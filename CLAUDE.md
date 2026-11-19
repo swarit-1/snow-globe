@@ -53,7 +53,10 @@ Only the lead session commits. Subagents never commit.
 
 **General:**
 - Back off on errors.
-- Never run two NPS fetchers at once. A Rainier stopgap poller is already running: one HEAD every 5 minutes.
+- Never run two NPS fetchers at once.
+  - The lead runs `lookout-capture loop` for all 8 cameras; the Rainier stopgap was retired (D-023).
+  - Every `lookout-capture` command except `status` takes a host-wide lock and exits with status 3 if another fetcher is active.
+  - Don't start capture or archive commands yourself; report what you need fetched.
 
 **NOAA:** use anonymous HTTPS to `noaa-hrrr-bdp-pds.s3.amazonaws.com` (us-east-1) with byte-range GETs. Keep local downloads small: subsets only, and delete GRIB files after extraction.
 
@@ -63,10 +66,23 @@ Only the lead session commits. Subagents never commit.
 - Never write frames, audio, plates, renders, traces or GRIB files inside the repo.
 - Never delete anything under `~/lookout-data` except your own temp or cache files.
 
+### Held-out data (D-019, D-022)
+Metadata may be read for any date.
+- **Archived frames:**
+  - Never download, open, view or use an archived frame (full size or thumbnail) dated **1 Jun 2026 or later**.
+  - Summer 2026 is design H's held-out season.
+- **The sealed window:**
+  - Never use any frame from **15 Dec 2026 – 14 Jan 2027**, live or archived, for development.
+  - That is design P's sealed window.
+- **Quarantine:** never open anything under `~/lookout-data/quarantine/`.
+
 ## Toolchain (machine: MacBook Air M4, macOS 26.5.1. Don't upgrade.)
 
 **Python:** `uv` with Python **3.13** (`requires-python = ">=3.13,<3.14"`). Use `httpx`, which uses certifi.
 - The python.org `python3` (3.14) has no CA certs, so always run through `uv run`.
+- iCloud sets the `hidden` flag on the venvs' `.pth` files, and Python 3.13 skips hidden `.pth` files. Imports then fail outside pytest.
+  - Prefix commands with `PYTHONPATH=src:../common/src`.
+  - From `eval/`, use `src:../workers/common/src`.
 - Lint and test with `ruff` + `pytest`.
 - Mark tests that touch the network `@pytest.mark.network`; they are excluded by default (`-m "not network"`).
 
@@ -109,7 +125,7 @@ Planning docs (`PLAN.md`, `DECISIONS.md`, `PRD_PROGRESS.md`, `PRD.md`) are edite
 
 JSON base: `https://www.nps.gov/featurecontent/ard/webcams/json/`. Images: `https://www.nps.gov/featurecontent/ard/webcams/images/<file>`.
 
-### NPS archive API (found 2026-11-19, via the page script at `https://www.nps.gov/AirWebCams/pore`)
+### NPS archive API (found 2026-11-19, via the page script at `https://www.nps.gov/AirWebCams/pore`; codes are case-insensitive, and lower case worked for all 8)
 - `GET https://www.nps.gov/airwebcams/api/GetAvailableDays/<code>?<cachebuster>` returns `MinDay`, `MaxDay` and per-year availability.
 - `POST https://www.nps.gov/airwebcams/api/Search/Execute` with a JSON body returns up to 300 results per page. An example body and response are in `~/lookout-data/samples/nps-json/`. Each asset has:
   - `AssetID`;
