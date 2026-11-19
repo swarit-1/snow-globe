@@ -1,0 +1,23 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Never commit voice fixtures, camera frames, plates, thumbnails or traces (PRD §9.1)
+fixtures/audio/
+data/frames/
+data/archive/
+data/plates/
+data/thumbs/
+traces/
+*.wav
+*.caf
+*.m4a
+
+# Build output
+target/
+node_modules/
+dist/
+.venv/
+__pycache__/
+.DS_Store
