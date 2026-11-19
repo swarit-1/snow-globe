@@ -381,6 +381,30 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - Until AWS is live (D-014), capture runs only while the laptop is awake and this session's background task lives.
   - Archive backfill can't run while the loop holds the lock. It needs the loop paused, or one process that does both, to be built in W2.
 
+## D-024 — Evaluation design per viewpoint, from the archive check · decided (lead; the owner may change it before the 14 Dec freeze) · 2026-11-19 · closes D-019's open part
+- **Evidence:** `docs/research/nps-archive-check.md`, which uses only frames from before the guard plus metadata (D-022).
+  - All seven ARD cameras changed from a 3:2 frame to a 16:9 frame, at a different time each, between 2023 and 2025.
+  - The archive keeps 999 px frames.
+  - Timestamps match NPS's own solar elevation on all 90 sampled days.
+- **Per viewpoint.** "Usable span" starts at the first 16:9 sample before the guard. The held-out season is summer 2026 everywhere, excluding 15 Jul 2026 (D-022).
+
+| Viewpoint | Design | Usable span for design H | Notes |
+|---|---|---|---|
+| `rainier.paradise-mountain` | **P** (P1), sealed window 15 Dec 2026 – 14 Jan 2027 | none | The park camera has no archive. |
+| `point-reyes.beach` | **P** on the sealed window, plus **H for K2** | Jul 2023 → | Development uses summers 2024 and 2025. The 3:2 epoch (2021–22) is a different view. |
+| `grand-canyon.yavapai` | **H** | Jul 2024 → | The 3:2 epoch (Dec 2020 – Jan 2024, one framing) may serve development and backtests, but not the summer-2026 season. Check 2025-01-15 on full frames before using winter 2024/25. |
+| `yosemite.turtleback` | **H** | Jan 2024 → | It has the most stable 16:9 framing by dHash. |
+| `acadia.mcfarland` | **H** | Jan 2024 → | |
+| `smokies.look-rock` | **H** | Jul 2024 → | It has the deepest coverage, 358–366 days a year. |
+| `big-bend.panther-junction` | **H**, after a check | Jan 2024 (or Jul 2024) → | Check 2024-01 for a framing change, on frames before the guard only. |
+| `grand-teton.science-center` | **no design H** | none | Its framing changed inside the 16:9 epoch: 2025-01-15 differs from 2025-07 and 2026-01. Excluded from scored metrics; live capture continues for Tier 0. |
+
+- **For every design-H use:**
+  - Fit τ, the clear-day references and the haze profiles on 999 px archive frames dated before 1 Jun 2026.
+  - Either score live frames at the same width or report the resolution gap.
+  - A camera-change exclusion rule goes into the pre-registration and is applied mechanically at scoring.
+- **Not used:** the observations made from frames past the guard (D-022).
+
 ---
 
 ## Spend ledger
