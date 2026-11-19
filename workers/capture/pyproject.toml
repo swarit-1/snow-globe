@@ -1,0 +1,45 @@
+[project]
+name = "lookout-capture"
+version = "0.1.0"
+description = "NPS webcam capture for Lookout: polite live capture, archive backfill and the archive check (PRD §8.6, §11.2, §13.2, §15.3)."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    # The [s3] extra brings boto3, which S3Storage needs inside the Lambda image.
+    "lookout-common[s3]",
+    "httpx>=0.28",
+    "pillow>=11.0",
+]
+
+[project.scripts]
+lookout-capture = "lookout_capture.cli:main"
+
+[tool.uv.sources]
+lookout-common = { path = "../common", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.9",
+    "moto[s3]>=5.1",
+    "boto3>=1.36",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.6,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not network' --strict-markers"
+markers = [
+    "network: touches the network; excluded by default (run with -m network)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
