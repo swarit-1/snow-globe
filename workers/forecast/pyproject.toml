@@ -1,0 +1,48 @@
+[project]
+name = "lookout-forecast"
+version = "0.1.0"
+description = "Lookout forecast worker: HRRR byte-range extraction at each viewpoint's sample points, availability-lag log (PRD 8.3, 11.2)."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "lookout-common[s3]",
+    "httpx>=0.28",
+    "jsonschema>=4.23",
+    "numpy>=2.2",
+    "eccodes>=2.50",
+    # eccodes declares this only in its non-Windows wheels, which uv does not read (see README).
+    "eccodeslib>=2.50; sys_platform != 'win32'",
+]
+
+[project.scripts]
+lookout-forecast = "lookout_forecast.cli:main"
+
+[tool.uv.sources]
+lookout-common = { path = "../common", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.9",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.6,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Import from source even when macOS hides the editable-install .pth files (README, "iCloud").
+pythonpath = ["src", "../common/src"]
+addopts = "-m 'not network' --strict-markers"
+markers = [
+    "network: touches the network (NOAA S3); excluded by default (run with -m network)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]

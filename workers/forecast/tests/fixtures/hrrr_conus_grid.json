@@ -1,0 +1,175 @@
+{
+  "about": "HRRR CONUS grid definition and true (i, j, lat, lon) tuples, decoded by ecCodes from one real wrfsfc message. Written by `lookout-forecast grid-check --write-fixture`. Never the GRIB file itself.",
+  "source_url": "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20261119/conus/hrrr.t07z.wrfsfcf00.grib2",
+  "byte_range": [
+    31950900,
+    34104594
+  ],
+  "eccodes": "2.50.0",
+  "md5GridSection": "78367561440d7c7b608b8532a02e4780",
+  "grid_keys": {
+    "gridType": "lambert",
+    "Nx": 1799,
+    "Ny": 1059,
+    "latitudeOfFirstGridPointInDegrees": 21.138123,
+    "longitudeOfFirstGridPointInDegrees": 237.280472,
+    "LaDInDegrees": 38.5,
+    "LoVInDegrees": 262.5,
+    "Latin1InDegrees": 38.5,
+    "Latin2InDegrees": 38.5,
+    "DxInMetres": 3000.0,
+    "DyInMetres": 3000.0,
+    "scanningMode": 64,
+    "shapeOfTheEarth": 6,
+    "radius": 6371229
+  },
+  "cells": [
+    {
+      "i": 0,
+      "j": 0,
+      "lat": 21.13812299999999,
+      "lon": 237.28047200000003,
+      "why": "first grid point"
+    },
+    {
+      "i": 1798,
+      "j": 0,
+      "lat": 21.140546625419137,
+      "lon": 287.7102815089707,
+      "why": "south-east corner"
+    },
+    {
+      "i": 0,
+      "j": 1058,
+      "lat": 47.83862349881542,
+      "lon": 225.90452026573686,
+      "why": "north-west corner"
+    },
+    {
+      "i": 1798,
+      "j": 1058,
+      "lat": 47.84219502248864,
+      "lon": 299.08280722816215,
+      "why": "last grid point"
+    },
+    {
+      "i": 899,
+      "j": 529,
+      "lat": 38.49724665100051,
+      "lon": 262.494023308958,
+      "why": "centre"
+    },
+    {
+      "i": 1,
+      "j": 1,
+      "lat": 21.16998449793677,
+      "lon": 237.29964880887914,
+      "why": "next to the first point"
+    },
+    {
+      "i": 1665,
+      "j": 870,
+      "lat": 44.376714155122926,
+      "lon": 291.7393321251424,
+      "why": "camera cell of acadia.mcfarland"
+    },
+    {
+      "i": 713,
+      "j": 194,
+      "lat": 29.342022210508254,
+      "lon": 256.80505448045557,
+      "why": "camera cell of big-bend.panther-junction"
+    },
+    {
+      "i": 463,
+      "j": 474,
+      "lat": 36.078330431026615,
+      "lon": 247.89184710091814,
+      "why": "camera cell of grand-canyon.yavapai"
+    },
+    {
+      "i": 548,
+      "j": 746,
+      "lat": 43.66973536040916,
+      "lon": 249.41258371907452,
+      "why": "camera cell of grand-teton.science-center"
+    },
+    {
+      "i": 163,
+      "j": 613,
+      "lat": 37.991563639658374,
+      "lon": 236.9739635037964,
+      "why": "camera cell of point-reyes.beach"
+    },
+    {
+      "i": 284,
+      "j": 919,
+      "lat": 46.78931226478593,
+      "lon": 238.24434443066596,
+      "why": "camera cell of rainier.paradise-mountain"
+    },
+    {
+      "i": 1307,
+      "j": 453,
+      "lat": 35.63547369249577,
+      "lon": 276.0701015255184,
+      "why": "camera cell of smokies.look-rock"
+    },
+    {
+      "i": 254,
+      "j": 578,
+      "lat": 37.70845987286474,
+      "lon": 240.28578985283926,
+      "why": "camera cell of yosemite.turtleback"
+    },
+    {
+      "i": 421,
+      "j": 96,
+      "lat": 25.92538506565615,
+      "lon": 248.42747412424646,
+      "why": "random (seed 20261119)"
+    },
+    {
+      "i": 882,
+      "j": 307,
+      "lat": 32.51728929880795,
+      "lon": 261.9534580111979,
+      "why": "random (seed 20261119)"
+    },
+    {
+      "i": 546,
+      "j": 604,
+      "lat": 39.87511367818097,
+      "lon": 250.05022809964188,
+      "why": "random (seed 20261119)"
+    },
+    {
+      "i": 500,
+      "j": 254,
+      "lat": 30.378202146354962,
+      "lon": 250.10036793241068,
+      "why": "random (seed 20261119)"
+    },
+    {
+      "i": 1524,
+      "j": 320,
+      "lat": 31.07092205484529,
+      "lon": 282.17005898943404,
+      "why": "random (seed 20261119)"
+    },
+    {
+      "i": 615,
+      "j": 540,
+      "lat": 38.38550279230119,
+      "lon": 252.70079830955748,
+      "why": "random (seed 20261119)"
+    }
+  ],
+  "measured": {
+    "forward_max_error_km": 1.2962161686956579e-11,
+    "inverse_max_abs_di": 3.183231456205249e-12,
+    "inverse_max_abs_dj": 2.5011104298755527e-12,
+    "inverse_round_trip_cells_ok": 1905141,
+    "cells": 1905141
+  }
+}
