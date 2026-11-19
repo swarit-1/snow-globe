@@ -1,0 +1,24 @@
+# Terraform working directories. Provider binaries (~735 MB) belong in TF_PLUGIN_CACHE_DIR outside iCloud
+# (infra/README.md); .terraform/ then holds only symlinks.
+**/.terraform/
+
+# State never goes in git: the root module's state lives in S3, and bootstrap's local state stays on this machine.
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+*.tfplan
+crash.log
+crash.*.log
+
+# These name the AWS account or the alarm address, and the repo is public.
+terraform/backend.hcl
+*.tfvars
+*.tfvars.json
+
+# Local overrides
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# .terraform.lock.hcl files are committed on purpose (pinned provider hashes).

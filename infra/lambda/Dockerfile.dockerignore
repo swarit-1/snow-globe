@@ -1,0 +1,51 @@
+# Build context for infra/lambda/Dockerfile is the repo root. BuildKit reads this file because it sits next to the
+# Dockerfile and is named after it; it overrides any .dockerignore at the root.
+#
+# Deny everything, then let in only what the image needs. Nothing else from the repo reaches the builder:
+# no data, no docs, no PRD, no .git, no renderer or app code.
+*
+!workers/common
+!workers/capture
+!workers/forecast
+!viewpoints/manifests
+!viewpoints/schema
+
+# Inside the allowed trees, drop local environments, caches, tests and build output.
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/tests
+**/test_*.py
+**/*_test.py
+**/conftest.py
+**/fixtures
+**/dist
+**/build
+**/*.egg-info
+**/.DS_Store
+
+# Never secrets.
+**/.env
+**/.env.*
+
+# Never data (CLAUDE.md: frames, audio, plates, renders, traces and GRIB live outside the repo).
+**/*.jpg
+**/*.jpeg
+**/*.png
+**/*.webp
+**/*.heic
+**/*.tif
+**/*.tiff
+**/*.grib
+**/*.grib2
+**/*.grb2
+**/*.idx
+**/*.nc
+**/*.parquet
+**/*.wav
+**/*.caf
+**/*.m4a
+**/*.jsonl
