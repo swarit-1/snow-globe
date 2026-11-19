@@ -1,317 +1,399 @@
-# Snow Globe — Product Requirements Document
+# Lookout: Product Requirements Document
 
-> **Version:** v0.3 (Milestone 0: research folded in, two council rounds applied)
-> **Status:** Design only. No application code exists. Awaiting owner answers to [§13](#13-open-questions-for-the-owner).
-> **Date:** 18–19 Nov 2026
-> **Owner:** Swarit Srivastava
-> **Repo:** `snow-globe` (planned monorepo: `app/` Tauri 2 + Rust core, `renderer/` WebGL2, `workers/` forecast and capture, `backend/` FastAPI, `eval/` scoring and dashboard, `harness/` replay and latency measurement, `viewpoints/` manifest)
-> **Companion docs:** [PLAN.md](PLAN.md) (milestones, dates, cut order, evidence), [DECISIONS.md](DECISIONS.md) (decisions with evidence; spend ledger), [docs/research/](docs/research/) (sourced landscape notes), [docs/council/](docs/council/) (council record)
+> **Version:** v0.4, a synthesis of two drafts:
+> - your **Lookout** draft (18 Nov 2026);
+> - **Snow Globe PRD v0.3** (Milestone 0, two council rounds, commit `d0ba83d`).
+>
+> **Status:** design only; no application code exists. Waiting on your calls in [§1](#1-decisions-to-confirm).
+>
+> **Name:** "Lookout" is a working title. The repo stays `snow-globe` until you choose.
+>
+> **Date:** 19 Nov 2026. **Owner:** Swarit Srivastava.
+>
+> **Companion docs:**
+> - [PLAN.md](PLAN.md) and [DECISIONS.md](DECISIONS.md) still describe v0.3; both get updated once §1 is set.
+> - [docs/research/](docs/research/) holds the sourced landscape notes.
+> - [docs/council/](docs/council/) is the council record.
+> - [docs/review/prd-crosscheck.md](docs/review/prd-crosscheck.md) lists every disagreement between the two drafts and how it was settled.
 
 ---
 
 ## 0. TL;DR
 
-**One line:** *Hold a key, ask "is the mountain out tomorrow at 4?", and see that real view at that hour — rendered from the real forecast and the real sky, not imagined.*
+Lookout shows what a place will actually look like at a time you say out loud.
+1. Hold a hotkey.
+2. Ask, for example, "is Rainier out tomorrow at 4?". "Show me Golden Gate at 9" works once a Golden Gate camera is licensed.
+3. Release.
 
-Snow Globe is a macOS push-to-talk **visual forecast**. A spoken place and time produce, within a second, an image of a real, fixed, camera-verified viewpoint whose sun and moon, cloud layers, cloud base, fog, precipitation and night lighting come from an ephemeris and NOAA's HRRR forecast for that place and hour. An image model may add photographic texture, but by construction it cannot change the sky or anything hidden by haze, and a validated check rejects it if it tries.
+An overlay then shows that real view at that hour, built from NOAA's forecast and the true positions of the Sun and Moon.
 
-It is a portfolio project that has to earn three numbers, in this order:
+It is a visual forecast, not an image generator. Sun and Moon, cloud layers, cloud base, fog, precipitation and night lighting all come from data for that place and hour. An image model may add photographic texture. By construction it cannot touch the sky or anything hidden by haze, and a validated check rejects it if it tries.
 
-1. **Perceived latency**, measured as a user experiences it. p95 from the OS key-up event to the first *composited* frame of each tier, after 30 minutes idle: real photo ≤ 300 ms (Tier 0), forecast-driven render ≤ 1 s (Tier 1, with a stretch target of ≤ 400 ms), refined render ≤ 3 s (Tier 2).
-2. **A rendering pipeline that can be explained end to end.** Ephemeris → HRRR fields sampled where each view ray meets each cloud layer → deterministic WebGL2 shader → camera response model → optional texture refinement. The same renderer module runs in the overlay, the scrub view and headless evaluation.
-3. **Accuracy measured against reality, pre-registered.** The primary claim is fixed in this document before any held-out frame is seen: on a sealed period, the 24-hour visual forecast of whether Mount Rainier's summit is visible has higher **Peirce skill score** than persistence. The skill comes from NOAA's forecast, and the README credits it. The renderer's own claim is that it **loses no skill** relative to HRRR's raw numbers (non-inferiority), and that its view-ray geometry **beats** the single-grid-cell scalar at predicting obscuration height.
+**The project has to earn three claims:**
+- **Fast.** Latency is the p95 from the OS key-up event to the first composited frame, after 30 minutes idle:
+  - **Tier 0**, a real photo: ≤ 300 ms.
+  - **Tier 1**, the relit frame: ≤ 1 s, with a stretch target of 400 ms.
+  - **Tier 2**, the photographic frame: ≤ 3 s, reported as the share of queries delivered within 3 s.
+- **Explainable.** Each frame comes from three stages that can be described and tested separately: retrieval, physically based relighting, and guarded refinement. The same renderer runs in the overlay, the scrub view and headless evaluation.
+- **Checked against reality, pre-registered.**
+  - **Primary claim:** on a sealed period, the 24-hour visual forecast of whether Mount Rainier's summit is visible beats persistence on the **Peirce skill score**.
+  - **Credit:** the forecast skill is NOAA's, and the README says so.
+  - **The renderer's own claims:** it loses none of that skill, and sampling the forecast along each view ray predicts cloud height better than the camera's own grid cell does.
 
-**What research changed in your brief** (sources in [docs/research/](docs/research/)):
+**What the cross-check changed.** Both drafts had errors; the full record is in [docs/review/prd-crosscheck.md](docs/review/prd-crosscheck.md).
+- **HRRR does not end on 30 Nov; Open-Meteo's copy of it does.**
+  - Forecasts are read from NOAA's AWS bucket.
+  - Its archive goes back to 2014, so evaluation can start on day one, with exact run times and the cloud-base and ceiling fields that Open-Meteo lacks.
+- **Forecast visibility is not haze along the sight line.** It is a near-surface fog diagnostic, so clear-air haze is calibrated per viewpoint instead (§9.3).
+- **The overlay can't both refuse focus and take plain arrow keys.** §5.4 sets the focus model.
+- **The demo needs a camera.** The headline demo is Rainier unless Golden Gate permission arrives by **4 Dec 2026**.
+- **Oculus's AWS stack costs ~$60 a month.** Lookout reuses only its serverless-compatible parts.
+- **From Lookout:**
+  - the Hillaire 2020 atmosphere replaces Hosek–Wilkie, because twilight is when people ask;
+  - the decisions table, the design section, the time-rule table, routes and jobs, graded asks, and capture of up to eight cameras.
+- **From v0.3:**
+  - latency measured at the composited pixel, after idle;
+  - one pre-registered endpoint;
+  - clouds intersected along view rays;
+  - Tier 2 that cannot change the sky;
+  - the data-flow inventory and licence ledger.
 
-- **No licence-clean Golden Gate camera exists.** The available ones are commercial, no-derivatives, road-pointed at 320×260, or carry no stated terms. Proposed: Mount Rainier from Paradise (hero), Point Reyes (coastal fog), Grand Canyon (third, after the MSV) — all National Park Service cameras. Golden Gate only with an owner's written permission by **4 Dec 2026**.
-- **Open-Meteo drops HRRR on 30 Nov 2026**, reports no run time, and has no cloud-base or ceiling field. Forecast ingest therefore reads HRRR directly from NOAA's AWS bucket.
-- **Speech finalization may consume the Tier 0 budget by itself.** The best independently measured hosted p95 is ~300 ms, and on-device SpeechAnalyzer reports conflict 5×. Engines are chosen by measurement on your voice in the idle state.
+**Measured so far** (this machine, 18–19 Nov 2026):
+- oculus-core matches JPL Horizons to 0.19′ for the Sun and 0.13′ for the Moon, worst case.
+- The NPS feeds are live: Point Reyes serves 3840×2160 frames (1.86 MB) and the Rainier park camera serves 1920×1080 frames (577 KB).
+- Open-Meteo's docs list HRRR as "Discontinued 2026-11-30".
 
-**What the council changed** ([Appendix A](#appendix-a--council-review)): a Minimum Shippable Version with dates and a cut order; capture and forecast snapshots start immediately; a hindcast on archived data plus a sealed prospective window; one pre-registered primary endpoint; new baselines (climatology, forecast-scalar, forecast-class analog); clouds with vertical extent intersected along view rays; Tier 2 composited so the sky is untouchable; paint measured from screen capture with an in-frame tag; replay that swaps sample values inside the live audio callback; a data-flow inventory and licence ledger; nothing derived from camera frames published until NPS confirms in writing.
-
-**Measured so far (this machine, 18–19 Nov 2026):**
-- The Oculus ephemeris matches JPL Horizons to 0.19′ (Sun) and 0.13′ (Moon) worst case: about 150× inside the 0.5° budget ([§2.3](#23-oculus-ephemeris--reuse-audit)).
-- The NPS feeds are live:
-  - Point Reyes: a 3840×2160 frame updated 07:30 PM PST, with EXIF naming NPS as artist and copyright holder.
-  - Rainier park camera: 1920×1080, updated off the quarter-hour.
-- Open-Meteo's docs confirm "Discontinued 2026-11-30" for HRRR.
-
-Nothing else here has been measured yet.
-
----
-
-## 1. Product Vision and Positioning
-
-### 1.1 What the product is
-
-- **Hold** a hotkey, **say** a place and a time, **release**. Escape cancels; a new query cancels in-flight work; the overlay never takes focus from the app you are in.
-- **Tiers**, each replacing the last with a 100 ms crossfade and each captioned:
-  - **Tier 0:** the nearest *real* photo of that viewpoint, matched on Sun position and season.
-  - **Tier 1:** the viewpoint relit in a GPU shader for the true Sun and Moon and the forecast sky.
-  - **Tier 2:** the Tier 1 frame with photographic texture transferred from a few-step image model. The sky and hazed regions stay exactly Tier 1.
-- **Times are local to the place.** A bare "4" is the next 4 o'clock *there*, with an AM/PM chip. "Sunset Friday", "golden hour", "tonight" and "now" resolve from the ephemeris at the place.
-- **"Now"** shows the camera's latest frame, labelled LIVE with its age, beside the simulation.
-- **The scrub view** drags through the forecast horizon.
-- **Places outside the curated set** fall back to plain generation, labelled UNVERIFIED. This sits after the MSV.
-
-### 1.2 What the product is NOT
-
-- **Not an image generator.** Weather, light and geometry are computed. The image model is limited, by construction, to texture in clear regions.
-- **Not a webcam viewer.** Cameras supply truth and plates.
-- **Not a better weather forecast.** The skill is NOAA's. Snow Globe renders HRRR faithfully, and shows how often HRRR is wrong and why.
-- **Not global.** Accuracy claims cover only curated, camera-verified viewpoints.
-
-### 1.3 Why it is worth building
-
-1. **Latency engineering** across speech → parse → GPU → network → GPU, measured from OS event to composited pixel, with a stale-paint correctness contract.
-2. **Physically grounded rendering** that a reviewer can interrogate, down to which HRRR grid cell each cloud pixel came from.
-3. **Forecast verification** in meteorology's own terms: pre-registration, persistence and climatology baselines, Peirce skill score, block bootstrap. It reports where the forecast fails (fog), and attributes the failure.
-
-### 1.4 Comparable prior art
-
-| Work | What it does | What Snow Globe adds |
-|---|---|---|
-| Wispr Flow | Push-to-talk dictation, non-activating overlay | The same interaction for a visual query, measured to the composited pixel |
-| Windy / Ventusky / Apple Weather | Forecast maps and numbers | What the forecast looks like from one real viewpoint |
-| Webcam sites | What a place looks like now | The future, verified against those cameras |
-| Text-to-image "weather photos" | Invented weather | Computed weather; generative model confined to texture |
-| Sunkavalli et al. 2007; Lalonde et al. 2009 | Relighting from a fixed camera's time-lapse | The camera's history as a relighting basis (post-MSV) |
-| Koschmieder contrast methods; MIT LL VEIA | Visibility from target contrast or edge loss vs a clear-day reference | Per-landmark visibility as fog and summit truth |
-| Kim & Pollefeys, PAMI 2008 | Radiometric calibration of a fixed camera from its own images | Model-free camera response, independent of the renderer |
-| NPS air-quality webcams | Cameras built to document haze and visibility | The verified viewpoints |
-| Delle Monache et al. 2013 (analog ensembles) | Forecast by retrieving similar past situations | A pre-registered analog baseline that the shader must not lose to silently |
+Nothing else has been measured.
 
 ---
 
-## 2. Current State — Honest Audit
+## 1. Decisions to confirm
 
-### 2.1 This repository
-Empty until M0: branch `main`, no commits. M0 adds this PRD, PLAN.md, DECISIONS.md, `docs/research/` and `docs/council/`.
+These choices are assumptions, not decisions. Each row has a recommended default; "yes to all defaults" is a valid answer. Rows 1, 2, 3, 5, 6 and 9 are your Lookout rows. Row 4 is new, from the cross-check, and the rest come from v0.3's open questions.
 
-### 2.2 Machine inventory (inspected 18 Nov 2026)
-
-| Item | Value | Consequence |
-|---|---|---|
-| Hardware | MacBook Air, Apple M4 (10-core GPU, Neural Engine, Metal 4), 16 GB, **fanless**, 60 Hz panel | Thermal state is recorded with every latency trace; one vsync = 16.7 ms. |
-| OS | macOS 26.5.1 (25F80); macOS 27 is now current | Measure on 26.5.x; record OS/Xcode per measurement; no upgrade mid-milestone. |
-| Xcode | 26.2, MacOSX26.2 SDK | SpeechAnalyzer and Foundation Models interfaces are in the SDK. |
-| Rust | 1.98.1 with `wasm32-unknown-unknown` | oculus-core builds natively and to WASM. |
-| Node / pnpm | 24.13.0 / 12.15.0 | Renderer and overlay. |
-| Python / uv | 3.14.2 / 0.11.6 | Workers, backend, eval. |
-| Other | Docker 29.5.3, ffmpeg 8.1.1, gh 2.91.0, Swift 6.2.3 | — |
-| Missing | Tauri CLI (stable is 2.12.7) | Installed in M1. |
-| Audio | Built-in MacBook Air microphone | Replay set recorded through the live capture path on it. |
-| Time zone | America/Chicago | Viewpoints are in America/Los_Angeles and America/Phoenix (no DST): two real cross-zone tests. |
-| Storage | Repo lives under `~/Documents` | If iCloud Desktop & Documents sync is on, voice fixtures and frames go elsewhere (checked in M1). |
-
-### 2.3 Oculus ephemeris — reuse audit
-
-`github.com/swarit-1/oculus`, crate `oculus-core` (MIT, same author), HEAD `06809e6`. `ephem.rs` uses JPL mean elements for the Sun (Standish 1992) and truncated ELP-2000/82 for the Moon (Meeus ch. 47), with aberration, precession–nutation and topocentric parallax. It sits on `time.rs`, `frames.rs` and `math.rs` (~1,500 lines; runtime dependency `libm` only). `sun_moon()` is exported to **Rust, WebAssembly and Python**. `natural.rs` has moonlit-sky brightness (Krisciunas & Schaefer 1991) and an empirical twilight term.
-
-**Measured today** (`cargo test --release --test golden_astro`, 3/3 pass, against JPL Horizons and Astropy vectors):
-
-| Quantity | Worst error | Budget |
-|---|---|---|
-| Sun apparent position | 0.19′ | 30′ |
-| Moon apparent position | 0.13′ | 30′ |
-| Moon illuminated fraction | 0.01 % | — |
-| Refracted altitude, stars > 5° | 21.6″ | — |
-
-**Caveats:**
-1. `Apparent.alt` is unrefracted. Horizon refraction (~34′) exceeds the budget, so validation and rendering use refracted altitude, with −0.833° for sunrise and sunset.
-2. Oculus's test sites aren't ours. M2 regenerates Horizons vectors for each viewpoint, hourly for 12 months, and checks sunrise/sunset against NOAA to ±1 min.
-3. Valid to 2050.
-
-**Proposed (D-002):** a Cargo git dependency pinned to `06809e6`; its MIT notice ships inside the WASM bundle.
-
-### 2.4 move-predictor
-
-This PRD mirrors move-predictor's PRD structure, and the README will mirror its README. One lesson carried over: its README reports 22–26 % top-1 against a "> 36 %" target. Here, the targets, the primary endpoint and a README skeleton with blanks are fixed up front, and every miss is reported with its measured value.
-
-### 2.5 Current landscape (looked up 18 Nov 2026; not yet benchmarked by us)
-
-| Area | Shortlist | Key facts |
-|---|---|---|
-| **On-device STT** ([notes](docs/research/stt-ondevice-macos.md)) | **SpeechAnalyzer `DictationTranscriber`** (A1); **FluidAudio Parakeet** (P) only if A1 misses its gate | Only `DictationTranscriber` honours contextual strings. Release → final reports conflict: 125–132 ms (vendor, M5 Max) vs 602–702 ms (one app). Live input broke on 26.3. |
-| **Cloud STT** ([notes](docs/research/stt-cloud.md)) | **Deepgram Nova-3** (D) with `Finalize`; Soniox stt-rt-v6 in reserve | Pipecat TTFS P50/P95: Nova-3 247/298 ms. Deepgram trains by default (opt out per request with `mip_opt_out=true`). AssemblyAI excluded: free accounts can't opt out of training. |
-| **LLM fallback** | **Apple Foundation Models** (in-process, $0); Claude Haiku 5.5 only if FM fails | FM is rate-limited outside a UI process and unavailable without Apple Intelligence. Haiku's retention terms must be recorded before it is enabled. |
-| **Tier 2** ([notes](docs/research/refinement.md)) | **Z-Image-Turbo img2img** on fal and on Runware; FLUX.2 klein 4B on fal as a ~20-call illustration only | Only SDEdit-style img2img keeps pixels aligned. FLUX.2, Kontext, Qwen, Nano Banana, GPT-image and Seedream regenerate every pixel. New fal accounts are capped at 2 concurrent requests; cancelling a running request only signals the runner. |
-| **Cameras** ([notes](docs/research/cameras.md)) | **NPS:** Rainier `webcams-mora/mountain.jpg` (1080p), Point Reyes air cam (4K, 15 min), Grand Canyon Yavapai air cam (4K, 15 min) | Windy, Skyline and EarthCam forbid storing or republishing. ShareAlike photos would force derived plates to CC BY-SA. Partner cameras on NPS pages are excluded. |
-| **Forecast** ([notes](docs/research/forecast.md)) | **HRRR direct** (AWS `noaa-hrrr-bdp-pds`, byte ranges via Herbie); Open-Meteo (pinned GFS) beyond 48 h and for unverified places | HRRR runs hourly (18 h, or 48 h at 00/06/12/18Z), available 52–108 min after start. Fields: `VIS`, `HGT:cloud ceiling`, `HGT:cloud base`, `LCDC/MCDC/HCDC`, `PRATE`, `RH`, `HPBL`, snow. VIS sees fog only when cloud water is within ~100 m of the ground. Archived since 2014; HRRRv4 from Dec 2020. |
-| **Independent truth** | GOES-18 (AWS `noaa-goes18`: `ABI-L2-ACMC` clear-sky mask, C02, C13 − C07) at the viewpoint pixels; on-site NPS met where present | The GOES fog/low-stratus product is not in the open bucket. No ceiling or visibility station at Paradise or Point Reyes. |
-| **Sky model** | **Hosek–Wilkie** via `andrewwillmott/sun-sky` (repo Unlicense; **data tables BSD-3**, notice kept) | Fitted only for Sun ≥ 0°; twilight comes from a separate model. Fallback: three.js `Sky.js` (MIT, pinned r187). |
-| **Shell** ([notes](docs/research/stt-ondevice-macos.md)) | Tauri 2.12.7; `tauri-plugin-global-shortcut` 2.4.1; `tauri-nspanel` 2.1.1 | Press and release events with no key repeat. nspanel uses the **private** `_setPreventsActivation:`. Hidden WKWebViews are suspended by default. Option-only shortcuts are rejected on macOS 15+. |
+| # | Decision | Recommended default | What changes if you pick otherwise | Your call |
+|---|---|---|---|---|
+| 1 | Platform | macOS 26.5.x on Apple silicon, held through M4; Windows later. | Speech and overlay code are platform-specific; the renderer, parser and backend are not. Upgrading to macOS 27 mid-milestone breaks latency comparisons. | ☐ |
+| 2 | Shell and renderer | Tauri 2 shell, one WebGL2 renderer. Swift as an **in-process static library** (C ABI) for SpeechAnalyzer and Foundation Models. | A native Swift + Metal app integrates better with macOS, but evaluation would need a second renderer. A separate Swift helper process loses Foundation Models, which must run in the UI process. | ☐ |
+| 3 | Evaluation viewpoints | National Park Service cameras.<br>• The MSV makes claims on **Mount Rainier** (Paradise park camera) and **Point Reyes**.<br>• Grand Canyon is third.<br>• Up to 8 NPS cameras are captured from M0.5.<br>• Golden Gate only with written permission by **4 Dec 2026**. | A Bay Area or Austin-only set has no licence-clean camera and no archive, so accuracy numbers wait weeks. | ☐ |
+| 4 | Size of v1 | The MSV (2 viewpoints, sealed P1) first, then grow toward 8 verified viewpoints. | Starting with 8 costs an estimated 1.5–2 days per viewpoint (plate, pose, landmarks, labels) before the sealed window, and that window can't move. | ☐ |
+| 5 | Compute and budget | Hosted, pay-per-call inference; a $25 development cap with hard caps in code totalling $24. | With your own GPU, Tier 2 can be self-hosted and the cap goes away. | ☐ |
+| 6 | Speech privacy | On-device by default (SpeechAnalyzer `DictationTranscriber`).<br>• A cloud engine (Deepgram Nova-3) runs in the replay bake-off.<br>• In the product it is off by default, behind a visible toggle. | Cloud-first is simpler but sends audio off the machine by default. If cloud is much faster, you decide with the numbers in hand. | ☐ |
+| 7 | Paid vendors | **Now:** Deepgram for the bake-off ($200 sign-up credit, training opt-out on every request) and fal for the Tier 2 kill test (≤ $1).<br>**Later:** Runware, Claude Haiku (only if Foundation Models fails), and the ungrounded-generation baseline (≤ $1). | Nothing is called until you approve that vendor. | ☐ |
+| 8 | Hosting | AWS serverless:<br>• Lambda, EventBridge Scheduler, S3, CloudFront and a budget alarm, built from Oculus's `bootstrap`, `storage`, `cdn` and `monitoring` Terraform.<br>• Whatever hosts the Tier 2 proxy must add ≤ 100 ms p95 when idle; Lambda and a Cloudflare Worker are both measured.<br>• GitHub Actions runs CI only.<br>• The repo is public. | • Oculus's full stack (ALB, Fargate, Redis) costs ~$60 a month, by Oculus's own estimate.<br>• GitHub Actions as the scheduler adds jitter, and scheduled workflows in a public repo are disabled after 60 days without activity, which is risky over a holiday sealed window. | ☐ |
+| 9 | Name | Lookout. | The repo, bundle id and overlay wordmark follow the name. | ☐ |
+| 10 | Fallbacks | Keep the LLM parser fallback (Foundation Models, on device, $0). Unverified places move to Later. | Unverified generation is exactly the "invented weather" image this project argues against. | ☐ |
+| 11 | Tier 0 when Tier 1 is close behind | If Tier 1 is ready within ~100 ms, skip painting Tier 0. It still runs and is measured. | Showing both causes a brief flicker. | ☐ |
+| 12 | Calendar | Tell me your hours per week; I assume ~25. A milestone more than 25 % late loses the next item on the cut list. | Dates in §16 move. | ☐ |
+| 13 | Start the clock | Go-ahead for M0.5 now: forecast worker, camera capture, NPS archive check and one backtest pair. | Every day of delay is a day less of archive and live data. | ☐ |
+| 14 | Your time | • ~20 min recording scripted utterances, plus ≥ 30 real-use ones.<br>• ~150 frames labelled per metric, plus 50 re-labels.<br>• Someone else to judge the Tier 2 preference test.<br>• Several nights of unattended idle trials.<br>• Permissions: Microphone and Speech Recognition; Screen Recording and Input Monitoring for the harness only; Apple Intelligence on. | Without the recordings and labels, the latency and accuracy numbers can't be published. | ☐ |
+| 15 | Emails and contact | You send the NPS confirmation emails (I draft them). The README lists a project-specific takedown address. | Without NPS confirmation, the public repo carries numbers only: no frames, plates or renders (§15). | ☐ |
 
 ---
 
-## 3. The Hard Problems (prioritized)
+## 2. Product vision and positioning
 
-### 3.1 P0 — Speech finalization dominates Tier 0
+Lookout answers a question no current tool answers directly: what will this exact view look like at that exact time?
 
-The time is usually the last word, so Tier 0 waits for it. The best measured hosted p95 is 298 ms; one SpeechAnalyzer report has 602–702 ms from stop to final text. **Chain for Tier 0 ≤ 300 ms** (the panel is already visible from key-down, so no reveal sits on this path): STT final ≤ 240 + parse 5 + image swap from a pre-decoded bitmap ≤ 10 + composite ≤ 2 vsyncs 33 ≈ 288 ms. That requires a p95 release → final ≤ ~240 ms *in the idle state*, which no engine has yet demonstrated on this machine. The levers, measured rather than assumed:
-
-1. **Explicit finalize on key-up.** A synthetic-silence pad is pushed as a burst, not in real time, and no audio is captured after release.
-2. **Partial-based Tier 0.** At key-up, if the latest partial is stable, Tier 0 paints from it. The stability window is tuned on the development half under a ceiling: the wrong-paint rate must be ≤ 2 % (Wilson upper bound on the test set), or partial-based paint is disabled. "Wrong" means a different Tier 0 image id from the one the final selects.
-3. **Engine choice in the idle state.** If A1's idle p95 exceeds 250 ms, Parakeet is benchmarked.
-
-If Tier 0 still misses, the report states the measured p95 and the bottleneck stage. An LLM fallback rate above ~5 % fails Tier 0 by construction (~0.6–0.9 s per call), and that is stated too.
-
-### 3.2 P0 — Tier 2 p95 over a network you don't control
-
-For the same model, vendor figures range from 0.3 s of GPU time to ~6 s end to end, so the tails come from queueing and cold starts. New fal accounts are capped at 2 concurrent requests, and a cancelled request may keep its slot until the runner stops.
-
-Rules:
-- At most one Tier 2 request in flight per user, and cancelled-but-unfinished requests count against the cap.
-- No speculative Tier 2 and no paid warm-up in v1; a TLS pre-connect on key-down only.
-- The chosen proxy path may add at most 100 ms p95 over a direct call.
-
-The headline is **"Tier 2 delivered within 3 s" over all queries**; rejections, errors and timeouts count as misses.
-
-### 3.3 P0 — Fog and obscuration
-See [§4](#4-the-fog-and-obscuration-problem).
-
-### 3.4 P1 — Truth from webcams is noisy
-
-The camera itself produces errors that are not forecast errors: auto-exposure, white balance, night noise, rain, ice or salt on the lens, stale frames, camera moves.
-
-Rules:
-- Staleness is detected from the NPS `imagedate` field plus HTTP `Last-Modified` plus the image hash.
-- Camera moves are detected by registration against the plate.
-- Exclusions apply identically to the model and to every baseline, and their counts are published.
-- Results are reported with and without iced-lens exclusions as a sensitivity check.
-- "Day" is defined by ephemeris Sun altitude, never by frame brightness, because brightness correlates with weather.
-
-### 3.5 P1 — Licensing decides the viewpoints, and NPS confirmation gates publishing
-
-- **What the frames say about ownership.** The NPS air-cam EXIF names NPS as artist and copyright holder. The capture software tag is `ARS_Digicam`, which suggests a contractor operates the camera. The Rainier park camera carries no ownership metadata.
-- **Written confirmation.** It is requested from NPS Air Resources Division and Mount Rainier NP, covering all three cameras and the archive, by the end of M2.
-- **Until confirmed:** capture and private evaluation only. "Private" includes the app: plates and thumbnails are served only to the owner's install, from authenticated storage.
-- **If there is no answer by the deadline:** the public repo, README and demo carry code, numbers and charts only, with no frames, plates or renders. The owner signs off on that list.
-
-### 3.6 P1 — Season, base rate and statistical power
-
-It is November.
-- **Rainier:** winter cloud makes "summit visible" frequent enough to score, but the base rate is skewed. That is why the endpoint uses the Peirce skill score: proportion correct would reward always saying "hidden".
-- **Point Reyes:** fog peaks in summer, so a December window will hold few events. Point Reyes is a secondary endpoint, scored on a summer season through the hindcast if the archive reaches back that far.
-- **Statistics:** the minimum detectable effect for each primary endpoint is computed from development-period variance and published before sealing. If it is implausibly large, the replacement endpoint is already named (§8.2).
-
-### 3.7 P2 — A photograph already has lighting baked in
-
-Relighting one photo is ill-posed. The MSV renderer uses:
-- a **dehazed overcast plate** as an albedo proxy, without double-counting sky occlusion;
-- a **night plate** for emissive lights;
-- **metric depth** from a DEM ray-cast plus scale-aligned near-field depth;
-- **DEM horizon maps** for shadows, since the occluders are off-screen;
-- a **model-free camera response**.
-
-Further physics is a post-MSV backlog, each item admitted only with a measured gain (§5.3).
-
-### 3.8 P2 — macOS platform fragility
-
-The risks: a private-API panel; TCC grants that reset on every ad-hoc-signed rebuild (a stable development certificate is required); hidden-webview suspension; a Swift-only speech API; Screen Recording re-consent prompts during unattended runs. A one-day spike proves them together first.
-
-### 3.9 P2 — Forecast source churn
-
-Open-Meteo drops HRRR on 30 Nov; RRFS replaced NAM on 3 Nov and may later replace HRRR. One forecast schema with per-source adapters; a model change is a labelled break in the series.
-
----
-
-## 4. The Fog and Obscuration Problem
-
-### 4.1 What each viewpoint needs
-
-| Viewpoint | Phenomenon | Decisive forecast fields |
+| What exists | What it gives you | What is missing |
 |---|---|---|
-| **Rainier (Paradise, ~1,650 m; summit 4,392 m)** | Summit or upper mountain hidden by cloud base or cap cloud; camera itself inside cloud | Ceiling and cloud base **along the view ray to the summit**; low/mid cloud; snow |
-| **Point Reyes** | Marine stratus and advection fog over the beach and headland; camera possibly inside the marine layer | Low cloud, cloud base, surface visibility |
-| **Grand Canyon** (post-MSV) | Winter snow and cloud in the canyon | Cloud base vs rim and canyon-floor heights. The haze metric is dropped: haze is aerosol, which HRRR VIS doesn't model. |
+| Live webcams | The real view right now | Nothing about later. Feeds go down, and many switch to infrared at night. |
+| Sun and moon planners | Where the Sun and Moon will be | No weather, and no picture of the scene. |
+| Weather apps and forecast maps (Windy, Ventusky, Apple Weather) | Numbers, icons and maps for the hour | No view of a particular place. |
+| Text-to-image models | A plausible picture of the place | Light, cloud and fog are invented and can't be checked. |
+| Relighting from a fixed camera's time-lapse (Sunkavalli et al. 2007; Lalonde et al. 2009) | A relighting basis from the camera's history | No forecast and no product. |
+| Analog ensembles (Delle Monache et al. 2013) | A forecast from similar past situations | No pictures, and no rendering of new situations. |
+| **Sigg, Cavallaro, Günther and Oswald, 2022** | **A GAN that turns a webcam image into its forecast view** | **A research method trained on archives from three Swiss cameras, at 64×128 px. No product around it and no latency goal.** |
 
-HRRR's visibility diagnostic sees fog only when model cloud water lies within ~100 m of the ground, so a deck at 300 m reads as clear. Ceiling and cloud base are the decisive fields. **Every height field has a pinned datum** (AGL over HRRR's smoothed terrain vs MSL), recorded in DECISIONS.md, because one 3 km grid cell can span a canyon rim and floor.
+**Sigg et al. is the closest prior work** (*AIES* 2022, [arXiv 2203.15601](https://arxiv.org/abs/2203.15601)).
+- Human raters did "not much better than if they guessed randomly" at telling its images from real ones.
+- The images matched the COSMO-1 forecast's conditions in "at least 89 % of the examined cases".
 
-### 4.2 Rendering model (MSV)
+That shows the idea is sound. Its agreement was scored against the *forecast's* conditions. Lookout's primary score is agreement with the frame the camera *actually recorded* at the valid time.
 
-- **Per-pixel metric depth and world height** come from a DEM ray-cast with the camera pose solved from surveyed landmarks (the NPS publishes a named-landmarks image per air cam), plus scale-aligned near-field depth from a permissively licensed model (CC-BY-NC weights excluded).
-- **Clouds with vertical extent.** Each layer is a slab with a base and a thickness. Each view ray is intersected with each slab, with Earth curvature, and the forecast is read **at the intersection point** (a 2° ray meets a 500 m layer ~14 km out). Noise is thresholded before filtering, so coverage doesn't bias with distance. An overlap rule is checked against HRRR total cloud.
-- **The camera inside cloud** is its own state: uniform extinction, no landmarks.
-- **Surface fog and ceiling slab.** Extinction is β = −ln(ε)/V, with ε pinned to the visibility diagnostic's contrast threshold, and β decays above the fog top. Thick fog uses a multiple-scattering airlight approximation rather than single scattering.
-- **Precipitation** is extinction plus wet-surface darkening. There are no rain streaks, because they are invisible at webcam shutter speeds.
+### 2.1 What Lookout adds
+1. A voice interface whose first frame arrives within a third of a second, measured at the composited pixel.
+2. Physics-first rendering from one plate set per viewpoint, so a new viewpoint needs no training.
+3. A score for every prediction against the frame the camera actually recorded, pre-registered against persistence, climatology and analog baselines.
 
-### 4.3 Measuring it in the real frame
+### 2.2 Rules the product keeps
+- Data decides. The image model only adds texture, and it can't reach the sky or hazed regions.
+- Every frame is labelled simulated, real or live, with its valid time and the forecast's issue time.
+- Real beats simulated. "Now" shows the live camera when one exists.
+- The skill is NOAA's. Lookout renders the forecast faithfully, and shows how often it is wrong and why.
+- A measured number outranks a new feature.
 
-- **Primary truth: binary per-landmark visibility.** Each landmark is scored visible or hidden by comparing its edge energy against an illumination-conditioned clear-day reference (VEIA-style). For Rainier the landmarks are a summit band, an upper-mountain band, the mid-slopes and a near ridge, which gives a categorical **obscuration height**: the highest visible landmark band.
-- **Secondary truth:** a continuous visibility estimate from multi-landmark contrast, scored as ordinal bins bounded by the landmark distances, with the top bin censored at ~80 × the farthest distance, plus a fog-top height from world height.
-- **Independent votes:** GOES-18 clear-sky mask and reflectance at the viewpoint pixels, and on-site NPS met where it exists. Disagreements are flagged, not averaged.
-- **One extractor** is applied to rendered frames, baseline frames and real frames alike. It is validated against labelled real frames *and* about 50 labelled renders before any number is published.
+### 2.3 What it is not
+- Not an image generator.
+- Not a webcam viewer: cameras supply truth and plates.
+- Not a better weather forecast.
+- Not global: accuracy claims cover only camera-verified viewpoints.
 
-### 4.4 What I expect, plainly
+### 2.4 Starting point (inspected 18 Nov 2026)
 
-**Rainier:** HRRR ceiling and cloud base should carry real skill over persistence at 24 h, because synoptic cloud is what NWP does well. I expect the claim to be earnable on a long enough window.
-
-**Point Reyes fog:** I expect weak skill at 24 h and frequent false alarms. Most of the error should be HRRR's rather than the renderer's. There is no published HRRR verification for this kind of fog, HRRR's marine-layer tops run ~150 m low, and SFO historically needed a purpose-built forecasting system. Post-MSV, an oracle ladder will attribute the error: forecast → HRRR f00 at valid time → GOES → camera-extracted inputs (the last rung labelled circular).
-
-A statistical fog post-processor is out of v1; it would adjust weather, so it needs your sign-off.
-
----
-
-## 5. Milestones, MSV and Cut Order
-
-### 5.1 Minimum Shippable Version
-
-Push-to-talk → Tier 0 and Tier 1 on **Rainier and Point Reyes**. Latency measured idle, with the paint-capture harness. P1 pre-registered and scored on the sealed period. Baselines: persistence, climatology, forecast-scalar and forecast-class analog. A validated extractor, the data-flow inventory, the licence ledger, and a README with the numbers. **Nothing outside the MSV starts until the MSV is published**, except the capture job, which starts first.
-
-### 5.2 Milestones
-
-Milestone dates depend on your hours per week (§13 Q2); [PLAN.md](PLAN.md) holds them. **Rule: a milestone that runs more than 25 % late loses the next item on the cut list (§5.3).**
-
-| # | Deliverables | Done when this evidence exists |
+| Item | State | Consequence |
 |---|---|---|
-| **0** | PRD, PLAN, DECISIONS, research, council | This document plus your answers to §13 |
-| **0.5** (immediately on go-ahead) | Forecast-snapshot worker (HRRR) and polite capture for all three viewpoints; NPS archive depth check; emails to NPS (and Golden Gate owners) sent | Worker and capture logs; archive report (depth, cadence, camera epochs); design H or P chosen (§8.4) |
-| **1** | Platform spike; hotkey; audio while held; A1 + D behind the STT trait; parser (+ FM fallback); overlay with Tier 0; replay and paint-capture harness; README skeleton with blanks | Replay report (idle and warm, ≥ 100 test utterances): p95 per stage; Tier 0 and first-partial numbers; WER; place accuracy; parser tests green; STT decision in DECISIONS.md |
-| **1.5 — walking skeleton** (≤ 21 days after go-ahead) | Renderer v0 (sky, layered cloud with base, ceiling slab, flat fog, camera model) headless; extractor v0; P1 scored on development data vs persistence, climatology, forecast-scalar | A dev-only P1 table (no held-out data touched) |
-| **2** | Tier 1 for Rainier and Point Reyes in overlay and scrub view; ephemeris validation; golden images; renderer features admitted only with measured dev gain | Ephemeris report; Tier 1 p95 (idle); golden images in CI; dev-split evidence for each admitted feature |
-| **3** (after MSV core) | Tier 2 kill test (≤ $1, 20 frames) → if it passes, composited Tier 2, checks, false-accept suite, cancellation; unverified fallback | Kill-test result; Tier 2 delivery rate within 3 s; false-accept bound; spend |
-| **4** | Sealed-period scoring; dashboard; extractor validation; uptime | P1 result with CI and the non-inferiority and superiority tests; secondaries with Holm correction; uptime and exclusions |
-| **5** | README with demo, architecture, numbers | Every number traceable to a file and `make score`; ships on schedule whatever P1 shows |
-
-### 5.3 Cut order (first to go)
-
-1. Unverified-place fallback.
-2. LLM fallback (alias, fuzzy and phonetic matching plus chips cover ≤ 10 places).
-3. Grand Canyon viewpoint.
-4. Scrub view polish (keep a bare slider).
-5. Tier 2 (if the kill test fails or the schedule demands it; Tier 1 is the floor).
-6. Post-MSV physics backlog items, lowest measured gain first.
-
-**Never cut:** the capture job, the sealed evaluation, the latency harness, the data-flow inventory.
+| Machine | MacBook Air M4 (10-core GPU), 16 GB, **fanless**, 60 Hz | Thermal state is recorded with every latency trace; one vsync is 16.7 ms. |
+| OS and tools | macOS 26.5.1; Xcode 26.2; Rust 1.98.1 with wasm32; Node 24; Python 3.14 with uv; Swift 6.2.3 | The SpeechAnalyzer and Foundation Models interfaces are in the SDK. The Tauri CLI is installed in M1. |
+| Time zone | America/Chicago | The viewpoints are in Los Angeles and Phoenix time (Phoenix has no DST), which gives two real cross-zone tests. |
+| oculus-core | `github.com/swarit-1/oculus` at `06809e6`, MIT. Runs in Rust, WASM and Python. | It is reused, not copied (§8.4). |
+| This repo | M0 documents only, on branch `m0-prd` | No app code until §1 is set. |
 
 ---
 
-## 6. Detailed Specifications
+## 3. Users, core loop and hooks
 
-### 6.1 Interaction and overlay
+Version 1 has one user, you, plus anyone watching a 60-second demo. Wider users matter only if a startup path opens after the accuracy results are in.
+
+| User | What they ask | Stage |
+|---|---|---|
+| You and a demo audience | "Is Rainier out tomorrow at 4?", then a follow-up | v1 |
+| Photographers scouting light and fog | "Will the headland be in fog at blue hour Saturday?" | After v1 |
+| Travelers | "Is the viewpoint worth the drive tomorrow morning?" | After v1 |
+
+### 3.1 Core loop
+1. Hold the hotkey and say a place and a time.
+2. Release. A real photo appears, then a relit frame, then a photographic frame.
+3. Scrub through the day, or ask a follow-up without repeating the place.
+
+### 3.2 Hooks
+- **Scrub.** The arrow keys move the valid time, and Tier 1 follows at 60 frames a second.
+- **Live beside simulated.** One key shows the camera's current frame next to the forecast frame.
+- **Graded asks.** Each ask about a future time is logged as a prediction. When that time arrives, the dashboard shows the real frame beside it.
+
+### 3.3 Example utterances
+
+| You say | It resolves to |
+|---|---|
+| "Is Rainier out tomorrow at 4?" | 4:00 PM tomorrow at Paradise, Pacific time, with a chip to flip AM/PM. |
+| "Show me Rainier at 9" | The next 9:00 or 21:00 at the place, with an AM/PM chip. |
+| "Point Reyes at sunset Friday" | Sunset on Friday, computed for the headland. |
+| "Grand Canyon golden hour" | The next evening golden hour at Yavapai Point. |
+| "What about midnight?" | Midnight at the last place asked about. |
+| "Point Reyes now" | The live camera frame beside a simulated frame for the current hour. |
+| "Golden Gate at 9" | Works only if the Golden Gate camera is licensed by 4 Dec. Otherwise: **No match**, plus the three closest known places. |
+
+---
+
+## 4. Scope
+
+### 4.1 Minimum Shippable Version (MSV)
+- Push-to-talk, with Tier 0 and Tier 1 on **Rainier and Point Reyes**.
+- Latency measured after idle with the paint-capture harness.
+- P1 pre-registered and scored on the sealed period, against persistence, climatology, forecast-scalar and analog baselines.
+- A validated extractor, the data-flow inventory, the licence ledger, and a README with the numbers.
+
+**Nothing outside the MSV starts until it is published**, except the capture and forecast jobs, which start first.
+
+### 4.2 Version 1
+- The MSV, plus:
+  - Tier 2 if its kill test passes;
+  - the scrub view and the live-beside-simulated view;
+  - the LLM parser fallback;
+  - the graded-asks dashboard.
+- Then growth toward **8 verified viewpoints** with ≥ 14 days of live data. Each viewpoint passes the same gates.
+- A README whose every number comes from a file and a command.
+
+### 4.3 Later
+
+| Item | Why it waits |
+|---|---|
+| Learned local correction of the forecast (a fog post-processor) | Needs the backtest pairs first, and it adjusts the weather, so it needs your sign-off. |
+| Unverified places, labelled as such | The thin-wrapper path; it adds no measured claim. |
+| Past times, and dates beyond 7 days | Needs reanalysis and climatology modes. |
+| "What if it were clear" overrides | Must be labelled hypothetical; adds parser and caption work. |
+| Fn-key trigger | Needs an event tap with Input Monitoring or Accessibility. `NSEvent` monitor crashes are reported on macOS 26. |
+| Windows, Linux, mobile | Platform work with no new result. |
+| Stars and skyglow from Oculus | Visible only on clear nights at dark sites. |
+| Night scoring | Infrared frames need their own truth. |
+| NBM and LAMP inputs (and a LAMP baseline at 1 h) | Recoverable later from archives. |
+| Sun study for interiors | The likely startup wedge, and a different product. |
+
+### 4.4 Non-goals
+- A general image generator or a weather app.
+- Accuracy claims for any place without a camera.
+- Accounts, payments, or a hosted multi-user service.
+- Training a new image model.
+
+---
+
+## 5. Design
+
+The overlay is one floating panel that never steals the app you are typing in. The default look reuses the Oculus instrument direction so the two projects read as a set: near-black panel, hairline rules, mono numerals, and colour only in the image.
+
+### 5.1 Overlay anatomy
+
+| Part | Content |
+|---|---|
+| Listening pill | Waveform and the live partial transcript while the key is held. |
+| Chips, top left | Place and viewpoint; valid time with zone and date; an AM/PM flip when the hour was ambiguous; the **destination chip** (`on-device`, or `→ <provider>` whenever audio or text leaves the machine). |
+| Image area | The camera's aspect ratio (16:9 for every candidate), so landmarks the caption names are never cropped. Tiers cross-fade in place. |
+| Tier marks, top right | Three marks that fill as tiers arrive. A hollow third mark means Tier 2 was rejected or late. |
+| Caption, bottom | The label line in §5.3. |
+| Scrub bar | Appears on arrow keys or hover, spanning 24 hours around the valid time (or the golden-hour interval). |
+
+### 5.2 States
 
 ```
-idle ──key-down──▶ listening ──partial──▶ resolving ──key-up──▶ tier0 ──▶ tier1 ──▶ tier2
+idle ──key-down──▶ listening ──key-up──▶ resolving ──▶ tier0 ──▶ tier1 ──▶ tier2
   ▲                    │ Esc / key-up with no speech                 │ any state: Esc → idle
   └────────────────────┴──────────── new key-down cancels everything ┘
 ```
 
-- **Panel:** transparent, non-activating, always on top (`tauri-nspanel` 2.1.1, or our own NSPanel via `objc2-app-kit` if the private API breaks).
-  - It is created at launch with background throttling disabled.
-  - It is **revealed on key-down**, so wake-from-suspension lands during speech rather than after key-up.
-  - The spans `reveal_req → visible → first_rAF → composite` are traced on every reveal.
-  - Keeping the panel ordered in at alpha 0 (click-through) is tested for latency and power.
-- **Hotkey:** a normal combo via `tauri-plugin-global-shortcut` 2.4.1, not Option-only. Releasing the modifier before the key is tested. Fn stays a stretch goal.
-- **Escape** is registered as a global shortcut only while the overlay is visible.
-- **Destination chip:** `on-device`, or `→ <provider>` for *any* audio or text leaving the machine. It changes **before** any fallback upload. An **on-device-only** setting disables every cloud path.
-- **Correctness contract:**
-  - Every paint is gated in the webview, immediately before compositing, on (query_gen, scene_hash, tier) matching current state.
-  - Late results are dropped.
-  - A wrong paint never counts as a hit; it is reported as visible-wrong-ms and flips per query.
-  - A randomized key-mash stress test (≥ 10k cycles, injected stage delays) asserts zero stale paints.
+| State | Trigger | What shows |
+|---|---|---|
+| Listening | Key down; the panel is revealed now, so wake-up happens during speech | Pill with partial transcript |
+| Resolving | Key up | Chips, then Tier 0 |
+| Relit | Tier 1 ready | Tier 1 frame and caption |
+| Refined | Tier 2 passes its checks | Tier 2 frame |
+| No match | Place not recognised | The transcript and the three closest known places, never a guess |
+| Out of range | Time beyond 7 days, or in the past | The horizon and an offer of the latest valid time |
+| Offline | No network | Cached tiers with a "forecast from" timestamp |
 
-### 6.2 Speech-to-text
+### 5.3 Caption
+
+The caption is the honesty layer, and every frame has one.
+
+```
+SIMULATED · Fri 20 Nov, 4:00 PM PST · cloud low 80% · ceiling 2,300 m · visibility 12 km
+  HRRR 18Z Thu, issued 11:27 AM PST (lead 28 h 33 min) · Sun 3.1° · Moon 41% lit, below horizon
+LIVE · Mount Rainier, Paradise camera · 3:52 PM PST (8 min old) · Courtesy National Park Service
+REAL PHOTO, CLOSEST MATCH · taken 14 Oct, 5:45 PM PDT · matched on Sun position and forecast class
+SIMULATED + AI TEXTURE · … · sky and haze unchanged from the simulation
+```
+
+- **"Issued"** means the time the forecast run became available, not its nominal run start. Lead time is the valid time minus that availability time.
+- The second line folds away and opens on hover.
+- **Credits** follow the licence ledger (§15.4): NOAA, NPS, and Open-Meteo with a link where its data is shown.
+
+### 5.4 Controls and the focus model
+
+The panel is **non-activating**: showing it never takes keyboard focus from the app you are in. So:
+
+| Key | Action | When it works |
+|---|---|---|
+| Hold hotkey | Listen; release to ask | Always (global shortcut; not Option-only, which macOS 15+ rejects) |
+| Esc | Dismiss, or cancel while listening | While the overlay is visible (registered globally only then) |
+| Left / Right | Scrub one hour; with Shift, ten minutes | After you click the panel |
+| M | Flip AM and PM | After you click the panel |
+| L | Live camera beside the simulated frame | After you click the panel |
+| C | Copy the image with its label burned in | After you click the panel |
+
+- Clicking the panel makes it the key window **without activating the app**, the Spotlight-style behaviour, and Esc hands focus back.
+- Plain arrow keys and Tab are never registered globally, because that would take them from your editor.
+- AM/PM uses M rather than Tab, so Tab keeps its VoiceOver and keyboard focus order.
+- The M1 spike verifies that focus returns to the previous text field.
+
+### 5.5 Copy, motion and accessibility rules
+- Never call a simulated frame a photo.
+- Always print the time zone and the date.
+- Units follow the system locale.
+- **Motion:** Tier 0 appears without a fade. Tier 1 and Tier 2 cross-fade in 120 ms with no layout shift, and the fade counts inside the measured paint time (§10.4). Reduce Motion turns the fade off.
+- **Keyboard and VoiceOver:** every control works from the keyboard, and the caption is real text that VoiceOver reads.
+- **Copies and exports** carry the caption burned into the pixels. Refined frames also carry IPTC `trainedAlgorithmicMedia`.
+
+---
+
+## 6. System architecture
+
+Eight components and one shared library, `oculus-core`, plus outside services. The Tier 1 renderer is one module used in three places: the overlay, the scrub view and headless evaluation.
+
+### 6.1 Components
+
+| Component | Runs in | Owns |
+|---|---|---|
+| Core (Rust, in the Tauri shell) | Desktop | Hotkey press and release, audio capture while held, speech bridge, parser, ephemeris through `oculus-core`, cancellation, tracing, caches |
+| Speech library (Swift static library, C ABI, in process) | Desktop | SpeechAnalyzer `DictationTranscriber` with partial results; Foundation Models for the parser fallback |
+| Overlay (TypeScript) | Webview | States, chips, caption, scrub, paint gate, Tier 2 composite and checks on the GPU |
+| Renderer (TypeScript + GLSL ES 3.0, WebGL2) | Webview and headless Chromium/SwiftShader | Tier 1 frames from a plate and a `SceneSpec`; `oculus-core` WASM inside |
+| Workers (Python) | AWS Lambda + EventBridge Scheduler | Forecast extraction (HRRR), camera capture, prediction issuing |
+| API (FastAPI on Lambda) | Cloud | Manifests with signed URLs, Tier 2 proxy and spend guard, prediction log |
+| Evaluation (Python) | Daily batch | Headless render of frozen `SceneSpec`s, extractor, baselines, scoring, backtest |
+| Dashboard (static site) | Web, private until NPS confirms | Accuracy and latency views |
+
+### 6.2 Diagram
+
+```
+┌──────────────────────── macOS app (Tauri 2) ─────────────────────────────┐
+│ Rust core: hotkey · cpal (while held) · SpeechEngine · parser · oculus  │
+│            cancellation · tracing · caches (forecast files, Tier 0, plates)
+│   Swift static lib (C ABI): SpeechAnalyzer · Foundation Models          │
+│ WKWebView panel: Tier 0 swap → Tier 1 WebGL2 (+ oculus WASM) → Tier 2   │
+│                  composite (sky locked, transmittance-weighted detail)  │
+└──────┬─────────────────────────┬────────────────────────┬────────────────┘
+       │ forecast JSON, plates,  │ STT (bake-off or        │ Tier 2 (≤ 1 in flight)
+       ▼ live frame (signed)     ▼ opt-in; token in ‖ mic) ▼
+  S3 + CloudFront           Deepgram                 refine proxy (spend guard)
+       ▲                                                  → fal or Runware
+       │ writes                                     
+  Lambda workers ◀── EventBridge Scheduler          Daily batch: headless render
+  (HRRR byte ranges from noaa-hrrr-bdp-pds;        (SwiftShader) → extractor →
+   NPS capture; prediction issuer)                  scores → Parquet → dashboard
+```
+
+The app and the evaluator read **the same forecast file** for each viewpoint and run, so the forecast behind a scored prediction is the one the app showed.
+
+### 6.3 Request flow
+
+Times are p95 budgets from key release; §10 breaks them down.
+1. **Key down.**
+   - Reveal the panel.
+   - Open the microphone and the speech session.
+   - Pre-connect TLS to the refine proxy.
+   - If cloud speech is on, mint its token in parallel.
+2. **First partial naming a known place** (match ≥ 0.9). Load that viewpoint's plate, forecast file and Tier 0 thumbnails from the local cache, fetching anything missing.
+3. **Key up.**
+   - Explicit finalize.
+   - Parse, resolve the time, and compute the Sun and Moon.
+4. **300 ms.** Tier 0, the closest real frame from the local library.
+5. **1 s.** Tier 1, the relit frame. Its 1024 px input for refinement renders offscreen at the same time.
+6. **3 s.** Tier 2, shown only if it passes the checks.
+7. **After.**
+   - Write the trace.
+   - If the valid time is in the future, log the ask as a graded prediction (§15.2).
+
+### 6.4 Platform matrix
+
+| Platform | Speech | Status |
+|---|---|---|
+| macOS 26 or later, Apple silicon | SpeechAnalyzer `DictationTranscriber`, on device | v1 |
+| Older macOS | Cloud streaming or a local model | Later |
+| Windows | Cloud streaming or a local model | Later |
+
+### 6.5 Why this stack
+
+| Choice | Reason |
+|---|---|
+| Tauri 2 (2.12.7) + `tauri-plugin-global-shortcut` 2.4.1 | Reports both press and release, with no key repeat, which hold-to-talk needs. The Rust core links `oculus-core` directly. |
+| `tauri-nspanel` 2.1.1, with our own NSPanel as a fallback | A non-activating, always-on-top panel. It relies on a private API, hence the fallback. |
+| Swift in-process static library, C ABI | `swift-rs` has no async support. Foundation Models must run in the UI process. A helper process adds IPC and permission attribution. |
+| WebGL2 renderer | Runs in the macOS webview and in headless Chromium, so the app and evaluation draw the same frames. |
+| Lambda + EventBridge Scheduler + S3 | Exact schedules, near-zero idle cost, and no server to keep alive. Oculus's state backend, storage, CDN and budget-alarm Terraform carry over. |
+| Parquet in S3, queried with DuckDB | The prediction log is append-only and analysed in batches, with no database server. |
+
+### 6.6 Changes to the brief's default architecture
+
+These are proposed. Each needs your go-ahead through §1.
+
+| # | Brief default | Proposed | Why |
+|---|---|---|---|
+| C1 | Tauri 2 | Keep it, with Swift as an in-process static library | See §6.5. |
+| C2 | Backend fetches Open-Meteo | An HRRR worker writes one JSON per viewpoint per run; the app and evaluation read the same file | Open-Meteo's HRRR ends 30 Nov, and it has no ceiling or cloud base and no run time. |
+| C3 | Tier 2 via proxy | A proxy with a spend guard, or a short-lived token for direct upload, chosen by a gate of ≤ 100 ms added p95 | Keys stay on the server. |
+| C4 | One scheduled job | Small unattended workers plus a daily batch | Frozen inputs make scoring reproducible. |
+| C5 | Renderer takes Sun and Moon as inputs | Computed inside the renderer via WASM | One self-contained module. |
+| C6 | — | Model-free camera response in Tier 1 | Otherwise the brightness and colour metrics measure the camera. |
+| C7 | Hosted inference only | **Not proposed** unless the Tier 2 kill test fails: an on-device one-step model | Likely lower quality. |
+| C8 | Golden Gate as the hero | Rainier as the hero, Point Reyes for fog, Grand Canyon third; Golden Gate only with permission | Licensing. |
+| C9 | Tier 2 "refines the frame" | Tier 2 adds ground texture only. The sky and hazed regions stay Tier 1 by construction. | It makes "never invents weather" structural rather than merely checked. |
+
+---
+
+## 7. Query understanding
+
+Speech becomes a structured query within 5 ms of the final transcript, with no language model in the common case.
+
+### 7.1 Speech
 
 ```rust
 trait SpeechEngine { fn start(&self, ctx: SpeechContext) -> Result<Box<dyn SpeechSession>>; }
@@ -323,551 +405,1021 @@ trait SpeechSession {
 }
 ```
 
-- **Audio.** `cpal` 0.18.2, opened on key-down and closed on key-up. No pre-roll buffer. Audio is held in RAM for the query only. Stream teardown happens off the key-up path.
-- **Swift.** An **in-process static library with a C ABI** (`@_cdecl`) hosts SpeechAnalyzer and Foundation Models. Foundation Models must run in the UI process.
-- **Vocabulary.** Manifest aliases are passed as contextual strings (A1) or keyterms (D).
-- **Engines.**
-  - **A1:** `DictationTranscriber`. Before it is labelled `on-device`, the spike verifies with a network monitor that it makes no network calls.
-  - **D:** Deepgram Nova-3. `mip_opt_out=true` is set in one function, covered by unit and integration tests. A short-lived token is minted by the backend **in parallel with opening the mic**, with audio buffered locally meanwhile, and traced as an `stt_token` span. If Deepgram has no token API, there is **no cloud primary**, never a long-lived key in the app.
-  - **P:** Parakeet, only if A1's *idle* release → final p95 exceeds 250 ms.
-- **Selection.** The primary is the engine with the lowest idle p95 release → final at equal or better post-parser place accuracy. The fallback is the best engine of the other kind (on-device vs cloud).
+**Audio:**
+- `cpal` 0.18.2, opened on key-down and closed on key-up.
+- No pre-roll buffer.
+- Audio is held in RAM for the duration of the query only.
+- Viewpoint aliases go in as contextual strings (on device) or keyterms (cloud).
 
-### 6.3 Parser
+**Engines:**
 
-Output (example):
+| Engine | Where | Partials | Role |
+|---|---|---|---|
+| **A1** SpeechAnalyzer `DictationTranscriber` | On device, macOS 26+ | Yes | **Default.** The only Apple transcriber that honours contextual strings. The spike confirms with a network monitor that it makes no network calls. |
+| **D** Deepgram Nova-3 with `Finalize` | Vendor servers | Yes | Measured in the bake-off. In the product: off by default, behind a toggle with a persistent indicator.<br>• `mip_opt_out=true` is set in one tested function.<br>• A short-lived token is minted in parallel with opening the mic.<br>• If no token API exists, there is no cloud path: never a long-lived key in the app. |
+| **P** Parakeet (FluidAudio) | On device | Yes | Benchmarked only if A1's idle p95 from release to final exceeds 250 ms. |
+
+Soniox stt-rt-v6 is in reserve. AssemblyAI is excluded, because free accounts can't opt out of training.
+
+**Selection.** The bake-off reports, for each engine:
+- time to first partial;
+- release-to-final p95 when idle;
+- WER;
+- place accuracy after the parser.
+
+The default stays on device unless you switch it after seeing those numbers.
+
+**Finalization levers** (each measured, not assumed):
+1. Explicit finalize on key-up, with a silence pad pushed as a burst.
+2. Tier 0 painted from a stable partial. This is allowed only while the wrong-paint rate stays ≤ 2 % (Wilson upper bound on the test set).
+3. Choosing the engine by its idle-state numbers.
+
+### 7.2 Prefetch on partials
+
+When a partial names a known place with a match score of 0.9 or more, the core loads that viewpoint's assets. A final transcript naming a different place cancels the load.
+
+Tier 1 may also pre-render from a stable partial. Pre-rendering is not painting. Whether it slows speech recognition through GPU or Neural Engine contention is measured (release → final with pre-render on vs off).
+
+### 7.3 Parser
+1. Normalise: lower-case, and strip filler and carrier phrases such as "show me".
+2. Extract the time expression with a hand-written grammar.
+3. Match what remains against the alias table.
+4. Emit the query.
 
 ```json
 {"place_id": "rainier", "viewpoint_id": "rainier.paradise-mountain",
- "valid_time": "2026-11-19T16:00:00-08:00", "valid_time_utc": "2026-11-20T00:00:00Z",
+ "valid_time": "2026-11-20T16:00:00-08:00", "valid_time_utc": "2026-11-21T00:00:00Z",
  "tz": "America/Los_Angeles",
- "time_source": {"kind": "clock", "text": "tomorrow at 4", "rule": "next-occurrence-am-or-pm"},
- "ambiguities": [{"field": "meridiem", "chosen": "pm", "alternative": "2026-11-19T04:00:00-08:00"}],
- "overrides": {}, "path": "fast", "confidence": 0.97}
+ "time_source": {"kind": "clock", "text": "tomorrow at 4", "rule": "day-plus-bare-hour"},
+ "ambiguities": [{"field": "meridiem", "chosen": "pm", "alternative": "2026-11-20T04:00:00-08:00"}],
+ "overrides": {}, "path": "fast_path", "confidence": 0.97}
 ```
 
-**Fast path** (deterministic, ≤ 2 ms, Rust):
-- **Places:** alias → exact → token fuzzy → phonetic (Double Metaphone), with a margin rule that triggers a disambiguation chip.
-- **Times:**
-  - **Clock:** a bare hour resolves to the next H:00 or H+12:00 at the place.
-  - **Days:** today, tonight, tomorrow, weekdays, this/next.
-  - **Solar events** from oculus-core: sunrise and sunset at −0.833°; golden hour rendered at +2°; blue hour at −5°; civil dawn and dusk at −6°.
-  - **"tonight"** = 21:00 local, or 1 h after sunset if later. **"now"** triggers LIVE.
-  - **DST:** a nonexistent local time shifts forward and is flagged; an ambiguous one takes the earlier offset and is flagged.
-- **Horizon:** HRRR up to 48 h; GFS up to 7 days, with the caption saying so; beyond that, Tier 0 only.
-- **Overrides:** a weather override switches the caption to "WHAT-IF".
+**The fallback** handles only what the grammar rejects:
+- Foundation Models with a `@Generable` struct, on device.
+- An 800 ms timeout, and a cache keyed by the normalised utterance.
+- The output is schema-validated and can never invent a `place_id`.
 
-**LLM fallback** (after the MSV core) runs only below a confidence threshold. It uses Foundation Models with a `@Generable` struct; the output is schema-validated and can never invent a `place_id`. Its rate and latency are reported.
+Every fallback call misses Tier 0, so the fallback rate is reported beside the Tier 0 numbers.
 
-**Tests:** ≥ 150 table-driven cases with an injected clock, covering:
-- noon and midnight edges;
-- machine zone ≠ place zone, including America/Phoenix across both DST changes;
-- the DST days 1 Nov 2026 and 14 Mar 2027;
-- weekday wrap;
-- solar events after the morning event has passed;
-- aliases, misspellings and phonetic errors;
-- ambiguity.
+### 7.4 Time rules
 
-Property tests check future-ness, horizon flags, and stability of the canonical form.
+All times are local to the place, never to the asker's machine.
 
-### 6.4 Tier 0
-
-- **Library.** Captured frames plus NPS archive frames from the same camera, stored privately at ≤ 1920 px. Each entry records Sun altitude and azimuth, day of year, extractor weather class, source and licence.
-- **Match.** Nearest on Sun altitude/azimuth, then day of year. The forecast-class analog adds the forecast weather class, and is a pre-registered baseline.
-- **Latency path.** Thumbnails for the viewpoint's plausible next 48 h are decoded with `decode()` in the background, so key-up → parse → swap.
-- **Leakage rule.** A baseline only sees frames captured before the issue time.
-
-### 6.5 Tier 1 renderer
-
-- **Interface.** `render(scene: SceneSpec, target) → Frame` is pure in (scene, renderer version). It is TypeScript + GLSL ES 3.0, imported by the overlay, the scrub view and the headless evaluator.
-- **Inputs.** `SceneSpec` = viewpoint + `valid_time_utc` + forecast samples (per layer: cover, base, thickness; ceiling; visibility; precipitation rate and type; RH; boundary-layer height; snow; wind) + the displayed seed. Sun and Moon come from oculus-core WASM inside the module.
-- **MSV passes:**
-  1. Hosek–Wilkie sky for Sun ≥ 0°. A separate twilight model (oculus-core empirical term) below 0°, scored separately. Moonlit night sky.
-  2. Cloud slabs intersected along view rays with curvature.
-  3. Dehazed overcast plate × (sky irradiance + Sun irradiance × N·L × DEM-horizon shadow), plus night emissive above a fitted Sun-altitude threshold.
-  4. Height- and depth-aware fog and ceiling slab.
-  5. Precipitation as extinction and wetness.
-  6. Camera model.
-- **Camera model.** Model-free radiometric response (Kim & Pollefeys 2008), fitted on development frames across all weather, so the exposure slope is identified at overcast and fog luminances. Few parameters. No valid-time-frame statistic enters it. Published with it on and off.
-- **Cloud Monte Carlo test.** ≥ 1,000 seeds × cover ∈ [0.1, 0.9], reporting rendered fraction by elevation band against cover.
-- **Determinism.** Same `SceneSpec` and version give identical pixels on the same backend. Golden images are rendered on Chromium/SwiftShader in CI; WKWebView has a looser, documented tolerance.
-- **Performance.** ≤ 50 ms of GPU time (`fenceSync`) at 1280×720. Shader variants are pre-warmed after launch and after context loss. GPU-resident plates are ≤ 1920 px wide.
-- **Pre-render cost.** Tier 1 may pre-render (not paint) from a stable partial. Whether that pre-render slows STT through GPU/ANE contention is measured (A1 release → final with pre-render on vs off), not assumed.
-
-### 6.6 Tier 2 (after the MSV core)
-
-1. **Kill test first:** 20 Tier 1 frames, run offline through Z-Image-Turbo img2img (strength 0.15–0.35), for ≤ $1. It records the check pass rate and a preference judged by someone other than you. It continues only if refinement is visibly better and passes checks.
-2. **By construction.** Tier 1's sky is composited back through the sky mask. Only high-frequency ground detail is transferred, weighted by Tier 1 transmittance T(x), so hazed or fogged regions cannot be dehazed. This runs on the GPU in the webview in ≤ 15 ms, with a per-frame phase-correlation registration check: a one-pixel crop or resize by the provider would ghost the transferred detail.
-3. **Checks.** Structure (edge F1, landmark positions ±2 px), weather (sky cloud fraction, landmark contrast), light (region luminance and ΔE2000).
-   - **False accepts** are measured on ≥ 200 deliberately weather-altered refinements run through the *full composited pipeline*: sky edits including sub-δ ones, snow added or removed, wet surfaces, fog texture. Zero accepts bounds the false-accept rate at ≤ 1.5 % (95 %).
-   - Thresholds are calibrated on a separate calibration set.
-4. **Survival.** ≥ 80 % of queries receive an accepted Tier 2 within 3 s, **and** a blind preference test (≥ 50 pairs, rated by someone other than you) prefers it in ≥ 70 % of pairs. Otherwise it ships off by default and the README says why.
-5. **Providers and transport.**
-   - Z-Image-Turbo on fal, using `X-Fal-Store-IO: 0` and a minimal CDN lifetime; Runware as the alternate host.
-   - A 50-call cancel microbenchmark records time-to-terminal and amount billed.
-   - Binary upload where the API allows it.
-   - FLUX.2 klein runs on fal (not BFL, whose policy "may train on" inputs) as a ~20-call illustration of why reference editors fail, not as a rate.
-6. **Disclosure.** Exported refined frames carry a burned-in label plus IPTC `trainedAlgorithmicMedia`.
-
-### 6.7 Live camera ("now")
-
-The latest frame is fetched in the background, polling the JSON and fetching the image only when `imagedate` changes. The caption reads `LIVE · frame time 16:00 PST (7 min old) · Courtesy National Park Service`. Installed copies follow the same polite-fetch rules.
-
-### 6.8 Unverified places (first on the cut list)
-
-- **Inputs.** Open-Meteo geocoding and a forecast from a pinned model.
-- **Generator.** A named provider and model, with retention recorded before it ships.
-- **Label.** `UNVERIFIED · generated image · scenery is invented`, burned into the pixels on export, plus IPTC metadata.
-- **Scope.** No accuracy claim, and the spend guard applies.
-
-### 6.9 Captions
-
-```
-SIMULATED · Thu 19 Nov 2026 16:00 PST (valid) · lead 22 h 35 min
-cloud low 80% · mid 10% · high 0% · ceiling 2,300 m · visibility 12 km · snow 0.4 mm/h
-HRRR 18Z run (NOAA), available 19:27 UTC · Sun 3.1° · Moon 41% lit, below horizon
-```
-
-- **Exports keep the caption.** Every exported or published image has its caption burned in.
-- **Attribution.** NPS, NOAA and Open-Meteo (with a link where its data is shown, marked "modified") are credited per the licence ledger (§9.3).
-
-### 6.10 Forecast worker
-
-- **Extraction.** After each HRRR run is available, byte-range GETs (Herbie) extract the fields at every viewpoint's sample points. Sample points are placed where the view rays meet each layer height.
-- **Output.** One JSON file per viewpoint per run, recording:
-  - source, model, and run start (from the path and the GRIB `d=` field);
-  - availability (from S3 `LastModified`, live only) and fetch time;
-  - grid cells and byte ranges;
-  - the values.
-- **Shared file.** The app reads the latest file and the evaluator reads the same files.
-- **Hindcast availability.** For archived runs, availability is modelled as run start + the p95 lag per forecast hour measured live; archived S3 timestamps record the backfill upload, not availability. A missing run falls back to the previous run and is never dropped.
-- **Lead time** is valid time minus availability. 24 h leads come from the 00/06/12/18Z runs (actual 24–29 h), and the actual lead is kept.
-- **Open-Meteo** (beyond 48 h; unverified places): a pinned model, bracketed by `meta.json` reads. A call is accepted only if `last_run_initialisation_time` is unchanged across it.
-
-### 6.11 Viewpoint manifest
-
-One entry per plate. It holds:
-- id, aliases, timezone;
-- camera pose and its solve residual;
-- assets (plates, depth, world height, masks) with a licence per asset;
-- landmarks (lat, lon, height, distance, pixel, band);
-- forecast sample points;
-- camera-response parameters and the frames they were fitted on;
-- the webcam block: JSON/image URLs, measured interval, terms URL, U1–U4 status, attribution, polite-capture caps, ownership basis and confirmation status;
-- truth sources.
-
-The full JSON schema lands with the M1 code and is validated in CI.
-
-### 6.12 Logs and schemas
-
-- **Records.** `forecast_run`, `prediction` (with both lead definitions, renderer SHA, SceneSpec hash and the displayed seed), `capture` (source stamp, hash, stale flag, registration residual, exclusion reason) and `score` (metric, value, extractor version).
-- **What gets predicted.** Predictions are issued hourly at leads 1, 6 and 24 h.
-- **Versioning.** Inputs are frozen, so a new renderer version is scored as a new version.
-
-### 6.13 Latency measurement
-
-- **t0.** The OS key-up event timestamp. Replay injects key events with `CGEventPost` at the HID tap, so the real Carbon hotkey path fires. The harness process (not the app) holds a listen-only tap that records only the hotkey's timestamps, never other key codes. The tap is compiled out of release builds.
-- **Paint.**
-  - **Definition:** the first WindowServer-composited frame in which the tier is at ≥ 50 % opacity.
-  - **Capture:** ScreenCaptureKit captures **only the overlay window** (or the tag rectangle) in measured runs. Each frame carries a pixel tag (query_gen, tier) drawn **inside the same surface** as the content: the WebGL canvas or the Tier 0 image layer.
-  - **Data kept:** the tag is decoded in memory and only timestamps are kept. Nothing is written to disk without a debug flag; if written, it stays local and is deleted after 7 days.
-  - **Overhead:** capture on vs off must differ by less than one vsync at p95.
-  - **Diagnostics:** `requestAnimationFrame` and IPC timestamps are kept as diagnostics, each with its uncertainty.
-- **Clock domains.** ScreenCaptureKit presentation timestamps and Rust `Instant` should both be host time; this is verified in the spike.
-- **Spans.** OS event → handler dispatch; audio buffer delivery; `stt_token`; DNS/TCP/TLS/WebSocket/TTFB (with a connection-reused flag); proxy-internal spans with propagated trace context; provider-reported queue and inference times; readback, encode and IPC; reveal; paint.
-- **Recorded per trace:** idle duration, cache, connection and model state; thermal state; power source; network interface **type only**.
-
-### 6.14 Replay harness
-
-- **Substitution.** Only sample *values* are swapped inside the live `cpal` callback. The real device opens, buffers arrive at their real cadence, and key-up triggers the real flush. No stage is mocked.
-- **Fixtures.** ~130 distinct scripted utterances (30 dev, 100 test), recorded through the live open-on-key-down path, plus ≥ 30 opt-in real-use utterances reported separately. The report includes the share of utterances still in speech at key-up.
-- **States.** Warm (< 60 s since the last query), **idle (≥ 30 min, the headline)**, post-wake and post-launch.
-  - Idle trials: ≥ 100 for the shipped engine and ≥ 60 for the comparison engine, run unattended overnight under `caffeinate -i` from a frozen measurement build. Concurrent load is recorded and the calendar stated.
-  - Each pass uses its own cache namespace.
-- **Statistics.** Cluster bootstrap by utterance. Runs are spread over ≥ 3 days at different times of day, with engines interleaved.
-- **Report.** p50/p95 per stage and tier with CIs; budget hit rates; wrong-paint rate; partial lag per engine; WER; place accuracy; fallback rate. Known bias: one speaker, one mic, one room.
-
----
-
-## 7. Architecture
-
-### 7.1 Interactive path
-
-```
-┌──────────────────────── macOS app (Tauri 2.12) ─────────────────────────┐
-│ Rust core: hotkey · cpal (while held) · SpeechEngine · parser (+ oculus) │
-│            cancellation · tracing · caches (forecast files, Tier 0, plates)
-│   Swift static lib (C ABI): SpeechAnalyzer · Foundation Models          │
-│ WKWebView panel: Tier 0 swap → Tier 1 WebGL2 (+ oculus WASM) → Tier 2   │
-│                  composite (sky locked, T(x)-weighted detail)           │
-└──────┬───────────────────────┬──────────────────────┬────────────────────┘
-       │ forecast JSON          │ STT (if cloud)       │ Tier 2 (≤ 1 in flight)
-       ▼ (authenticated store)  ▼ token minted in ‖    ▼
-  private object storage    Deepgram             backend: proxy or token mint,
-                                                  spend guard, per-install auth,
-                                                  async log (no text, no IP kept)
-```
-
-### 7.2 Evaluation path
-
-```
-unattended:                                             batch (daily) and CI:
-  hourly  forecast worker (HRRR byte ranges)              headless render (SwiftShader)
-  JSON-poll capture; fetch image on imagedate change  ─▶  one extractor on renders/baselines/truth
-  archive backfill (1 request at a time, ≥ 5 s apart,     score P1 (+ secondaries, Holm)
-          resumable, size-capped)                         dashboard (private until NPS confirms)
-  → private storage + small SQL DB                        `make score` reproduces from frozen inputs
-```
-
-### 7.3 Challenges to your default architecture (need your go-ahead)
-
-| # | Default | Recommendation | Why |
-|---|---|---|---|
-| C1 | Tauri 2 | **Keep**; Swift as an in-process static library with a C ABI | `swift-rs` has no async support; Foundation Models must run in the UI process |
-| C2 | Backend fetches Open-Meteo | **HRRR worker writes one JSON per viewpoint per run; the app and the eval read the same file** | Open-Meteo drops HRRR on 30 Nov, has no ceiling, no run time; one source of truth |
-| C3 | Tier 2 via proxy | **Short-lived token + direct upload if supported, else a never-sleeping proxy**; ≤ 100 ms p95 gate | Removes a hop; keys stay server-side |
-| C4 | One scheduled job | **Small unattended worker + daily batch** | Frozen inputs make scoring reproducible |
-| C5 | Renderer takes Sun/Moon as input | **Computed inside via WASM** | One self-contained module |
-| C6 | — | **Model-free camera response in Tier 1** | Otherwise brightness and colour measure the camera |
-| C7 | Hosted inference only | **Optional:** a small on-device one-step model on the M4 GPU as a $0 Tier 2 candidate | Apple Silicon is a GPU here; likely lower quality |
-| C8 | Golden Gate hero | **Rainier hero; Point Reyes fog; Grand Canyon third; Golden Gate only with permission by 4 Dec** | Licensing |
-| C9 | Tier 2 "refines the frame" | **Tier 2 contributes ground texture only; sky and hazed regions are Tier 1 by construction** | Makes "never invents weather" structural, not just checked |
-
----
-
-## 8. Metrics and Eval (pre-registration)
-
-This section is the pre-registration. It is frozen, with a commit hash recorded in DECISIONS.md, before any held-out frame is scored, labelled or viewed. The held-out frames are excluded from the labelling page.
-
-### 8.1 Latency targets (p95, OS key-up → composited paint, **idle**)
-
-| Target | Chain (initial allocation) |
+| You say | Resolves to |
 |---|---|
-| **Tier 0 ≤ 300 ms** | STT final ≤ 240 · parse 5 · swap ≤ 10 · composite ≤ 33 |
-| **First forecast-driven frame (Tier 1) ≤ 1,000 ms; stretch ≤ 400 ms** | STT final ≤ 240 (or stable partial) · parse 5 · GPU ≤ 50 · composite ≤ 33 · margin |
-| **Tier 2 ≤ 3,000 ms, reported as the share of queries delivered within 3 s** | STT final ≤ 240 · parse 5 · Tier 1 render + readback + JPEG encode ≤ 80 · token or proxy ≤ 100 · upload ≤ 250 · queue + inference ≤ 1,800 · download ≤ 200 · composite + checks ≤ 30 · paint ≤ 33 ≈ 2,740 ms |
+| A bare hour, "at 9" | The next 9:00 or 21:00 at the place, with an AM/PM chip. |
+| An hour with AM, PM, "tonight" or "this morning" | That time. If it has already passed, tomorrow, with the date chip highlighted. |
+| A day plus a bare hour, "tomorrow at 4" | 7 to 11 means AM, 12 means noon, 1 to 6 means PM; chip shown. |
+| "Now", or no time at all | The current time, with the live frame if a camera exists. |
+| "Sunrise", "sunset" | The Sun's centre at −0.833° altitude, which puts the upper limb on the horizon after refraction. |
+| "Golden hour" | The interval with the Sun from +6° to −4°; evening unless "morning" is said. Rendered at +2°, and the scrub bar spans the interval. |
+| "Blue hour" | Sun from −4° to −6°, rendered at −5°. |
+| "Morning", "afternoon", "evening", "night" | 9:00, 15:00, 19:00, 22:00 (configurable). |
+| "Tonight", alone | 21:00, or 1 h after sunset if that is later. |
+| "In two hours" | Now plus the offset. |
+| A weekday or a date | The next such day. |
+| A time with no place | The last place asked about, named on the chip. |
+| A daylight-saving gap or repeat | A nonexistent time moves forward; an ambiguous one takes the earlier offset. Both are flagged on the chip. |
+| **Horizon** | HRRR to 48 h; a pinned GFS run to 7 days, with the caption saying so; beyond that, the Out of range state. |
 
-Also reported: warm, post-wake and post-launch states; first partial and place match from key-down; mic-open latency against a reference click; wrong-paint rate; LLM fallback rate. **No target moves after measuring.**
+### 7.5 Place and viewpoint matching
+- **Aliases.** Each viewpoint has an alias list: names, nicknames and common mishearings.
+- **Matching order:** alias → exact → token-set fuzzy → phonetic key (Double Metaphone), so "point rays" still matches.
+- **Close calls.** If the two best scores are within a margin, a disambiguation chip appears.
+- **Viewpoints.** "From" picks a viewpoint, as in "Grand Canyon from Yavapai". Otherwise the place's default viewpoint is used.
+- **A miss** returns the three closest places, never a guess.
 
-### 8.2 Accuracy endpoints
+### 7.6 Tests
+- A table of at least 150 utterances with expected queries, run on every commit with an injected clock.
+- Edge cases:
+  - noon and midnight;
+  - weekday wrap;
+  - solar events after the morning event has passed;
+  - aliases, misspellings and phonetic errors;
+  - ambiguity.
+- Daylight saving: the skipped hour in March (14 Mar 2027) and the repeated hour in November (1 Nov 2026).
+- Cross-zone: asked from Chicago (this machine) or Austin about Los Angeles and Phoenix. Phoenix has no DST, so it is tested across both changes.
+- Property tests:
+  - a resolved time is never in the past unless the ask was "now";
+  - horizon flags are correct;
+  - the canonical form is stable.
 
-**Primary (one):**
-- **P1 — Rainier summit visible, 24 h lead.**
-  - **Outcome:** a daytime frame (Sun ≥ 3° by ephemeris) is "summit visible" when the summit-band landmark's edge ratio against its illumination-conditioned clear-day reference is ≥ τ. Below a lower threshold it is "hidden"; between the two it is "partial", which is excluded from P1 and reported. Camera-in-cloud frames are a separate class, scored as "hidden" in a sensitivity analysis. τ and the partial band are fixed on development data.
-  - **Prediction:** the same extractor run on the rendered frame.
-  - **Statistic:** **Peirce skill score** (POD − POFD). The primary test is the paired difference ΔPSS = PSS(Snow Globe) − PSS(persistence), with a 95 % CI from a block bootstrap. The block length is set from development-period autocorrelation, at least 1 day.
-  - **Persistence** is the stronger of two:
-    - (a) the latest frame available at issue time;
-    - (b) the frame at valid − 24 h. At 24–29 h leads this frame postdates issue, so it is a conservative baseline, and the PRD says so.
-  - **Claim:** made if the CI excludes 0.
-  - **MDE:** computed from development data and published before sealing. If the MDE on the prospective window exceeds 0.25, the primary moves to the hindcast held-out season (design H). If H isn't available, P1 is reported as underpowered, plainly.
+---
+
+## 8. Data
+
+Everything Lookout needs is free for a non-commercial project. The evaluation archive exists for the forecast; for the cameras, it is checked in M0.5.
+
+### 8.1 Inventory
+
+| Source | Used for | Cadence | Status |
+|---|---|---|---|
+| `oculus-core` (your Rust crate) | Sun and Moon position, illuminated fraction, twilight | Computed | Reused; refraction and the camera-frame transform are added (§8.4) |
+| **HRRR, direct from AWS** `noaa-hrrr-bdp-pds` | Visibility, cloud ceiling, cloud base, cloud top, low/mid/high cloud, boundary-layer cloud, RH, dew point, boundary-layer height, precipitation rate and type | Hourly runs: 18 h, or 48 h at 00/06/12/18Z. On S3 52–108 min after the run starts. | Public domain. Archived since 2014; HRRRv4 from Dec 2020. |
+| Open-Meteo, pinned model | GFS from 48 h to 7 days | Model-dependent | Free for non-commercial use; data CC BY 4.0. Its HRRR is **discontinued 2026-11-30**, and its responses carry no run time (bracketed with `meta.json`). |
+| NPS air-quality webcams | Truth frames, plates, Tier 0 library, live view | One frame per 15 min at the air cams | Generally public domain. EXIF names NPS. Written confirmation requested. |
+| Mount Rainier park camera `webcams-mora/mountain.jpg` | Rainier truth and plate | Off the quarter-hour; cadence to be measured | 1920×1080, Axis P1387. **No ownership metadata**, so confirmation is requested from the park. |
+| GOES-18 (`noaa-goes18`) | Independent cloud and fog vote at the viewpoint pixels | 5 min | Public domain |
+| Golden Gate cameras | Demo viewpoint | — | No licence-clean source found. Crissy Field's cameras were "temporarily unavailable" on 18 Nov. Permission asks: Lawrence Hall of Science, ALERTCalifornia; cut-off 4 Dec. |
+| Hosted image model | Tier 2 | Per call | Chosen in M3 by kill test and benchmark |
+
+### 8.2 Viewpoints
+
+Capture starts for every camera that passes the licence check. Building (plates, pose, labels) follows the order below.
+
+| Viewpoint | Camera | Why | Status |
+|---|---|---|---|
+| **Mount Rainier, Paradise** | NPS park camera, 1080p | "Is the mountain out?" Cap clouds and cloud base | **MSV hero** |
+| **Point Reyes** | NPS air cam, 4K, 15 min | Coastal fog; NPS calls it the windiest place on the Pacific Coast and the second foggiest in North America | **MSV** |
+| Grand Canyon, Yavapai Point | NPS air cam, 4K, 15 min | Deep scene; winter cloud in the canyon | Third, built after the MSV |
+| Yosemite, Turtleback Dome | NPS air cam, 4K | Large day-to-day weather changes. (The Half Dome and El Capitan cameras belong to Yosemite Conservancy and are excluded.) | v1 candidate |
+| Acadia, McFarland Hill | NPS air cam, 4K | Coastal fog on the other ocean | v1 candidate |
+| Grand Teton | NPS air cam, 4K | Mountain cloud | v1 candidate |
+| Great Smoky Mountains, Look Rock | NPS air cam | Classic haze site | Checked in M0.5 |
+| Big Bend | NPS air cam | Very clear air, in Texas | Checked in M0.5 |
+| National Mall | No NPS air cam found | A recognisable landmark | Not available |
+| Golden Gate Bridge | None licence-clean | The original demo ask | Only with permission by 4 Dec |
+
+### 8.3 Forecast
+
+- **Primary source: HRRR, read directly.**
+  - Byte-range GETs via `.idx` files (Herbie) fetch only the needed fields at each viewpoint's sample points. A sample point sits where a view ray meets each layer height, not at the camera's grid cell.
+  - One JSON file is written per viewpoint per run. It records the source and model, the run start, the availability time (S3 `LastModified`, live runs only), the fetch time, the grid cells, the byte ranges and the values.
+- **Lead time** is the valid time minus the availability time.
+  - 24 h and 48 h leads come only from the 00/06/12/18Z runs, so the actual 24 h leads are 24–29 h; the actual lead is kept.
+  - For archived runs, availability is modelled as run start plus the live-measured p95 lag for each forecast hour.
+  - A missing run falls back to the previous one and is never dropped.
+- **Datums.** Every height field has its datum pinned in DECISIONS.md (above HRRR's smoothed terrain, or above sea level). One 3 km cell can span a canyon's rim and floor.
+- **Between hours,** values are interpolated linearly. The scrub view interpolates between forecast hours.
+- **Source churn.** If NOAA retires HRRR for RRFS, a source adapter switches and the switch is a labelled break in every series. RRFS is on NOMADS today but not yet in an operational AWS bucket, and its off-hour cycles have no low/mid/high cloud cover.
+
+### 8.4 Ephemeris
+
+`oculus-core` computes the Sun from JPL mean elements (Standish 1992) and the Moon from truncated ELP-2000/82 (Meeus ch. 47), with aberration, precession, nutation and topocentric parallax. It builds for Rust, WASM and Python, so the app and evaluation run the same code.
+
+**Measured** (18 Nov, `cargo test --release --test golden_astro`, 3/3 pass, against JPL Horizons and Astropy):
+
+| Quantity | Worst error |
+|---|---|
+| Sun apparent position | 0.19′ (0.003°) |
+| Moon apparent position | 0.13′ |
+| Moon illuminated fraction | 0.01 % |
+
+**Additions:**
+- Apparent altitude with atmospheric refraction (`Apparent.alt` is unrefracted).
+- A transform into each viewpoint's camera frame, giving a pixel position and a light direction.
+
+**Checks:**
+- 1,000 random place-and-time samples against Skyfield with a JPL ephemeris.
+- Horizons vectors for each viewpoint, hourly for 12 months.
+- Sunrise and sunset against NOAA to ±1 min.
+- Targets: Sun ≤ 0.05°, Moon ≤ 0.3°.
+
+The crate is a Cargo git dependency pinned to `06809e6`. Its MIT notice ships inside the WASM bundle, and it is valid to 2050.
+
+### 8.5 Viewpoint plates
+
+A plate set is everything the renderer needs for one viewpoint; Appendix A has the manifest. The builder is an offline command:
+1. **Base frame.** A bright-overcast frame near midday with **every landmark visible**. This is hard at Rainier, where overcast often hides the summit. Several such frames can be median-combined. The frame is dehazed with the per-viewpoint haze model (§9.3), so it serves as an albedo proxy.
+2. **Night frame and lights mask:** the median night frame minus the median day frame, thresholded.
+3. **Pose:** heading, pitch, roll and field of view, solved from three or more surveyed landmarks. NPS publishes a named-landmarks image for each air cam.
+4. **Depth and world height:** a DEM ray-cast for terrain, with a permissively licensed monocular model for the near field only, scale-aligned to the DEM. Models with non-commercial (NC) weights are excluded.
+5. **Normals** from depth, and **DEM horizon maps** for shadows from off-screen ridges.
+6. **Masks:** sky (segmentation), lights, and landmark bands.
+7. **Pose check, part 1:** landmark reprojection ≤ 1°.
+8. **Pose check, part 2:** the predicted time the summit (or another landmark) loses direct sun at sunset, against archive frames, converted to degrees. Where the Sun itself is in frame (Grand Canyon, summer sunsets), its predicted pixel is checked too.
+9. **Camera response** fitted on development frames (§9.4).
+
+### 8.6 Frame quality gates
+
+A captured frame is scored only if it passes all of these. Exclusions apply identically to the model and to every baseline, and their counts are published.
+
+| Gate | Test |
+|---|---|
+| Fresh | NPS `imagedate`, HTTP `Last-Modified` and the image hash all differ from the previous capture. |
+| Same view | Registration against the plate is within tolerance, which catches a moved camera. |
+| Clear lens | Sharpness above a floor, which catches droplets, ice and salt. Results are reported with and without iced-lens exclusions. |
+| Colour mode | Monochrome (infrared) night frames are flagged; they feed the Tier 0 library but are not scored in v1. |
+| Daylight | Defined by the ephemeris Sun altitude, never by frame brightness, because brightness correlates with weather. |
+
+### 8.7 Storage
+
+Measured frame sizes are 577 KB for the Rainier 1080p JPEG and 1.86 MB for the Point Reyes 4K JPEG.
+- **What is stored:** the frame nearest each hour at ≤ 1920 px (~0.5 MB), plus 15-minute frames as 640 px thumbnails for staleness checks and Tier 0.
+- **Estimate:** ~17 MB per camera per day, or ~135 MB a day for 8 cameras. About 12 GB over three months, which costs well under $1 a month in S3.
+- **Kept with the frames:** plates, the frame at every prediction's valid time, the forecast JSON files and the prediction log.
+- **Access:** all of it is private until NPS confirms (§15).
+
+---
+
+## 9. Rendering pipeline
+
+Three tiers produce the same view at rising fidelity, and only the last one uses an image model.
+
+### 9.1 Tier 0: closest real frame
+- **Library:** captured frames plus NPS archive frames from the same camera. Each entry is indexed by:
+  - Sun altitude, and Sun azimuth relative to the camera;
+  - day of year;
+  - the extractor's weather class (cloud fraction, low-visibility flag);
+  - source and licence.
+- **Query:** the same descriptor, built from the ephemeris and the forecast file. If the forecast hasn't loaded yet, the match falls back to Sun position only.
+- **Latency:** thumbnails for the viewpoint's plausible next 48 h are decoded in the background, so the key-up path is parse → swap.
+- **Caption:** it says this is a real photo, when it was taken, and what it was matched on.
+- **Leakage:** in evaluation, Tier 0 sees only frames captured before the issue time. It is the analog baseline R3 (§13.4).
+
+### 9.2 Tier 1: relit plate
+
+`render(scene: SceneSpec, target) → Frame` is pure in (scene, renderer version).
+
+`SceneSpec` holds:
+- the viewpoint and the valid time;
+- the forecast samples, per layer: cover, base and thickness, plus ceiling, visibility, precipitation rate and type, RH, boundary-layer height and wind;
+- the seed.
+
+Sun and Moon are computed inside the module.
+
+| Pass | Model | Driven by |
+|---|---|---|
+| 1. Atmosphere | **Hillaire 2020** lookup tables (transmittance, multiple scattering, sky view, aerial perspective), valid at every Sun angle including twilight. Ported from `sebh/UnrealEngineSkyAtmosphere` (MIT); Babylon.js's GLSL port (Apache-2.0) is the alternative. | Sun and Moon direction; the per-viewpoint clear-air haze |
+| 2. Sun, Moon, night sky | Geometric disks. Moon brightness from its illuminated fraction. Moonlit sky brightness from `oculus-core` (Krisciunas & Schaefer 1991). | Ephemeris, pose |
+| 3. Cloud layers | **Slabs with base and thickness**, each intersected along every view ray with Earth curvature. The forecast is read at the intersection point. Noise is thresholded before filtering so coverage doesn't drift with distance, and it drifts with the forecast wind. An overlap rule is checked against HRRR total cloud. | Low, mid and high cover; cloud base and top; ceiling; wind |
+| 4. Scene light | Dehazed overcast plate × (sky irradiance + Sun irradiance × N·L × DEM horizon shadow × cloud transmittance toward the Sun). | Plate, normals, horizon maps, pass 3 |
+| 5. Night lights | Lights mask × an on/off curve fitted to Sun altitude on real frames | Lights mask |
+| 6. Haze, fog and ceiling | §9.3 | Depth, world height, visibility, ceiling, base, RH |
+| 7. Precipitation | Extinction plus wet-surface darkening. No rain streaks: they are invisible at webcam shutter speeds and distances. | Precipitation rate and type |
+| 8. Camera | Model-free radiometric response (§9.4), exposure, and a monochrome mode to match infrared night frames | Scene luminance |
+
+- **Performance:**
+  - ≤ 8 ms a frame at 1080p in steady state, so scrubbing holds 60 fps.
+  - ≤ 50 ms of GPU time (`fenceSync`) for the first frame, including the lookup tables and plate upload.
+  - Shader variants are pre-warmed after launch and after a lost context. GPU-resident plates are ≤ 1920 px wide.
+- **Known limits:** one plate is not true albedo, and terrain shadows come only from the DEM. Low-Sun and golden-hour results are reported as their own stratum.
+
+### 9.3 Haze, fog and obscuration
+
+| Viewpoint | Phenomenon | Decisive forecast fields |
+|---|---|---|
+| Rainier (Paradise ~1,650 m; summit 4,392 m) | Summit hidden by cloud base or cap cloud; the camera itself inside cloud | Ceiling and cloud base **along the view ray to the summit**; low and mid cloud |
+| Point Reyes | Marine stratus and advection fog; the camera possibly inside the marine layer | Low cloud, cloud base, near-surface visibility |
+| Grand Canyon | Winter cloud and snow in the canyon | Cloud base against the rim and floor heights |
+
+The rendering model:
+- **Clear-air haze is not the forecast's visibility field.**
+  - HRRR VIS is a near-surface diagnostic: the minimum of a humidity term and hydrometeors in the lowest ~100 m. It sees fog only when model cloud water is that low, so a deck at 300 m reads as clear.
+  - It also says nothing about aerosol haze along a 20–100 km sight line.
+  - So each viewpoint gets a **clear-air extinction profile fitted on clear development frames**, from landmark contrast against distance, per season. It is a fitted asset, so the leakage rules in §13.9 apply.
+  - The Grand Canyon haze metric is dropped, because HRRR doesn't model aerosol.
+- **Near-surface fog** applies the visibility field only to the part of each ray below ~100 m above ground. Extinction is β = −ln(ε) / V, with ε pinned to the diagnostic's contrast threshold (Koschmieder's 3.912 / V when ε = 0.02):
+
+  ```
+  β = −ln(ε) / V        T(d) = exp(−β d)        L = L_scene · T(d) + L_sky · (1 − T(d))
+  ```
+
+- **Low cloud and ceiling slabs** confine fog between a base and a top in world height, so terrain above the deck stays clear. Above the fog top, β decays.
+- **Thick fog** uses a multiple-scattering airlight approximation.
+- **Camera inside cloud** is its own state: uniform extinction, and no landmarks.
+
+### 9.4 Camera model
+
+The radiometric response is model-free (Kim & Pollefeys, PAMI 2008), fitted on development frames across all weather, so the exposure slope is identified at overcast and fog luminance. It has few parameters, and no statistic from the valid-time frame enters it. Results are published with it on and off; otherwise the brightness and colour metrics would measure the camera, not the forecast.
+
+### 9.5 Determinism and tests
+- **Seed.** The seed is a hash of the viewpoint and the forecast run, and cloud noise drifts with the forecast wind across valid time. So scrubbing is continuous, and the same (viewpoint, run, valid time) always gives the same pixels. The displayed seed is the one that gets scored.
+- **Golden images.** Twelve reference conditions per viewpoint have goldens, and a render must reach SSIM ≥ 0.98 against its golden.
+  - Goldens are rendered on Chromium/SwiftShader in CI.
+  - WKWebView has its own, looser tolerance, which is documented.
+- **Cloud test.** ≥ 1,000 seeds × cover from 0.1 to 0.9. The rendered sky fraction must be within 5 points of the **view-ray target fraction**, reported by elevation band. The target is not the raw forecast cover: forecast cover is an area fraction over a column, and a camera sees slant rays crossing many columns.
+
+### 9.6 Tier 2: guarded refinement (after the MSV core)
+1. **Kill test first.**
+   - 20 Tier 1 frames run offline through Z-Image-Turbo img2img at strength 0.15–0.35, for ≤ $1.
+   - It records the check pass rate, plus a preference judged by someone other than you.
+   - Work continues only if refinement is visibly better and passes the checks.
+2. **Safe by construction.**
+   - Tier 1's sky is composited back through the sky mask.
+   - Only high-frequency ground detail is transferred, weighted by Tier 1 transmittance T(x), so hazed or fogged regions can't be dehazed.
+   - This runs on the GPU in the webview in ≤ 15 ms.
+   - A phase-correlation check per frame catches a provider's one-pixel crop or resize, which would otherwise ghost the transferred detail.
+3. **Input:** the Tier 1 frame at 1024 px on the long edge, rendered offscreen as soon as the parameters are known.
+4. **Prompt:** built from the parameters only (time-of-day phrase, sky state, fog state). The user's words never reach the model.
+5. **Cache key:** viewpoint, 10-minute bucket, quantised weather, model version. Measured latency runs use their own cache namespace.
+6. **Transport:**
+   - At most one request in flight, and a cancelled-but-unfinished request still counts.
+   - No speculative or paid warm-up; only a TLS pre-connect on key-down.
+   - A 50-call microbenchmark records the time to cancel and the amount billed.
+   - fal is called with `X-Fal-Store-IO: 0`; Runware is the alternate host.
+7. **Illustration:** FLUX.2 klein (on fal, not BFL, whose policy "may train on" inputs) gets ~20 calls to show why reference editors fail. It is not scored as a rate.
+
+### 9.7 Guardrails
+
+Tier 2 is shown only if every check passes. Otherwise Tier 1 stays and the reason is logged.
+
+| Check | Measure | Starting threshold |
+|---|---|---|
+| Registration | Phase-correlation shift | ≤ 1 px |
+| Structure | SSIM between edge maps of Tier 1 and Tier 2, non-sky region; landmark positions | ≥ 0.80; ±2 px |
+| Brightness | Mean luminance per region against Tier 1 | Within 15 % |
+| Colour | ΔE2000 per region against Tier 1 | Calibrated |
+| Fog | Landmark-region contrast against Tier 1 | Within 20 % |
+| Sky, Sun and Moon | Identical to Tier 1 by construction | Asserted in tests |
+
+**Thresholds:**
+- They start from the values above.
+- They are calibrated on ~100 human-judged pairs that are separate from the test set, and then frozen.
+
+**False accepts** are measured before any pass rate is reported:
+- ≥ 200 deliberately weather-altered refinements are run through the *full composited pipeline*.
+- The alterations: sky edits (including subtle ones), snow added or removed, wet surfaces, fog texture.
+- Zero accepts bounds the false-accept rate at ≤ 1.5 % (95 %).
+
+**Survival:** Tier 2 ships on by default only if:
+- ≥ 80 % of queries get an accepted Tier 2 within 3 s; **and**
+- a blind preference test (≥ 50 pairs, rated by someone else) prefers it in ≥ 70 % of pairs.
+
+Otherwise it ships off, and the README says why.
+
+---
+
+## 10. Latency engineering
+
+### 10.1 Budgets (p95, OS key-up → composited paint, idle)
+
+| Tier | Target | Chain (initial allocation, ms) |
+|---|---|---|
+| Tier 0 | **≤ 300** | STT final ≤ 240 · parse 5 · swap ≤ 10 · composite ≤ 33 ≈ 288 |
+| Tier 1 | **≤ 1,000; stretch ≤ 400** | STT final ≤ 240 (or stable partial) · parse 5 · GPU ≤ 50 · fade to 50 % ≤ 60 · composite ≤ 33 ≈ 388 |
+| Tier 2 | **≤ 3,000**, reported as the share delivered within 3 s | STT final ≤ 240 · parse 5 · render + readback + JPEG ≤ 80 · proxy ≤ 100 · upload ≤ 250 · queue + inference ≤ 1,800 · download ≤ 200 · composite + checks ≤ 30 · fade ≤ 60 · paint ≤ 33 ≈ 2,800 |
+
+The Lookout draft's plan reached the photographic frame in 2,250 ms. It assumed ~150 ms for the final transcript and 1,400 ms for inference.
+
+The research doesn't support those figures:
+- The best independently measured hosted STT p95 is 298 ms.
+- On-device reports conflict 5× (125 ms vs 602–702 ms).
+- Tier 2 inference figures are vendor claims that leave out our network.
+
+So the honest slack on Tier 2 is about 200 ms. **The final transcript is the bottleneck for all three tiers, and no engine has yet shown ≤ 240 ms idle on this machine.** These are planning numbers; each milestone replaces them with measured p50 and p95. **No target moves after measuring.**
+
+### 10.2 Techniques
+
+| Technique | What it saves |
+|---|---|
+| Reveal and pre-warm on key-down | Panel wake-up, microphone, speech session, GL context and proxy connection are ready before speech ends. |
+| Prefetch on a partial | Plate, forecast file and Tier 0 thumbnails are usually local by key release. |
+| Offscreen Tier 2 input | The 1024 px frame renders in parallel with the on-screen frame. |
+| Local caches | Plates on disk, GPU textures in memory, forecast files by run, Tier 2 results by key. |
+| Cancellation | One generation number per query. A new key press cancels everything in flight. |
+
+### 10.3 Correctness contract
+- Every paint is gated in the webview, immediately before compositing, on (query_gen, scene_hash, tier) matching the current state. Late results are dropped.
+- A wrong paint never counts as a hit. It is reported as visible-wrong milliseconds and as flips per query.
+- A randomised key-mash stress test (≥ 10,000 cycles with injected stage delays) must show **zero stale paints**.
+
+### 10.4 Measurement
+- **t0** is the OS key-up event.
+  - Replay injects key events with `CGEventPost` at the HID tap, so the real hotkey path fires.
+  - Only the harness process (not the app) holds a listen-only tap, and it records only the hotkey's timestamps.
+  - The tap is compiled out of release builds.
+- **Paint:**
+  - **Definition:** the first WindowServer-composited frame in which the tier is at ≥ 50 % opacity.
+  - **Capture:** ScreenCaptureKit captures only the overlay window.
+  - **Tag:** a pixel tag carrying (query_gen, tier) is drawn inside the same surface as the content.
+  - **Kept:** only timestamps.
+  - **Overhead budget:** capture on vs off must differ by less than one vsync at p95.
+- **Diagnostics only:** `requestAnimationFrame` and IPC timestamps. They fire 1–3 vsyncs before compositing, so they are never the paint time.
+- **Clocks:** ScreenCaptureKit timestamps and Rust `Instant` should both be host time; the spike verifies this.
+
+### 10.5 Trace
+
+Every query writes one line of JSON. It has these timestamps:
+- `key_down`, `speech_first_partial`, `place_matched`, `assets_ready`;
+- `key_up`, `speech_final`, `parsed`, `forecast_ready`;
+- `tier0_paint`, `tier1_paint`;
+- `tier2_sent`, `tier2_first_byte`, `tier2_checked`, `tier2_paint`.
+
+It also has these spans:
+- OS event → handler;
+- audio buffer delivery;
+- `stt_token`;
+- DNS, TCP, TLS and time to first byte, with a connection-reused flag;
+- proxy-internal spans;
+- provider-reported queue and inference times;
+- readback and encode;
+- panel reveal.
+
+And this state:
+- idle duration and cache state;
+- thermal state and power source;
+- network interface **type only**.
+
+Traces stay on the machine and never contain transcript text.
+
+### 10.6 Replay harness
+- **Substitution:** only sample *values* are swapped inside the live `cpal` callback. The real device opens, buffers arrive at their real cadence, and key-up triggers the real flush. No stage is mocked.
+- **Fixtures:**
+  - ~130 scripted utterances (30 for development, 100 for test), recorded through the live path;
+  - ≥ 30 opt-in real-use utterances, reported separately.
+- **States:**
+  - **idle** (≥ 30 min; the headline);
+  - warm (< 60 s since the last query);
+  - cold (caches cleared);
+  - after wake;
+  - after launch.
+
+  Idle trials: ≥ 100 for the shipped engine and ≥ 60 for the comparison engine, run unattended overnight under `caffeinate -i` from a frozen build. Each pass uses its own cache namespace.
+- **Statistics:** a cluster bootstrap by utterance. Runs are spread over ≥ 3 days at different times, with engines interleaved.
+- **Report:**
+  - p50 and p95 per stage and tier, with confidence intervals;
+  - budget hit rates, wrong-paint rate and partial lag;
+  - WER, place accuracy and fallback rate;
+  - the share of utterances still in speech at key-up.
+
+  Known bias: one speaker, one microphone, one room.
+- **One command** runs it and writes a results table plus the raw traces. CI runs the parts that need no microphone.
+
+---
+
+## 11. Backend and infrastructure
+
+One small API on Lambda, five scheduled jobs and an on-demand backfill. Keys for any paid service never leave the server.
+
+### 11.1 Routes
+
+| Route | Returns |
+|---|---|
+| `GET /v1/viewpoints` | Verified viewpoints and the alias-table version (a static file on CloudFront) |
+| `GET /v1/viewpoints/{id}/manifest` | The plate manifest, with signed URLs for plates, forecast files and Tier 0 thumbnails |
+| Forecast file (signed URL, no API hop) | The latest per-run JSON for the viewpoint: the same file evaluation reads |
+| `GET /v1/live/{viewpoint}` | The latest captured camera frame and its age. The app never polls NPS directly, so there is one polite fetcher for every install. |
+| `POST /v1/refine` | The raw refined frame (compositing and checks run in the webview), or "keep Tier 1" at the spend cap |
+| `POST /v1/predictions` | An id for a logged graded ask |
+| `GET /v1/predictions/{id}` | The prediction, plus its truth frame and scores once the valid time has passed |
+| Dashboard data | Static exports from the daily batch |
+
+### 11.2 Jobs
+
+| Job | Schedule | Does |
+|---|---|---|
+| Forecast worker | Every 5 min from 50 min past each run's start, until the run is on S3 | Extracts byte ranges and writes one JSON per viewpoint per run; records the measured lag per forecast hour |
+| Capture | Every 5 min | Polls the NPS JSON or HTTP headers, and fetches the image **only when it changes**, at most 4 per hour per camera. Applies the quality gates and stores frames. |
+| Prediction issuer | Hourly | Freezes a `SceneSpec` for leads of 1, 3, 6, 12, 24 and 48 h, wherever a run covers them. Rendering is pure, so freezing the inputs is issuing the prediction. |
+| Daily batch | Daily (a missed day re-runs from frozen inputs) | Renders frozen `SceneSpec`s headless, runs the extractor and baselines, scores, and updates the private dashboard |
+| Archive backfill | On demand | One request at a time, ≥ 5 s apart, resumable, never downloading twice, size-capped |
+| Cost report | Daily | Paid calls against the caps; a budget alarm on top |
+
+### 11.3 Hosting
+- **AWS, described in Terraform.**
+  - **Carried over from Oculus:** `bootstrap/` (state backend), `storage.tf`, `cdn.tf` and the `aws_budgets_budget` alarm.
+  - **Not carried over:** the ALB, Fargate service, ElastiCache and NAT gateway. Oculus's own PRD estimates that stack at ~$60 a month.
+- **Workers and API:**
+  - Lambda, with a container image for `eccodes` and Herbie.
+  - EventBridge Scheduler (its free tier covers 14 M invocations a month).
+  - S3 and CloudFront.
+  - Estimated ≈ $0–1 a month; the Lambda free-tier figures are checked on AWS's page before deploying.
+- **The Tier 2 proxy** must add ≤ 100 ms p95 over a direct call when idle. Lambda (with SnapStart or a compiled runtime) and a Cloudflare Worker are both measured, and the result goes in DECISIONS.md.
+- **GitHub Actions** runs CI only. Its schedules jitter, and a public repo's schedules are disabled after 60 days without activity. The sealed window spans the holidays.
+- **A server-side daily cap** on Tier 2 calls. At the cap, `/v1/refine` answers "keep Tier 1".
+
+---
+
+## 12. Repository layout
+
+The repo mirrors Oculus: the PRD, a milestone runbook and a per-ticket progress file sit at the root.
+
+```
+snow-globe/                 (renamed when you choose a name)
+  PRD.md  PLAN.md  PRD_PROGRESS.md  DECISIONS.md  THIRD_PARTY_NOTICES  Makefile
+  app/
+    src-tauri/              Rust core: hotkey, audio, speech bridge, parser, cancellation, trace
+    src/                    overlay UI (TypeScript)
+    speech-macos/           Swift static library (C ABI): SpeechAnalyzer, Foundation Models
+  renderer/                 WebGL2 Tier 1 renderer, goldens, headless runner
+  workers/                  forecast worker, capture, prediction issuer (Python)
+  server/                   FastAPI on Lambda: manifests, refine proxy, predictions
+  eval/                     extractor, baselines, scoring, backtest, reports
+  plates/                   plate builder; binaries live in object storage
+  viewpoints/               manifests, validated against a JSON schema in CI
+  bench/                    replay and paint-capture harness (voice fixtures live outside git)
+  dashboard/                static accuracy and latency site
+  infra/terraform/          AWS serverless resources
+  docs/                     research, council, review
+```
+
+Conventions:
+- small commits, with tests beside the code;
+- secrets only in environment variables;
+- CI on every push;
+- one Make target each for `test`, `bench`, `backtest` and `score`.
+
+---
+
+## 13. Testing and evaluation
+
+Evaluation starts on day one: HRRR's archive goes back to 2014, and NPS keeps an image archive whose depth is checked in M0.5.
+
+### 13.1 Tests
+
+| Layer | Covers | Pass rule |
+|---|---|---|
+| Unit | Parser table, time rules, ephemeris against references, metric code | All pass |
+| Property | Resolved time never in the past; cache keys stable; canonical form stable | All pass |
+| Golden image | Tier 1 under twelve conditions per viewpoint | SSIM ≥ 0.98 |
+| Cloud Monte Carlo | Rendered vs view-ray target fraction | Within 5 points |
+| Contract | API request and response schemas; the manifest schema | All pass |
+| Leakage | Baselines see only frames available at issue time; held-out frames are absent from the labelling store | All pass |
+| Stale paint | ≥ 10,000 randomised cycles | 0 stale paints |
+| False accept | ≥ 200 weather-altered Tier 2 frames | Bound reported |
+| Replay | End-to-end latency, idle | Measured against §14 |
+
+### 13.2 Evaluation designs
+
+| Mode | Data | Leads | Available |
+|---|---|---|---|
+| **Hindcast (design H)** | Archived NPS frames paired with archived HRRR runs (exact run times; availability modelled) | 1–48 h | Back to HRRRv4 (Dec 2020), limited by NPS archive depth (checked in M0.5) |
+| **Sealed prospective (design P)** | Live captures paired with live forecast files | 1, 3, 6, 12, 24, 48 h | 15 Dec 2026 – 14 Jan 2027 (≥ 28 days, extended by any outage) |
+| **Graded asks** | Your own queries, scored when they come due | Whatever you asked | From the time the API is deployed (M2), reported separately |
+
+The M0.5 archive check chooses H or P, and the split is committed before any held-out frame is touched.
+
+Open-Meteo's Previous Runs archive is **not** used. It offers only whole-day offsets, and its visibility came back null for HRRR, NBM and GFS.
+
+Every pair renders Tier 1 headless. Tier 2 runs on a budgeted sample only.
+
+### 13.3 Truth from the frame
+- **Primary truth: binary visibility per landmark.** A landmark is visible when its edge energy, compared with an illumination-conditioned clear-day reference, clears a threshold (the VEIA method).
+  - Rainier's bands: summit, upper mountain, mid-slopes, near ridge.
+  - That gives a categorical **obscuration height**: the highest visible band.
+- **Secondary truth:**
+  - cloud fraction in the sky mask, against an illumination-conditioned clear-sky reference, for Sun ≥ 10°. A red-to-blue threshold would flag red twilight skies and white near-horizon haze as cloud.
+  - a continuous visibility estimate from contrast across several landmarks, scored in ordinal bins bounded by landmark distances.
+- **Independent votes:** GOES-18's clear-sky mask and reflectance at the viewpoint pixels, plus on-site NPS met data where it exists. Disagreements are flagged, not averaged.
+- **One extractor** is applied to rendered frames, baseline frames and real frames alike.
+
+### 13.4 Endpoints (the pre-registration)
+
+This section is frozen, with its commit hash recorded in DECISIONS.md, before any held-out frame is scored, labelled or viewed.
+
+**Primary: P1, Rainier summit visible at a 24 h lead.**
+- **Outcome.** A daytime frame (Sun ≥ 3° by ephemeris) is "visible" when the summit band's edge ratio is ≥ τ. Below a lower threshold it is "hidden". In between it is "partial", which is excluded from P1 and reported. Frames from inside cloud are a separate class, counted as hidden in a sensitivity analysis. τ and the partial band are fixed on development data.
+- **Prediction:** the same extractor, run on the rendered frame.
+- **Statistic:** the Peirce skill score (PSS = POD − POFD). The test is the paired ΔPSS against persistence, with a 95 % confidence interval from a block bootstrap. The block length is set from development-period autocorrelation, and is at least 1 day.
+- **Claim:** made if the confidence interval excludes 0. The minimum detectable effect is published before sealing.
+  - If it exceeds 0.25 on the prospective window, the primary moves to the hindcast held-out season.
+  - If no hindcast is available, P1 is reported as underpowered, plainly.
 
 **Renderer claims (pre-registered with P1):**
-- **R1 — non-inferiority.**
-  - **Test:** PSS(Snow Globe) ≥ PSS(S) − Δ, with Δ = 0.05, against both forecast-scalar baselines.
-  - **S_rule:** "visible" if HRRR ceiling at the summit-ray intersection is above the summit height (datum-corrected) and low + mid cover < 50 %.
-  - **S_mos:** a logistic regression on HRRR fields, fitted on development data.
-  - **What a pass shows:** against S_rule, faithfulness (the extractor recovers the rule from the render); against S_mos, that rendering keeps up with a fitted statistical forecast.
-- **R2 — superiority of geometry.** For Rainier's obscuration height (ordinal landmark bands), ray-intersection sampling beats sampling HRRR at the camera's grid cell. The statistic is ordinal error, paired, with a block bootstrap.
-- **R3 — analog.**
-  - **Analog distance:** a weighted Sun-position plus forecast-class distance, defined on development data.
-  - **Stratum:** a pre-registered "no close analog" stratum, with its n reported.
-  - **If the analog is non-inferior everywhere, including that stratum,** the README says the shader buys explainability and coverage, not accuracy.
+- **R1, non-inferiority:** PSS(Lookout) ≥ PSS(S) − 0.05 against both forecast-scalar baselines, S_rule and S_mos (§13.6).
+- **R2, geometry:** for Rainier's obscuration height, sampling along view rays beats sampling the camera's own grid cell. Scored as ordinal error, paired, with a block bootstrap.
+- **R3, analog:** the shader against Tier 0's forecast-class analog, with a pre-registered "no close analog" stratum. If the analog is non-inferior everywhere, the README says the shader buys explainability and coverage, not accuracy.
 
-**Key secondary (not part of the primary claim):**
-- **P2 — Point Reyes landmark obscured, 24 h.** The landmark, its distance, its height and the forecast fields mapped to it are named in M2 from the NPS landmarks image, before sealing. It is scored on a summer hindcast season if the archive allows.
+**Key secondaries** (Holm-corrected, reported, not claimed):
+- **K1, cloud-fraction error at 24 h**: skill 1 − E/E_ref against persistence, over whole periods only.
+- **K2, low-visibility event at 24 h, per viewpoint**: the nearest named landmark obscured, meaning fog or cloud at camera level. Scored by PSS, with POD, FAR and CSI also reported.
+  - At Point Reyes this is v0.3's P2. The landmark, its distance and height, and the forecast fields mapped to it are named in M2, before sealing.
+  - Point Reyes is scored on a summer hindcast season if the archive allows, because a December window will hold few fog events.
+  - At Rainier it is the near-ridge band.
 
-**Secondary** (your list plus the council's; Holm-corrected; reported, not claimed):
-- cloud fraction in the sky mask;
-- the fog contingency table;
-- brightness (L\*) and colour (ΔE2000) per region;
-- embedding similarity as a diagnostic, with the model named;
-- leads of 1 h and 6 h;
-- climatology skill.
+**Other secondaries** (descriptive):
+- brightness (mean log luminance);
+- colour (ΔE2000 in the sky region);
+- LPIPS and image-embedding cosine, named as diagnostics;
+- Sun and Moon disk error;
+- leads of 1, 3, 6, 12 and 48 h;
+- climatology skill;
+- ungrounded-generation scores.
 
-**The skill-score ratio** (1 − E/E_ref) is reported only over whole periods, never per day.
+### 13.5 Scores
 
-### 8.3 Extractor validation (before any number is published)
+```
+POD = H / (H + M)      POFD = F / (F + C)      PSS = POD − POFD
+FAR = F / (H + F)      CSI = H / (H + M + F)   SS  = 1 − E_model / E_ref
+```
 
-- **Labels.** ~150 real frames per metric, stratified by time of day and weather, plus ~50 renders. 50 frames are re-labelled a week later for intra-rater agreement; a second labeller is used if available.
-- **Bars.** Summit and landmark visibility F1 ≥ 0.85. Cloud fraction MAE ≤ 0.10 by day. Fog F1 only with ≥ 30 positives.
-- **Failure rule.** A metric that fails its bar is not reported, and the README says so.
+H, M, F and C are hits, misses, false alarms and correct negatives. CSI ignores correct negatives and moves with the base rate, which is why the claims use PSS.
 
-### 8.4 Periods and leakage
+### 13.6 Baselines
 
-- **Design H (archive is deep enough).**
-  - Development: earlier season(s) within one camera epoch.
-  - Held-out: a later season (for Rainier, winter 2025–26 if available; for P2, summer 2026).
-  - The prospective window is a confirmation.
-  - All fitted assets come only from development frames that precede the held-out season: plates, clear-day references, the camera response, τ, S_mos and analog weights.
-  - Only HRRRv4 (Dec 2020 onward) is used.
-- **Design P (archive is shallow).**
-  - Development: captures from go-ahead to 14 Dec 2026.
-  - Held-out: a **sealed prospective window 15 Dec 2026 – 14 Jan 2027 (≥ 28 days)**, extended by any outage.
-- **Choosing and committing.** The archive check in M0.5 picks H or P. The split is committed before any held-out frame is touched.
-- **Renderer features.** Development data is split into dev-fit and dev-check by alternating weeks. A feature is admitted only if it improves dev-check P1-PSS by ≥ 0.02 (or dev-check obscuration-height error), which keeps feature choice from becoming a garden of forking paths.
-- **CI tests.** Leakage tests (a baseline only sees frames available at issue time; held-out frames are absent from the labelling store) and metric unit tests run on every push.
+| Baseline | What it is | What beating it shows |
+|---|---|---|
+| Persistence | The stronger of (a) the latest frame available at issue time and (b) the frame at valid − 24 h | The forecast adds information |
+| Climatology | The frequency for that hour and month, from development frames | Skill beyond the season |
+| S_rule | "Visible" if HRRR's ceiling where the summit ray crosses it is above the summit (datum-corrected) and low + mid cover is < 50 % | Rendering is faithful (R1) |
+| S_mos | Logistic regression on HRRR fields, fitted on development data | Rendering keeps up with a statistical forecast (R1) |
+| Camera-cell sampling | The same render, with the forecast sampled at the camera's grid cell | View-ray geometry matters (R2) |
+| Tier 0 analog | The closest real frame, matched on Sun position and forecast class | Rendering beats retrieval (R3) |
+| Ungrounded generation | ~50 text-to-image frames with no forecast input (≤ $1, after vendor approval) | What grounding buys: how often a generator "shows the mountain out" regardless of weather |
 
-### 8.5 Dashboard
+### 13.7 Statistics
+- Results are reported by lead time and per camera. Pooled numbers appear only beside the per-camera ones.
+- Intervals are 95 %, from a block bootstrap over days, since frames within a day are correlated.
+- **Effective sample size is reported beside every pair count.** On the sealed window, 28 days × 2 viewpoints gives 56 day-viewpoint blocks, whatever the number of hourly predictions.
 
-A static page with:
-- P1 (with CI, n and base rate) and the R1–R3 results;
-- secondaries with Holm-adjusted p-values;
-- per-viewpoint strips: yesterday's forecast vs what the camera saw vs persistence;
-- latency by stage;
-- uptime and exclusions.
+### 13.8 Extractor validation (before any number is published)
+- **Labels:**
+  - ~150 real frames per metric, stratified by time of day and weather;
+  - ~50 labelled renders;
+  - 50 frames re-labelled a week later, plus a second labeller if available.
+- **Bars:** landmark visibility F1 ≥ 0.85; cloud-fraction MAE ≤ 0.10; fog F1 only with ≥ 30 positives.
+- **A metric that fails its bar is not reported,** and the README says so.
 
-It stays private until NPS confirms. `make score` rebuilds it from frozen inputs.
+### 13.9 Periods and leakage
+- **Design H:**
+  - Development is the earlier season or seasons within one camera epoch. Held-out is a later season.
+  - Every fitted asset comes only from development frames that precede the held-out season: plates, haze profiles, clear-day references, the camera response, τ, S_mos and analog weights.
+  - Only HRRRv4 is used.
+- **Design P:** development runs from go-ahead to 14 Dec 2026; held-out is the sealed window.
+- **Feature admission:**
+  - Development data is split into dev-fit and dev-check weeks, alternating.
+  - A renderer feature is admitted only if it improves dev-check P1 PSS by ≥ 0.02, or improves obscuration-height error.
+
+### 13.10 Dashboard
+- P1 with its confidence interval, n and base rate; R1–R3; the key secondaries with Holm-adjusted p-values.
+- Accuracy by lead time, each tier against each baseline, per camera.
+- Latency by stage, p50 and p95, idle and warm.
+- Per-viewpoint strips: yesterday's forecast, what the camera saw, and persistence.
+- The ten best and ten worst predictions beside their truth frames.
+- Guardrail pass rate and the reasons for failures.
+- Graded asks; uptime and exclusions.
+- **Access:** private until NPS confirms. `make score` rebuilds it from frozen inputs.
+
+### 13.11 What I expect, plainly
+- **Rainier:** HRRR's ceiling and cloud base should carry real skill over persistence at 24 h, because synoptic cloud is what forecast models do well.
+- **Point Reyes fog:** expect weak 24 h skill and frequent false alarms, mostly HRRR's rather than the renderer's.
+  - HRRR's marine-layer tops run ~150 m low.
+  - SFO historically needed a purpose-built forecasting system.
+  - That result is reported as measured. The latency and rendering claims stand without it.
 
 ---
 
-## 9. Privacy, Licensing and Cost
+## 14. Metrics and targets
 
-### 9.1 Data-flow inventory
+Each number has one place where it is measured. A missed target is reported with its measured value and the bottleneck. Targets don't move after measuring.
 
-| Data | Where it goes | Retention | Disclosure / control | Owner |
-|---|---|---|---|---|
-| Live audio (on-device engine) | RAM | duration of the query | chip `on-device`; mic indicator | you |
-| Live audio (cloud engine) | Deepgram (`mip_opt_out=true`) | provider: "only for the duration necessary to process the request" | chip `→ Deepgram` before the first byte; on-device-only setting | you |
-| Transcript text | RAM; Foundation Models (on-device); Haiku only if enabled, after its terms are recorded | query | chip for any cloud text | you |
-| Traces | local disk | 30 days rolling | IDs, lengths and parse fields only, never transcript text (replay runs excepted) | you |
-| Screen-capture frames (harness) | RAM, overlay window only | discarded; timestamps kept | MEASURING indicator; Screen Recording permission disclosed; debug dumps local, 7 days | you |
-| Hotkey event tap (harness) | RAM | discarded | hotkey timestamps only; compiled out of release | you |
-| Replay fixtures (your voice) | local, outside iCloud and git; Deepgram only with your approval | privately until **M5 + 12 months** so README numbers stay traceable (or the README says they were deleted) | REC indicator that switches itself off; opt-in | you |
-| Fixture transcripts and labels | git | permanent | committed text only | you |
-| Backend log | backend DB | 90 days | install_id (pseudonymous, disclosed), viewpoint_id, valid_time, timings, check results; no text; no IP stored by our code; host access-log retention recorded once the host is chosen; first-run notice | you |
-| Tier 1 frame sent for Tier 2 | fal (request history off, minimal CDN lifetime; provider application logs exist) or Runware | provider terms | "AI-refined" caption; burned-in label on export | you |
-| Unverified-place text and image | Open-Meteo geocoding; named image provider | provider terms (recorded before shipping) | chip; burned-in label; IPTC metadata | you |
-| Camera frames (may show people) | private storage ≤ 1920 px | **12 months after M5**, except plate sources and published examples | published only after NPS confirmation, ≤ 1280 px, people and vehicles blurred, reviewed; Rainier (busy visitor area) reviewed most carefully | you |
-| Plates, depth, masks | private storage; app cache | as frames | not public until confirmed | you |
-| Forecast JSON | private storage; app | life of the project | NOAA credit; Open-Meteo link where used | you |
-| Provider keys | backend environment only | — | the app holds none (short-lived STT token only) | you |
-| Demo recording | README | permanent | shows only content cleared for publication | you |
-
-**Takedown:**
-- **Channel:** a GitHub issue template plus a contact of your choosing (§13).
-- **Response time:** within 7 days.
-- **Copies deleted:** storage, CDN, dashboard and the Tier 0 index; local caches purge when the index changes.
-
-### 9.2 Polite collection
-- **Live capture:** poll the JSON; fetch the image only when `imagedate` changes; at most 4 images per hour per camera.
-- **Archive backfill:** one request at a time, ≥ 5 s apart, resumable, never downloading twice, with a total size cap.
-- **Identification:** the User-Agent names the project and its repo URL; backoff on errors; robots.txt honoured (NPS disallows only `/ns/`, `/search/` and `loader.cfm`).
-
-### 9.3 Licence ledger (→ generated `THIRD_PARTY_NOTICES`)
-
-| Item | Licence / basis | Duty |
+| Metric | Target | Measured by |
 |---|---|---|
-| NPS camera frames | Generally public domain (NPS disclaimer); air-cam EXIF names NPS; written confirmation requested | "Webcam imagery courtesy National Park Service. Derived images are not NPS products." No implied endorsement. |
-| HRRR, GOES-18, METAR, NBM (if used) | US government, public domain | "Forecast data: NOAA HRRR via NOAA Open Data Dissemination"; GOES-18/NOAA credited where used as truth |
-| Open-Meteo | CC BY 4.0; free API non-commercial | Link next to any display; mark "modified" |
-| Hosek–Wilkie data tables | **BSD-3** (Hosek & Wilkie 2012–13) via `sun-sky` (Unlicense) | Keep the notice in source and bundle |
+| Tier 0 paint, p95, idle | ≤ 300 ms (warm and cold reported beside it) | Replay + paint capture |
+| Tier 1 paint, p95, idle | ≤ 1 s; stretch ≤ 400 ms | Replay + paint capture |
+| Tier 2 within 3 s | ≥ 80 % of queries; p95 reported | Replay + paint capture |
+| First partial, p50 | ≤ 300 ms after speech onset | Replay (onset known from the fixture) |
+| Release → final, p95, idle | ≤ 240 ms (allocation) | Replay |
+| Exact place and time, replay test set | ≥ 95 % | Bench |
+| Parser fallback rate | ≤ 10 % (Tier 0 survives only below ~5 %) | Bench |
+| Wrong paints from partials | ≤ 2 % (Wilson upper bound), or partial paint disabled | Replay |
+| Stale paints | 0 in ≥ 10,000 cycles | Stress test |
+| Tier 1 frame time | ≤ 8 ms at 1080p steady state; first frame ≤ 50 ms GPU | Renderer bench |
+| Sun and Moon position | ≤ 0.05° and ≤ 0.3°; sunrise and sunset ±1 min | Ephemeris tests |
+| Pose | ≤ 1° | Plate builder |
+| Rendered vs target cloud fraction | Within 5 points | Monte Carlo test |
+| P1: ΔPSS vs persistence, 24 h | Claimed if the 95 % CI excludes 0 (a hypothesis, not a gate) | Sealed scoring |
+| R1: non-inferiority vs S_rule and S_mos | Margin 0.05 | Sealed scoring |
+| K1, K2: cloud-fraction skill; low-visibility PSS, 24 h | Reported, Holm-corrected | Sealed scoring |
+| Tier 2 false accepts | ≤ 1.5 % (0 of ≥ 200) | False-accept suite |
+| Tier 2 guardrail pass rate | ≥ 90 %, with thresholds frozen first | Evaluation sample |
+| Tier 2 preference | ≥ 70 % of ≥ 50 pairs, rated by someone else | Blind test |
+| Extractor | Landmark F1 ≥ 0.85; cloud-fraction MAE ≤ 0.10 | Labelled frames |
+| Verified viewpoints | 2 for the MSV; 8 targeted for v1 | Manifest |
+| Scored pairs | ≥ 5,000 hindcast pairs where the archive allows; live pairs reported with effective n | Prediction log |
+| Capture and worker uptime | Reported; outages extend the window | Logs |
+
+---
+
+## 15. Privacy, licensing and safety
+
+Three rules cover it:
+- audio stays local by default;
+- every frame is labelled;
+- no camera is used against its terms, and nothing derived from camera frames is published until NPS confirms in writing.
+
+### 15.1 Rules
+
+| Area | Rule |
+|---|---|
+| Audio | Captured only while the key is held and held in RAM for the query. Transcribed on device by default. Never stored, except recordings you add to the replay set. |
+| Cloud speech | Off by default. Turning it on shows a persistent indicator. The destination chip changes **before** the first byte leaves the machine, and an on-device-only setting disables every cloud path. |
+| Labels | A caption on every frame. Copied and exported images carry the caption burned in, and refined frames also carry IPTC metadata. |
+| Cameras | Only sources whose terms allow automated access. The manifest stores the terms URL, the date checked, the ownership basis and the confirmation status. |
+| Capture rate | Never faster than the camera's own update, and at most 4 per hour. Fetch only on change. No steering of shared cameras. |
+| Publication | Until NPS confirms (requested for all cameras and the archive, by the end of M2), there is capture and private evaluation only. "Private" includes the app. With no answer, the public repo, README and demo carry code, numbers and charts only, and you sign off that list. |
+| People in frames | Published frames are ≤ 1280 px, with people and vehicles blurred and each one reviewed. The Rainier camera faces a busy visitor area. |
+| Attribution | The app and the README credit NOAA and each camera operator. |
+| Secrets | Paid-service keys live only on the server. The app holds at most a short-lived token. |
+| Telemetry | Traces stay on the machine and never contain transcript text. |
+
+### 15.2 Data-flow inventory
+
+| Data | Where it goes | Retention | Disclosure and control |
+|---|---|---|---|
+| Live audio (on device) | RAM | The query | `on-device` chip; mic indicator |
+| Live audio (cloud, bake-off or opt-in) | Deepgram with `mip_opt_out=true` | Provider: "only for the duration necessary" | `→ Deepgram` chip before the first byte |
+| Transcript text | RAM; Foundation Models (on device) | The query | Haiku only if enabled, after its terms are recorded |
+| Traces | Local disk | 30 days rolling | IDs, lengths and parse fields only |
+| Screen-capture frames (harness) | RAM, overlay window only | Discarded; timestamps kept | MEASURING indicator; Screen Recording permission disclosed |
+| Hotkey event tap (harness) | RAM | Discarded | Hotkey timestamps only; compiled out of release builds |
+| Replay fixtures (your voice) | Local, outside iCloud and git | Until M5 + 12 months, so README numbers stay traceable | REC indicator that switches itself off; opt-in |
+| Graded asks | Prediction log (Parquet in S3) | Life of the project | install_id (pseudonymous), viewpoint, valid time and timings, with no text. Disclosed on first run; off in on-device-only mode. |
+| API logs | CloudWatch | 30 days (set in Terraform) | No text. Our code stores no IP; the host's access-log retention is recorded. |
+| Tier 1 frame sent for Tier 2 | fal (no request history, short CDN lifetime) or Runware | Provider terms | "AI texture" caption; burned-in label on export |
+| Camera frames | Private S3, ≤ 1920 px | 12 months after M5, except plate sources and published examples | Published only after NPS confirmation (§15.1) |
+| Plates, depth, masks | Private S3; app cache | As frames | Not public until confirmed |
+| Forecast files | S3; app | Life of the project | NOAA credit |
+| Provider keys | Server environment only | — | The app holds none |
+
+### 15.3 Polite collection
+- **Live:** poll the JSON or headers, and fetch the image only on change, at most 4 per hour per camera.
+- **Backfill:** one request at a time, ≥ 5 s apart, resumable, never downloading twice, with a total size cap.
+- **Identification:** the User-Agent names the project and its repo URL.
+- **Errors:** back off on errors.
+- **robots.txt:** honoured (NPS disallows only `/ns/`, `/search/` and `loader.cfm`).
+
+### 15.4 Licence ledger (generates `THIRD_PARTY_NOTICES`)
+
+| Item | Licence or basis | Duty |
+|---|---|---|
+| NPS camera frames | Generally public domain (NPS disclaimer); air-cam EXIF names NPS; confirmation requested | "Webcam imagery courtesy National Park Service. Derived images are not NPS products." No implied endorsement. |
+| HRRR, GOES-18 | US government, public domain | "Forecast data: NOAA HRRR via NOAA Open Data Dissemination" |
+| Open-Meteo | CC BY 4.0; free API non-commercial | A link beside any display; marked "modified" |
+| Hillaire atmosphere | `sebh/UnrealEngineSkyAtmosphere` (MIT) or Babylon.js (Apache-2.0) | Keep the notice in the source and the bundle |
 | oculus-core | MIT | Notice inside the WASM bundle |
-| Parakeet weights (if used) | CC BY 4.0 | "NVIDIA Parakeet TDT v2, CC BY 4.0" |
 | Z-Image-Turbo | Apache-2.0 | Notice; disclose AI refinement |
-| Depth and embedding models, DEM | Named in M2; non-commercial weights excluded | Per licence |
+| Parakeet weights (if used) | CC BY 4.0 | Credit line |
+| Depth model, embedding model, DEM | Named in M2; non-commercial weights excluded | Per licence |
 
-### 9.4 Cost (development cap $25)
-
-| Item | Estimate | Hard cap in code |
-|---|---|---|
-| Deepgram STT benchmark (covered by sign-up credit) | ≈ $0.20–2 | $3 |
-| Tier 2 kill test | ≤ $1 | $1 |
-| Tier 2 benchmark and false-accept suite (if the kill test passes) | ≈ $5–8 | $10 |
-| Tier 2 during development and eval sample | ≈ $3–5 | $6 |
-| Haiku (only if FM fails) | ≈ $0.05–0.50 | $1 |
-| Unverified-place generation | ≈ $0.50 | $1 |
-| Hosting and storage | $0 on free tiers (§13) | $2 |
-| **Total** | **≈ $10–17** | **$24** |
-
-Ask before the first paid call to each vendor; hard caps in the proxy; ledger in DECISIONS.md.
+### 15.5 Takedown
+- **Channel:** a GitHub issue template plus a project-specific contact address.
+- **Response:** within 7 days.
+- **Deleted from:** storage, CDN, dashboard and the Tier 0 index. Local caches purge when the index changes.
 
 ---
 
-## 10. Risks and Mitigation
+## 16. Milestones
+
+Each milestone ends at a gate. **A gate passes when its evidence exists**: the measured value and, for a miss, the bottleneck. A missed target triggers the cut-order rule, not a stall and not a retune.
+
+**Rules:**
+- A milestone that runs more than 25 % late loses the next item on the cut list (§19).
+- Nothing outside the MSV starts before it is published, except M0.5.
+- Every model, vendor and architecture choice goes in DECISIONS.md with its measurement.
+- No paid call to a vendor before your go-ahead for that vendor.
+
+**Dates** are offsets from go-ahead day **G**, assuming ~25 hours a week (§1 row 12). Fixed dates that don't move:
+- the Golden Gate cut-off, **4 Dec 2026**;
+- the sealed window, **15 Dec 2026 – 14 Jan 2027** (design P), with the pre-registration frozen before it.
+
+Under design P, the freeze needs τ, S_mos, the analog weights and the MDE from development data by 14 Dec. With go-ahead on 20 Nov that is about G+24, so it moves to the front of M2. Under design H the date doesn't bind.
+
+| Milestone | Builds | Gate evidence |
+|---|---|---|
+| **M0 Scout** (done 19 Nov) | PRD, research, council, cross-check | Your calls in §1 |
+| **M0.5 Start the clock** (G → G+4) | • Forecast worker.<br>• Capture of every camera that passes the licence check (≤ 8).<br>• NPS archive check.<br>• Repo scaffold, CI, trace skeleton, PRD_PROGRESS.md.<br>• **One backtest pair end to end**: an archived frame plus an archived HRRR run → a crude headless render → a crude extractor score.<br>• Email drafts. | • ≥ 72 h of worker and capture logs.<br>• Archive report, with H or P chosen in DECISIONS.md.<br>• The pair rendered and scored, labelled "v−1".<br>• Emails sent (you). |
+| **M1 Voice to first pixel** (G+4 → G+18) | • A one-day platform spike: hotkey with the modifier released first; panel over another app keeping focus; click-to-key focus; wake timing; cpal; Swift partials; network silence; ScreenCaptureKit tag; `CGEventPost`; clock agreement.<br>• Speech A1, plus D for the bake-off.<br>• Parser, overlay with Tier 0, replay and paint harness, README skeleton with blanks. | • Replay report (idle headline): p95 per stage, Tier 0, first partial, WER, place accuracy.<br>• ≥ 150 parser cases green.<br>• STT decision.<br>• 0 stale paints.<br>• A screen recording over another app. |
+| **M1.5 Walking skeleton** (by G+21) | Renderer v0 headless (sky, cloud slabs, ceiling slab, flat fog, camera v0); extractor v0; P1 on **development data only** against persistence, climatology and S_rule | • A dev-only P1 table, with nothing held out touched.<br>• Monte Carlo test output. |
+| **M2 Relit frame** (G+21 → G+38) | • Tier 1 for Rainier and Point Reyes in the overlay and scrub view.<br>• Ephemeris validation, plates, haze profiles, camera response, goldens.<br>• Features admitted on dev-check evidence.<br>• Pre-registration frozen. | • Ephemeris report.<br>• Pose report.<br>• Tier 1 p95 idle, with pre-render contention measured.<br>• Goldens in CI.<br>• Pre-registration hash. |
+| **M3 Photographic frame** (G+38 → G+48) | Tier 2 kill test, then (if it passes) composite, checks, false-accept suite, cancellation and the proxy gate; then the LLM fallback | • Kill-test result.<br>• Delivery within 3 s.<br>• False-accept bound.<br>• Preference result.<br>• Spend ledger. |
+| **M4 Proof** (held-out period + ~5 days) | Extractor validation; score once; dashboard; uptime | • P1 with CI, n and base rate.<br>• R1–R3; K1–K2.<br>• A plain-language fog result.<br>• Exclusions. |
+| **M5 Ship** (~4 days) | README in move-predictor's shape, 60-second demo, `THIRD_PARTY_NOTICES` | Every README number traces to a file and `make score` from a fresh clone. **Ships on schedule whatever P1 shows.** |
+| **v1 growth** (after M5) | Viewpoints 3–8, each with plate, pose, labels and goldens; ≥ 14 days of live data | Gate evidence per viewpoint |
+
+**The 60-second demo:**
+- 0–10 s: "Rainier tomorrow at four", asked over an editor, with a trace bar.
+- 10–25 s: scrubbing the evening.
+- 25–45 s: yesterday's 24 h forecast vs what the camera saw vs persistence.
+- 45–60 s: skill against lead time, with confidence intervals.
+
+### 16.1 Order of work inside a milestone
+1. Write the gate's test or benchmark first.
+2. Build until it produces its number.
+3. Record the measured numbers in PRD_PROGRESS.md and the decisions in DECISIONS.md.
+4. Stop and show the evidence.
+
+---
+
+## 17. Compute and cost plan
+
+Development is capped at $25.
+- Ask before the first paid call to each vendor.
+- Hard caps are enforced in code.
+- Every charge goes into the DECISIONS.md ledger.
+
+| Item | What drives it | Estimate | Hard cap |
+|---|---|---|---|
+| Deepgram bake-off | Replay minutes (covered by sign-up credit) | ≈ $0.20–2 | $3 |
+| Tier 2 kill test | 20 frames | ≤ $1 | $1 |
+| Tier 2 benchmark and false-accept suite (if the kill test passes) | ~270 benchmark calls + ≥ 200 altered frames | ≈ $5–8 | $10 |
+| Tier 2 during development and the evaluation sample | Interactive use; a sample in evaluation; result cache | ≈ $3–5 | $5 |
+| Ungrounded-generation baseline | ~50 images | ≈ $0.25–1 | $1 |
+| Haiku (only if Foundation Models fails) | < 10 % of asks, cached | ≈ $0.05–0.50 | $1 |
+| Hosting and storage (AWS serverless) | Lambda, Scheduler, S3 (~12 GB), CloudFront | ≈ $0–1 a month | $3 |
+| Tier 1, backtests, scoring | Headless shader renders and CPU metrics | $0 | — |
+| **Total** | | **≈ $10–19** | **$24** |
+
+---
+
+## 18. Risks and stress test
+
+The largest risk is that fog shows no skill at 24 h. The plan reports that result as measured, and the latency and rendering claims stand without it.
+
+### 18.1 Risks
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| STT final alone exceeds the Tier 0 chain when idle | High | High | Idle-state engine choice; partial-based paint under a 2 % wrong-paint ceiling; report the miss and the bottleneck |
-| Tier 2 within 3 s for < 80 % of queries | High | Medium | Kill test first; one request in flight; Tier 1 as the floor; ships off by default if it fails |
-| NPS never confirms | Medium | High | Email this week; publish numbers-only fallback; owner signs off the public list |
-| P1 underpowered | Medium | High | MDE published before sealing; design H; plain "underpowered" report |
-| Extractor fails validation | Medium | High | Bars set in advance; the metric is withheld if it fails |
-| Golden Gate permission not granted by 4 Dec | High | Low | Golden Gate moves to v2 |
-| Analog beats the shader | Medium | Medium | Pre-registered R3; the README states it |
-| Screen Recording re-consent prompt stalls an overnight run | Medium | Medium | Checked in the spike; harness-only signed identity |
-| `tauri-nspanel` private API breaks | Medium | Medium | Own NSPanel fallback |
-| Capture or worker outage | Medium | High | Archive backfill; uptime log; period extended |
-| HRRR retired mid-evaluation | Low | Medium | Source adapter; labelled break |
+| The final transcript alone breaks the Tier 0 chain when idle | High | High | Choose the engine on idle numbers; partial-based paint under a 2 % ceiling; report the miss and the bottleneck |
+| Tier 2 delivered within 3 s for < 80 % of queries | High | Medium | Kill test first; one request in flight; Tier 1 is the floor; ships off if it fails |
+| Fog and low cloud are too local for a 3 km model | High | Medium | P1 is at Rainier; fog is a key secondary; every lead is reported |
+| NPS never confirms | Medium | High | Email in M0.5; numbers-only fallback; you sign off the public list |
+| P1 underpowered | Medium | High | MDE published before sealing; design H; a plain "underpowered" report |
+| The extractor fails validation | Medium | High | Bars set in advance; the metric is withheld |
+| The analog beats the shader | Medium | Medium | R3 is pre-registered, and the README says so |
+| Single-plate relighting looks wrong at low Sun | Medium | Medium | DEM shadows; Hillaire twilight; golden hour reported as its own stratum |
+| No Golden Gate permission by 4 Dec | High | Low | Rainier carries the demo; Golden Gate moves to v2 |
+| A capture or worker outage during the sealed window | Medium | High | Lambda + EventBridge, not GitHub cron; uptime alarm; archive backfill; the window is extended |
+| `tauri-nspanel`'s private API breaks | Medium | Medium | Our own NSPanel fallback |
+| A Screen Recording re-consent prompt stalls an overnight run | Medium | Medium | Checked in the spike; a harness-only signed identity |
+| NOAA retires HRRR mid-evaluation | Low | Medium | Source adapter; a labelled break |
+| Seen as a wrapper around an image API | Medium | High | Tiers 0 and 1 use no image model; Tier 2 can't touch the weather; the README leads with measured numbers |
 | Spend overrun | Low | Medium | Hard caps; ask first |
-| Scope creep | High | High | MSV; cut order; 25 % lateness rule |
+| Scope creep | High | High | MSV; cut list; the 25 % rule |
 
----
+### 18.2 Stress test
 
-## 11. Cut List (not in v1)
+**v0.3 council:** four judges (latency engineer, graphics and ML researcher, skeptical hiring manager, privacy and licensing reviewer), two rounds each. Their record is in [docs/council/](docs/council/) and summarised in Appendix C.
 
-Mobile, accounts, payments, Windows, Linux. Accuracy claims outside the curated set. Archive view of past times. Fn hotkey. Video. User-supplied viewpoints. Multiple languages. The fog post-processor. The factored time-lapse basis. NBM inputs (recoverable later from the AWS archive). Speculative Tier 2. Night scoring. The full oracle ladder and retrieval-rank metric (post-MSV).
+**Lookout's six objections, rechecked after the cross-check:**
 
----
-
-## 12. The Portfolio Story (one page for a reviewer)
-
-**Problem:** You can see a forecast as numbers, or a place now through a webcam. You can't see what a real place will look like at a future hour, and image generators that claim to show it invent the weather.
-
-**What it is:** A push-to-talk macOS overlay. Ask "is Rainier out tomorrow at 4?" and within a second see that view relit for the true sun and HRRR's forecast sky, with each cloud pixel traceable to a grid cell.
-
-**Draft headline (blanks filled at M4):**
-> *On a pre-registered, sealed __-day period (base rate: summit visible __ % of daytime frames; climatology PSS __), Snow Globe's 24-hour visual forecast of Mount Rainier's summit scored a Peirce skill score of __ vs __ for persistence (Δ __, 95 % CI __ to __). The skill is NOAA HRRR's; rendering it lost none (non-inferiority margin 0.05: __), and sampling the forecast along each view ray beat the camera's own grid cell at predicting cloud height (__).*
-> *Latency, after 30 min idle: first forecast-driven frame __ ms p95 from key release, measured at the composited pixel.*
-
-**Status:** M0 complete when you approve this document.
-
----
-
-## 13. Open Questions (for the owner)
-
-Each has my recommendation; "yes to all recommendations" is a valid answer.
-
-1. **Viewpoints.** Approve Rainier (hero), Point Reyes (fog) and Grand Canyon (third, post-MSV) in place of Golden Gate? Will you contact Lawrence Hall of Science ("The View") and ALERTCalifornia for Golden Gate, with a 4 Dec cut-off? *Rec: yes; I draft the emails.*
-2. **Calendar.** Hours per week, and an MSV date? Accept the 25 %-late rule? *Rec: give me a number and I set milestone dates in PLAN.md.*
-3. **Go-ahead for M0.5 now:** the forecast worker and polite capture of all three cameras, before the rest of M1, plus the NPS archive check. *Rec: yes; calendar time is the scarcest input.*
-4. **Hosting.** Which accounts do you have, or will you create (free tiers)? Options:
-   - GitHub Actions (free only if the repo is public; jitter is fine given archive backfill) for the worker and batch jobs;
-   - private object storage for frames (Cloudflare R2 or Backblaze B2 free tier);
-   - a never-sleeping proxy or token minter (Cloudflare Workers, or similar).
-   Is the repo public? *Rec: public repo; R2 + Workers + Actions.*
-5. **Paid vendors** (nothing is called until you say so): Deepgram (account; $200 credit; your replay recordings sent with `mip_opt_out`), fal and Runware (Tier 2 kill test ≤ $1, then ≤ $10), Haiku only if Foundation Models fails. *Rec: approve Deepgram and fal now, Runware and Haiku later.*
-6. **Your time and machine.**
-   - Record ~130 scripted utterances (~20 min) plus ≥ 30 real-use ones.
-   - Label ~150 frames per metric plus 50 re-labels.
-   - Find someone else for the Tier 2 preference test.
-   - Leave the laptop running idle-latency trials overnight under `caffeinate` (several nights).
-   - Grant permissions: Microphone, Speech Recognition, Screen Recording and Input Monitoring (harness only), Apple Intelligence on.
-   *Rec: yes; fixtures kept privately until M5 + 12 months.*
-7. **Architecture changes C1–C9** (§7.3). *Rec: approve all except C7 (on-device Tier 2), which I'd leave out unless the kill test fails.*
-8. **Tier 0 on screen** when Tier 1 is ready within ~100 ms of it: show both (a brief flicker), or skip Tier 0 in that case? *Rec: skip; Tier 0 still runs and is measured.*
-9. **Your requirements that sit last in the cut order:** the LLM fallback and the unverified-place fallback. Keep them (minimal, after the MSV), or drop them? *Rec: keep the LLM fallback (Foundation Models, $0); drop unverified generation, because it is exactly the "invented weather" image the project argues against.*
-10. **NPS confirmation and takedown contact.** Will you send the NPS emails (I draft them), and which contact address should the README list for takedown requests? *Rec: a project-specific address, not your personal one.*
-11. **macOS.** Stay on 26.5.x through M4, even though 27 is out? *Rec: yes.*
-
----
-
-## Appendix A — Council review
-
-Two rounds, four judges, each reading this document and `docs/research/` independently; I answered round 1 in [docs/council/round1-responses.md](docs/council/round1-responses.md) and each judge followed up. Summary of what was raised, what changed, and what I rejected.
-
-### A.1 Latency engineer
-**Raised:**
-- t0 and "paint" were measured at the wrong points: rAF fires 1–3 vsyncs before composite, and a one-time calibration is invalid.
-- The harness would measure its own cache, since passes 2–10 hit it.
-- p95 over 15 utterances is just the worst one.
-- "Warm" was a benchmark trick; real push-to-talk is idle.
-- Speculation and cancellation had no correctness contract.
-- The Tier 2 budget omitted half its stages and ignored fal's 2-concurrent-request cap and best-effort cancel.
-- The 200 ms STT allocation contradicted the research.
-
-**Round 2:**
-- Inject keys through the real hotkey path.
-- Swap samples inside the live audio callback.
-- Draw the paint tag in the content surface.
-- Add a 2 % wrong-paint ceiling.
-- Push the pad as a burst.
-- Run ≥ 60 idle trials.
-- Mint the STT token in parallel with opening the mic.
-- Cap the proxy's added p95.
-- Run a cancel microbenchmark.
-- Measure pre-render contention.
-
-**Adopted:** all of it (§3.1, §3.2, §6.1, §6.2, §6.13, §6.14, §8.1).
-
-### A.2 Graphics/ML researcher
-**Raised:**
-- **Clouds:** the claim that clouds "pack toward the horizon" through perspective is false for a thin layer, and mip-filtering biases coverage with distance.
-- **Measurement:** the evaluation would measure HRRR, the camera model and the render-vs-photo gap, not the renderer.
-- **Baselines and metrics:** climatology, forecast-scalar and analog baselines were missing; region means and embedding cosine are gameable.
-- **Fog truth:** single-β Koschmieder breaks on slant paths and censoring.
-- **Tier 2 checks:** circular, and calibrated on false rejects instead of false accepts.
-- **Power:** one December week can't support a claim.
-- **Answer to it:** a hindcast on archived data.
-
-**Round 2:**
-- Non-inferiority needs a pre-set Δ and defined scalars, plus one superiority test where geometry should matter.
-- Use the Peirce skill score rather than proportion correct.
-- Define the outcome classes and the persistence baseline precisely.
-- Set the block length from autocorrelation.
-- Close the hindcast leakage paths: fitted assets, archived availability times, HRRRv4, the labelling page.
-- Use a model-free camera response (Kim & Pollefeys).
-- Score the displayed seed (seed averaging retracted).
-- Define day by ephemeris.
-- Use dev-internal splits for feature admission.
-
-**Adopted:** all of it (§4.2, §4.3, §6.5, §6.6, §8.2, §8.4).
-
-### A.3 Skeptical hiring manager
-**Raised:**
-- Three projects stapled together.
-- The headline number arrives last.
-- The estimates aren't credible, and M2 is where this stalls.
-- No ranked priorities or cut order.
-- A null by construction.
-- Point Reyes kills the demo.
-- Tier 0's 300 ms is a hollow headline, because the fastest frame shows the wrong weather.
-
-**Round 2:**
-- Set dates.
-- Walking skeleton ≤ 3 weeks after go-ahead.
-- Golden Gate cut-off 4 Dec.
-- A $1 Tier 2 kill test before building anything for it.
-- Physics fixes as a gated backlog.
-- Credit HRRR for the skill.
-- Put the base rate in the headline.
-- Check Rainier's EXIF now. Done: no ownership metadata on the park camera; NPS artist/copyright on the air cams.
-
-**Adopted:**
-- MSV, cut order and the 25 % rule (§5).
-- Walking skeleton.
-- Rainier hero.
-- 4 Dec cut-off.
-- Kill test.
-- Gated backlog.
-- Revised headline (§12).
-- The 60-second demo.
-- First-forecast-driven-frame metric.
-- PLAN/PRD contradictions fixed.
-
-### A.4 Privacy and licensing reviewer
-**Raised:**
-- No data inventory.
-- Transcripts with no defined home.
-- A cloud STT key in the app.
-- A fallback that could upload after the chip said `on-device`.
-- Public domain is not privacy clearance (people on the beach).
-- Licence claims stronger than their sources: Hosek–Wilkie tables are BSD-3; Soniox keeps diagnostic metadata; Open-Meteo requires a link and "modified".
-- Generated images of real places lose their captions once exported.
-
-**Round 2:**
-- Keep fixtures until a stated date, so numbers stay traceable.
-- Disclose install_id and host logs.
-- No cloud primary without a token API.
-- Rules for screen capture and the event tap.
-- The NPS request covers all cameras and the archive, has a deadline and a numbers-only fallback, and "private" includes the app.
-- Archive backfill budget.
-- FLUX.2 control on fal, not BFL.
-
-**Adopted:** all of it (§3.5, §6.2, §6.13, §9).
-
-### A.5 Rejected or modified, and why
-
-| Proposal | Judge | Decision | Reason |
+| Judge | Objection | Answer now | Still open |
 |---|---|---|---|
-| Cut the LLM and unverified fallbacks entirely | HM | **Modified:** last in the cut order; you decide (§13 Q9) | Both are in your brief |
-| Make Tier 0 only a baseline | HM | **Modified:** kept on screen, plus the forecast-driven-frame headline; you decide on skipping it (§13 Q8) | Tier 0 is in your brief |
-| Defer per-query paint capture to after the MSV; ~40 idle trials | HM | **Rejected:** per-query capture kept; ≥ 100 idle trials for the shipped engine, ≥ 60 for the other | Latency is your first priority, and a one-time calibration was shown to be invalid. Two judges set the trial floor. |
-| Defer Holm correction and the analog baseline | HM | **Rejected** | Holm costs nothing; dropping the strongest competitor would look like hiding it |
-| Defer the oracle ladder, retrieval rank, ordinal fog bins, fog-top height | HM | **Accepted** | Not needed for P1 |
-| Drop FLUX.2 klein entirely | GR | **Modified:** a ~20-call illustration on fal, clearly not a rate | Lets the README show, not assert, why reference editors fail |
-| Full censored-likelihood β fit as primary fog truth | GR | **Modified:** binary per-landmark visibility is primary; continuous fit post-MSV | Same information for P1 at a fraction of the work |
-| Drop the third viewpoint | HM | **Modified:** captured from day one, built after the MSV | Calendar time can't be bought back |
-| Seed averaging | GR (round 1) | **Withdrawn by GR in round 2:** score the displayed seed | It was a hedge |
+| Latency engineer | Tier 2 needs Tier 1's frame, so the budget is serial | Offscreen input at parse time; a chain of ~2,800 ms with an honest STT allocation; ≤ 1 request in flight | Final-transcript latency when idle; provider tails |
+| Graphics researcher | An overcast plate is not albedo; sunsets will look flat | Dehazed plate; DEM horizon shadows; Hillaire twilight; golden hour scored separately | Specular and wet surfaces |
+| Forecast verifier | Persistence is hard to beat under 6 h | P1 at 24 h, against the *stronger* persistence; all leads reported; LAMP at 1 h later | Skill at short leads |
+| Hiring manager | Is this a wrapper? Three projects stapled together? | Two of three tiers use no image model; MSV; walking skeleton in ≤ 3 weeks; the headline credits NOAA | Whether M2 runs late |
+| Licensing reviewer | May you store and show these frames? | NPS only; confirmation gate; people blurred; licence ledger | The Golden Gate source; NPS's reply |
+| Investor | Who asks this every week? | Out of scope for v1. Decided after M4 results and ten photographer interviews. | Demand |
+
+**Next council round:** add the forecast verifier to the four judges, and give the parts taken from Lookout their first independent review.
+
+---
+
+## 19. Cut list
+
+If time runs short, cut from the top.
+1. Unverified places (already moved to Later).
+2. Rain and snow effects beyond extinction.
+3. Moon and stars (the Moon's *position* stays tested).
+4. The LLM parser fallback: show "didn't catch that", with the three closest places.
+5. The live-beside-simulated view.
+6. Shipping the cloud speech fallback. The bake-off itself stays, because the brief requires it.
+7. Grand Canyon, and any viewpoint beyond the MSV pair.
+8. Scrub-view polish (keep a bare slider).
+9. Tier 2: if the kill test fails or the schedule demands it. Tier 1 is the floor.
+10. Post-MSV physics, lowest measured gain first.
+
+**Never cut:** the capture and forecast jobs, the sealed evaluation, the latency and replay harness, the labels, and the data-flow inventory.
+
+---
+
+## 20. Open questions
+
+Each is answered by a milestone, not by a guess.
+
+| Question | Answer, or where it gets answered |
+|---|---|
+| Which fixed camera covers the Golden Gate, with terms that allow capture? | **M0: none found.** Permission asks go out, with a 4 Dec cut-off. |
+| Which model replaces HRRR on Open-Meteo, and is it archived? | **M0: answered.** `ncep_rrfs_conus` (6-hourly, Single Runs from 2 Apr 2026). Not needed: HRRR is read directly, with its archive back to 2014. |
+| Does NPS allow bulk archive download, and how far back does each camera go? | M0.5 archive check |
+| Does the park own the Rainier `mountain.jpg` camera? | M0.5 email |
+| Can SpeechAnalyzer deliver a first partial < 300 ms and a final ≤ 240 ms when idle? | M1. It runs in process, not in a helper. |
+| Where does the cloud-deck height come from? | **M0: answered.** HRRR cloud base, cloud top and ceiling, with datums pinned in M2. |
+| Do per-viewpoint haze profiles hold across seasons? | M2 |
+| How well does single-plate relighting hold when the Sun is below 10°? | M2, as its own stratum |
+| Does Tier 2 survive a $1 kill test, and which host wins? | M3 |
+| Is there forecast skill for low visibility under 6 hours? | M4 |
+
+---
+
+## 21. Résumé lines and headline
+
+Blanks are filled only from dashboard exports.
+
+> *On a pre-registered, sealed __-day period (base rate: summit visible __ % of daytime frames; climatology PSS __), Lookout's 24-hour visual forecast of Mount Rainier's summit scored a Peirce skill score of __ vs __ for persistence (Δ __, 95 % CI __ to __). The skill is NOAA HRRR's. Rendering it lost none (non-inferiority margin 0.05: __), and sampling the forecast along each view ray beat the camera's own grid cell at predicting cloud height (__).*
+> *Latency after 30 min idle: first forecast-driven frame in __ ms p95 from key release, measured at the composited pixel.*
+
+- Built a voice-driven visual forecast app in Rust, TypeScript, WebGL2, Swift and Python: p95 of __ ms to a first real frame and __ ms to a forecast-driven frame, measured at the composited pixel after idle.
+- Wrote a physically based relighting renderer (Hillaire atmosphere, view-ray cloud slabs, depth-aware fog): __ ms a frame, shared by the app and a headless evaluation job.
+- Scored __ predictions (__ independent days) against national-park webcams at __ viewpoints, with skill of __ over persistence at 24 hours (95 % CI __).
+- Guarded a diffusion texture step so it can't change the weather: __ % pass rate, false accepts ≤ __ %; the rest fall back to the physical render.
+
+---
+
+## 22. References
+
+Checked 18–19 Nov 2026. Fuller source lists are in [docs/research/](docs/research/).
+
+| Source | Used for |
+|---|---|
+| Sigg, Cavallaro, Günther and Oswald, *AIES* 2022 ([arXiv 2203.15601](https://arxiv.org/abs/2203.15601)) | Closest prior work |
+| Hillaire, "A Scalable and Production Ready Sky and Atmosphere Rendering Technique", *Computer Graphics Forum* 39(4), 2020; [sebh/UnrealEngineSkyAtmosphere](https://github.com/sebh/UnrealEngineSkyAtmosphere) | Tier 1 atmosphere |
+| Kim & Pollefeys, *IEEE PAMI* 2008 | Model-free camera response |
+| Sunkavalli et al. 2007; Lalonde et al. 2009; Delle Monache et al. 2013 | Time-lapse relighting; analog ensembles |
+| [NOAA HRRR on AWS](https://registry.opendata.aws/noaa-hrrr-pds); NOAA-EMC UPP `CALVIS_GSD.f` | Forecast fields; visibility provenance |
+| [Open-Meteo GFS and HRRR docs](https://open-meteo.com/en/docs/gfs-api) | The HRRR discontinuation date |
+| NWS RRFS webinar Q&A; SCN 26-48 | HRRR's continuation; RRFS replacing NAM |
+| *Wind Energy Science* 10, 2755 (2025) | HRRR marine-layer tops running low |
+| [NPS air-quality webcams](https://www.nps.gov/features/ard/webcams/index.html); [NPS disclaimer](https://www.nps.gov/aboutus/disclaimer.htm) | Cameras and terms |
+| [Tauri global-shortcut plugin](https://v2.tauri.app/plugin/global-shortcut/) | Press and release events |
+| Apple Developer Forums 811083, 818005, 819525 | Contextual strings; the 26.3 live-input break; `NSEvent` monitor crashes |
+| [GitHub Actions: disabling workflows](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows) | The 60-day schedule disable |
+| [Amazon EventBridge pricing](https://aws.amazon.com/eventbridge/pricing) | Scheduler free tier |
+| Oculus repository (`PRD.md` §13.6; `infra/terraform`) | `oculus-core`; Terraform reuse; the cost estimate |
+
+---
+
+## Appendix A: Viewpoint manifest
+
+One JSON file per viewpoint, validated against a schema in CI. The values below are placeholders that show the shape.
+
+```json
+{
+  "id": "rainier.paradise-mountain",
+  "place": "Mount Rainier",
+  "aliases": ["rainier", "mount rainier", "the mountain", "paradise"],
+  "default": true,
+  "time_zone": "America/Los_Angeles",
+  "camera": {
+    "lat": 0.0, "lon": 0.0, "elevation_m": 0,
+    "heading_deg": 0.0, "pitch_deg": 0.0, "roll_deg": 0.0, "fov_deg": 0.0,
+    "pose_rms_px": 0.0, "pose_check_deg": 0.0, "pose_check_method": "landmarks+sunset-shadow"
+  },
+  "plate": {
+    "version": 1,
+    "base": "base.webp", "night": "night.webp", "depth": "depth.png", "world_height": "height.png",
+    "normals": "normals.webp", "horizon_map": "horizon.bin",
+    "sky_mask": "sky.png", "lights_mask": "lights.png", "landmark_bands": "bands.png",
+    "dem": {"source": "", "licence": "", "datum": ""},
+    "assets_licence": {"base": "NPS public domain (pending confirmation)"},
+    "landmarks": [{"name": "", "band": "summit", "px": [0, 0], "lat": 0.0, "lon": 0.0,
+                   "height_m": 0, "distance_km": 0.0}]
+  },
+  "haze_profile": {"fitted_on": "dev frames", "season": "", "beta_per_km": 0.0},
+  "camera_response": {"params": [], "fitted_on_frames": []},
+  "forecast_samples": [{"layer": "low", "height_m": 0, "lat": 0.0, "lon": 0.0, "grid_cell": [0, 0]}],
+  "truth_camera": {
+    "operator": "National Park Service", "json_url": "", "image_url": "",
+    "terms_url": "", "terms_checked": "2026-11-19", "ownership_basis": "", "confirmation": "requested",
+    "interval_min_measured": 0, "fixed_view": true, "night_mode": "colour|infrared",
+    "polite_caps": {"max_per_hour": 4, "fetch_on_change": true},
+    "publish_cleared": false, "people_in_frame": true
+  },
+  "truth_sources": ["webcam", "goes18_acmc"],
+  "attribution": "Webcam imagery courtesy National Park Service. Derived images are not NPS products."
+}
+```
+
+## Appendix B: Kickoff checklist
+
+**Yours:**
+- [ ] Set the calls in §1.
+- [ ] Send the NPS confirmation emails (drafts come in M0.5). If you want Golden Gate, contact Lawrence Hall of Science and ALERTCalifornia by 4 Dec.
+- [ ] Confirm the AWS account to use. Terraform creates the budget alarm before anything else is deployed; confirm its email subscription.
+- [ ] Create the Deepgram and fal accounts once approved, and put the keys in the server's environment, never in the app.
+- [ ] Grant Microphone and Speech Recognition when the app first asks. Grant Screen Recording and Input Monitoring to the harness only. Turn Apple Intelligence on.
+- [ ] Record the replay set in M1; label frames in M2–M4.
+
+**Claude Code's next session:**
+- [ ] Bring PLAN.md and DECISIONS.md in line with your §1 calls (the sky model, hosting, the viewpoint plan), and start PRD_PROGRESS.md.
+- [ ] Run M0.5 as in §16.
+- [ ] Optionally, a council round on the parts taken from Lookout (§18.2).
+
+## Appendix C: Council review (v0.3), summarised
+
+Full record: [docs/council/round1-responses.md](docs/council/round1-responses.md).
+
+- **Latency engineer.**
+  - Raised: paint measured at the wrong point; the harness measuring its own cache; p95 over 15 utterances; a "warm" headline; no correctness contract; an incomplete Tier 2 budget; an STT allocation that contradicted the research.
+  - All adopted (§10).
+- **Graphics/ML researcher.**
+  - Raised: false cloud-packing geometry; an evaluation that measured HRRR and the camera rather than the renderer; missing climatology, scalar and analog baselines; single-β fog on slant paths; circular Tier 2 checks; no statistical power.
+  - All adopted (§9, §13).
+- **Hiring manager.**
+  - Raised: "three projects stapled together"; the headline arriving last; no cut order; Tier 0's wrong-weather frame.
+  - Adopted: MSV, walking skeleton, kill test, cut order, the 25 % rule, a headline that credits NOAA.
+  - Rejected: deferring per-query paint capture, Holm correction and the analog baseline.
+- **Privacy and licensing reviewer.**
+  - Raised: no data inventory; a cloud key in the app; public domain treated as privacy clearance; overstated licences; captions lost on export.
+  - All adopted (§15).
+
+## Appendix D: Synthesis record
+
+Every disagreement between the Lookout draft and v0.3, with its evidence and verdict, is in [docs/review/prd-crosscheck.md](docs/review/prd-crosscheck.md).
+
+- **24 points checked in Lookout:** 12 corrected outright, 7 merged, 4 where v0.3's approach is kept, and 1 confirmed (Sigg et al.).
+  - Factual corrections: HRRR's end date, the Open-Meteo archive, visibility treated as haze, the Oculus hosting cost, frame sizes, and the Moon's illuminated fraction, which already exists.
+  - Design corrections: overlay focus, the demo utterance, cloud-cover calibration, hourly seeds, the 16:10 frame.
+  - Method corrections: gates shaped as targets, and the STT allocation.
+  - Merged: the Sun-in-frame pose check, pair counts reported without effective n, the two primary metrics.
+  - Kept from v0.3: idle-state headlines, the stronger persistence baseline, the in-process speech library, DEM shadows.
+- **17 points checked in v0.3:** 12 where Lookout's approach is adopted, 4 merged, and 1 kept (DEM depth).
+  - Adopted from Lookout: the atmosphere model, the decisions table, the design section, time rules, routes and jobs.
+  - Merged: the eight-camera plan.
+- **Kept from v0.3 throughout:** the measurement method, the pre-registration, the view-ray geometry, Tier 2 safe by construction, and the privacy inventory.
 
 ---
 
