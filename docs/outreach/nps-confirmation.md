@@ -1,0 +1,47 @@
+# Draft: NPS confirmation request (M0.5)
+
+**For you to send.** Fill the brackets and send it from the project's own contact address, not a personal one (PRD §15.5). I haven't sent anything.
+
+Send it to two places:
+1. **NPS Air Resources Division (air-quality webcams).** Use the contact form linked from the archive site: <https://www.nps.gov/airwebcams/Contact>.
+2. **Mount Rainier National Park,** about the Paradise "mountain" camera. Use the park's contact page (<https://www.nps.gov/mora/contacts.htm>; check the link before sending).
+
+---
+
+**Subject:** Permission check: using NPS webcam images in a non-commercial forecast-verification project
+
+Hello,
+
+I'm building **Lookout**, a non-commercial, open-source portfolio project. It renders what a scenic viewpoint will look like at a future hour, using NOAA's public forecast, and then checks those renderings against what the park webcams actually recorded. NPS webcams are the ground truth. Before I publish anything, I'd like to confirm that my use is appropriate.
+
+**Cameras:**
+- Air-quality webcams:
+  - Point Reyes (View of Point Reyes Beach);
+  - Grand Canyon (Yavapai Point);
+  - Grand Teton (Teton Science Center);
+  - Yosemite (Turtleback Dome);
+  - Acadia (McFarland Hill);
+  - Great Smoky Mountains (Look Rock);
+  - Big Bend (Panther Junction area).
+- Mount Rainier: the Paradise camera at `https://www.nps.gov/webcams-mora/mountain.jpg`.
+
+**How I collect images:**
+- Live images are checked at most every 5 minutes, and an image is downloaded only when it has changed. That is no more than 4 images per camera per hour.
+- Archive images (AirWebCams) are fetched one request at a time, at least 5 seconds apart. The first pass is about [N] frames.
+- Every request identifies the project in its User-Agent.
+
+**What I'd like to confirm:**
+1. Are the images from these cameras NPS works in the public domain, per the NPS website disclaimer? Or do any carry other terms? The air-quality images name "National Park Service" as artist and copyright holder in their EXIF data. The Rainier Paradise image carries no ownership metadata, so I'd also like to know who operates that camera and what terms apply.
+2. Is the automated collection described above acceptable? Is there a preferred way to get archive images in bulk?
+3. May I publish derived images in the project's repository, README and a short demo video? These are relit or simulated views, and crops of camera frames no wider than 1280 px with people and vehicles blurred. Each would carry the credit *"Webcam imagery courtesy National Park Service. Derived images are not NPS products."* Nothing would suggest NPS endorsement.
+
+If any of this isn't appropriate, I'll change the plan, and I'll remove any image on request within 7 days.
+
+Thank you,
+[Your name]
+Lookout project, [project contact address]
+[Repository URL, once public]
+
+---
+
+**After the reply:** paste it into `docs/outreach/replies/` and tell me. Each manifest's `confirmation` and `publish_cleared` fields will be updated from it, and the PRD §15.1 publication gate opens or stays closed.
