@@ -1,0 +1,266 @@
+{
+ "_fixture": "Recorded subset of ~/lookout-data/samples/nps-json/search_pore_20261117.json (NPS archive Search/Execute for pore on 2026-11-17, fetched 2026-11-19): every asset with |SolarElevationAngle| < 12 deg plus every 8th asset. Metadata only, no images.",
+ "ResultCount": 26,
+ "Results": [
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 12:00 AM Pacific Standard Time",
+    "TimeOfDay": "night",
+    "SolarElevationAngle": -71.0099870107582,
+    "AssetID": "50c46ac9-87eb-4f24-bcb6-5928653027d3",
+    "ImageCreateDateTime": "11/17/2026 12:00:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 2:00 AM Pacific Standard Time",
+    "TimeOfDay": "night",
+    "SolarElevationAngle": -57.2612573636607,
+    "AssetID": "a924981a-b0c6-4179-981a-ba8c04120a11",
+    "ImageCreateDateTime": "11/17/2026 02:00:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 4:00 AM Pacific Standard Time",
+    "TimeOfDay": "night",
+    "SolarElevationAngle": -34.4322931317528,
+    "AssetID": "ce877f0a-fa68-4e1f-8ae4-bb6fdba07987",
+    "ImageCreateDateTime": "11/17/2026 04:00:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 6:00 AM Pacific Standard Time",
+    "TimeOfDay": "night",
+    "SolarElevationAngle": -11.1244276092844,
+    "AssetID": "10d1080a-e43b-4f1a-ab3a-359ea14e3235",
+    "ImageCreateDateTime": "11/17/2026 06:00:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 6:15 AM Pacific Standard Time",
+    "TimeOfDay": "night",
+    "SolarElevationAngle": -8.30502611580567,
+    "AssetID": "32b06488-9f87-40d3-90a7-70c75303343b",
+    "ImageCreateDateTime": "11/17/2026 06:15:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 6:30 AM Pacific Standard Time",
+    "TimeOfDay": "dawn",
+    "SolarElevationAngle": -5.45007328598534,
+    "AssetID": "595af08c-d1f3-4c57-8e02-c7a95722087e",
+    "ImageCreateDateTime": "11/17/2026 06:30:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 6:45 AM Pacific Standard Time",
+    "TimeOfDay": "dawn",
+    "SolarElevationAngle": -2.04546942342623,
+    "AssetID": "c471fa3e-9f98-4d8e-ad6f-121ba3b33bb8",
+    "ImageCreateDateTime": "11/17/2026 06:45:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 7:00 AM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 0.515386386865687,
+    "AssetID": "29837d2b-da7b-4271-9e62-7243da303dd4",
+    "ImageCreateDateTime": "11/17/2026 07:00:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 7:15 AM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 2.93946993734589,
+    "AssetID": "932e72f4-de1d-4528-bf86-dc5044c8b468",
+    "ImageCreateDateTime": "11/17/2026 07:15:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 7:30 AM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 5.45631805832841,
+    "AssetID": "f0aa52e2-20a6-4be9-8a2c-f9b3f018ae00",
+    "ImageCreateDateTime": "11/17/2026 07:30:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 7:45 AM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 7.9571479054451,
+    "AssetID": "117e0b95-83a2-4325-960d-26619e827708",
+    "ImageCreateDateTime": "11/17/2026 07:45:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 8:00 AM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 10.4073938480093,
+    "AssetID": "6423e7a8-f344-48ba-87c4-1305a0e0436a",
+    "ImageCreateDateTime": "11/17/2026 08:00:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 10:00 AM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 26.644085790229,
+    "AssetID": "41af76bd-a3c7-4c0e-9888-750c6c041ff7",
+    "ImageCreateDateTime": "11/17/2026 10:00:00 AM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 12:00 PM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 32.8918114902113,
+    "AssetID": "8a1c9d2b-901c-48d4-b053-88844bebcba4",
+    "ImageCreateDateTime": "11/17/2026 12:00:00 PM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 2:15 PM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 24.3499048761321,
+    "AssetID": "743f4125-8869-4ffa-beab-06e403b1719b",
+    "ImageCreateDateTime": "11/17/2026 02:15:00 PM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 3:45 PM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 11.8265523345047,
+    "AssetID": "d395d97d-d41a-4700-be1b-dc120e8591ee",
+    "ImageCreateDateTime": "11/17/2026 03:45:00 PM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 4:00 PM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 9.41438636822018,
+    "AssetID": "d41c773a-9e6e-41db-82ca-e48d91fc3e61",
+    "ImageCreateDateTime": "11/17/2026 04:00:00 PM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 4:15 PM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 6.9406793699517,
+    "AssetID": "ee02b345-3048-4c39-8e13-469aaec0a464",
+    "ImageCreateDateTime": "11/17/2026 04:15:00 PM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 4:30 PM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 4.42680714550888,
+    "AssetID": "9858a538-de5d-4635-b0e9-57f7598193cf",
+    "ImageCreateDateTime": "11/17/2026 04:30:00 PM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 4:45 PM Pacific Standard Time",
+    "TimeOfDay": "day",
+    "SolarElevationAngle": 1.92589134918609,
+    "AssetID": "c2cd8add-a8a1-49c4-a933-337e234f35a1",
+    "ImageCreateDateTime": "11/17/2026 04:45:00 PM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 5:00 PM Pacific Standard Time",
+    "TimeOfDay": "dusk",
+    "SolarElevationAngle": -0.406540496590551,
+    "AssetID": "c498b926-2a78-49e3-944d-cb03948d6acb",
+    "ImageCreateDateTime": "11/17/2026 05:00:00 PM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 5:15 PM Pacific Standard Time",
+    "TimeOfDay": "dusk",
+    "SolarElevationAngle": -3.55384426918813,
+    "AssetID": "4d3b8bbe-cc01-411f-8c6d-d6bcdcbda11d",
+    "ImageCreateDateTime": "11/17/2026 05:15:00 PM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 5:30 PM Pacific Standard Time",
+    "TimeOfDay": "dusk",
+    "SolarElevationAngle": -6.63699887114895,
+    "AssetID": "63ee1af3-4f49-432d-b1a0-eaf8402d10f8",
+    "ImageCreateDateTime": "11/17/2026 05:30:00 PM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 5:45 PM Pacific Standard Time",
+    "TimeOfDay": "night",
+    "SolarElevationAngle": -9.45714406033061,
+    "AssetID": "b4741a16-8fcc-4479-8fcc-8060c02438c0",
+    "ImageCreateDateTime": "11/17/2026 05:45:00 PM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 6:15 PM Pacific Standard Time",
+    "TimeOfDay": "night",
+    "SolarElevationAngle": -15.1458743223278,
+    "AssetID": "80afbea6-7415-4c1d-9ee7-ffdda6ee0e80",
+    "ImageCreateDateTime": "11/17/2026 06:15:00 PM"
+   }
+  },
+  {
+   "Asset": {
+    "LocationCode": "pore",
+    "LocalTimeString": "11/17/2026 8:15 PM Pacific Standard Time",
+    "TimeOfDay": "night",
+    "SolarElevationAngle": -38.6020425319541,
+    "AssetID": "b6f3fb71-03ed-4a94-86d9-9793fff23570",
+    "ImageCreateDateTime": "11/17/2026 08:15:00 PM"
+   }
+  }
+ ]
+}

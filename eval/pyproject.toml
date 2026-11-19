@@ -1,0 +1,67 @@
+[project]
+name = "lookout-eval"
+version = "0.1.0"
+description = "Lookout evaluation: landmark extractor, verification scores, baselines, leakage guard, ephemeris wrapper and the backtest pair (PRD §13)."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "lookout-common",
+    "numpy>=2.1",
+    "pillow>=11.0",
+    "jsonschema>=4.23",
+    "scipy>=1.14",
+]
+
+[project.scripts]
+lookout-eval = "lookout_eval.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.9",
+    "hypothesis>=6.120",
+]
+# oculus-core's Python bindings, built from source with maturin (feature "python", crate in core/).
+# Needs a Rust toolchain and network on first sync. Opt out with `uv sync --no-group oculus`; the
+# ephemeris then needs LOOKOUT_EPHEMERIS=noaa (see src/lookout_eval/ephemeris.py).
+oculus = [
+    "oculus-core-py",
+]
+# Only `lookout-eval backtest-pair --forecast auto` uses lookout-forecast (imported lazily, to
+# backfill an archived HRRR run). Not installed by default: `uv sync --group forecast`.
+forecast = [
+    "lookout-forecast",
+]
+
+[tool.uv]
+default-groups = ["dev", "oculus"]
+
+[tool.uv.sources]
+lookout-common = { path = "../workers/common", editable = true }
+lookout-forecast = { path = "../workers/forecast", editable = true }
+oculus-core-py = { git = "https://github.com/swarit-1/oculus", rev = "06809e6141432119d399cd22f29f6f517bf0226d", subdirectory = "core/bindings/python" }
+
+[build-system]
+requires = ["uv_build>=0.11.6,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Import both packages from source too. In iCloud-synced ~/Documents the venv's .pth files have
+# been given the macOS "hidden" flag (seen 2026-11-19), and Python 3.13 skips hidden .pth files,
+# which silently drops editable installs. The sources are the same files the .pth points to.
+pythonpath = ["src", "../workers/common/src"]
+addopts = "-m 'not network' --strict-markers"
+markers = [
+    "network: touches the network; excluded by default (run with -m network)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+# Docstrings use the PRD's own symbols (minus sign, en dash, times, alpha).
+allowed-confusables = ["−", "–", "×", "α"]
