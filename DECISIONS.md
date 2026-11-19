@@ -334,6 +334,53 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - It ends when the AWS capture job is live.
 - **Numbers:** in PRD_PROGRESS.md.
 
+## D-022 — Held-out breach in the archive check; design H keeps summer 2026 except 15 Jul · decided (lead; the owner may change it before the 14 Dec freeze) · 2026-11-19 · amends D-019
+- **What happened.** The full record is in `docs/research/nps-archive-check.md`, under "Guard breach".
+  - D-019's guard allows archived frames only from before 1 Jun 2026. The M0.5 archive check had no date guard in code.
+  - Between 09:44:34 and 10:40:52 UTC on 19 Nov, the check downloaded 22 frames past the guard, built contact sheets from them and looked at them:
+    - **8 dated 15 Jul 2026,** inside the held-out season: the midday thumbnail at all 7 ARD cameras, plus the Point Reyes hires;
+    - **14 dated 17 Nov 2026:** the midday thumbnail and hires at all 7 cameras.
+  - **D-019's commit order was not met.** D-019 says "viewed so far: no archived frame" and was meant to be committed before any frame was viewed. It reached the repo at a1fca21, after the check had run.
+  - **Cause:** the lead ran the docs and capture work packages in parallel, so the check ran before D-019's guard was in code.
+- **What leaked:**
+  - **15 Jul 2026:** one midday frame per camera, so that day's weather at each camera is now known.
+  - **Framing:** the breach record lists what was observed at Grand Teton, Big Bend and the others, only so that it can be set aside.
+  - **17 Nov 2026:** these show the current framing, which live capture shows anyway, and they are outside the held-out season. They add nothing.
+- **Decision:**
+  - The held-out season stays **summer 2026** (1 Jun – 31 Aug 2026, local dates).
+  - **15 Jul 2026 is excluded from scoring at all 7 ARD cameras.**
+  - **Why not another season:** no summer is untouched. A mid-July midday thumbnail of every summer from 2021 to 2025 was viewed as development data, so moving the season would not remove the problem.
+  - **What may inform design H:** the observations under "Observations that rest on frames past the guard" must not shape any design-H choice, exclusion rule or pre-registration. Which cameras enter design H is decided from:
+    - frames dated before 1 Jun 2026;
+    - metadata;
+    - a camera-change rule, written into the pre-registration and applied mechanically at scoring.
+- **Enforcement:**
+  - **Capture code:** `workers/capture/.../heldout.py` refuses archived frames dated 1 Jun 2026 or later in backfill, the archive check and the CLI. Only `--held-out-override "<reason>"`, meant for scoring, releases them, and every release is logged.
+  - **Eval code:** eval's leakage guard defaults to design P's window and does not yet apply this archive guard. Adding it is integration work (W2).
+  - **Data:** the 22 frames, their sidecars, the 7 contact sheets and the check's summary JSON were moved, not deleted, to `$LOOKOUT_DATA_DIR/quarantine/held-out-breach-2026-11-19/`. Its README gives the undo steps. `archive/` keeps 85 frames, the latest dated 15 Jan 2026.
+
+## D-023 — Two NPS fetchers ran at once, and Rainier got 5 downloads in an hour · decided (fixed in code; stopgap retired) · 2026-11-19 · closes D-021
+- **What happened:**
+  - **During the archive check** (08:46–10:41 UTC), the Rainier stopgap kept polling: 6 stopgap events. CLAUDE.md says never to run two NPS fetchers at once.
+  - **At the capture worker's first live pass** (10:56:15–10:56:31 UTC), the stopgap was still running.
+    - Rainier got **5 image GETs in the rolling hour** from 10:56:28. The cap is 4.
+    - It got two HEADs 53 s apart. The limit is one every 5 minutes.
+  - **Load on nps.gov stayed small:** archive requests were at least 5 s apart, plus one extra Rainier HEAD and one extra GET. Both are still breaches of the polite-collection rules.
+  - **Cause:** the lead started the capture work package without stopping the stopgap first.
+- **Fix:**
+  - **A host-wide lock.** Every `lookout-capture` command that touches nps.gov takes `state/locks/nps-fetcher.lock`. It exits with status 3, before sending anything, if:
+    - another fetcher holds the lock;
+    - the stopgap is running;
+    - stopgap records appear in the last 11 minutes.
+  - **The stopgap was stopped at 12:13:12 UTC.** It ran 06:30–12:13 and stored 24 Rainier frames; its last record was at 12:12:23.
+  - **The production loop took over** after the 11-minute window: `lookout-capture loop --interval 300`, all 8 cameras.
+    - It runs on this laptop under `caffeinate -s`, which keeps the Mac awake only on AC power.
+    - It uses `PYTHONPATH=src:../common/src`, because iCloud hides the venv's `.pth` files.
+  - **Rainier is now paced:** image GETs are at least 720 s apart, so frames spread through the hour instead of coming in bursts of 4.
+- **Still true:**
+  - Until AWS is live (D-014), capture runs only while the laptop is awake and this session's background task lives.
+  - Archive backfill can't run while the loop holds the lock. It needs the loop paused, or one process that does both, to be built in W2.
+
 ---
 
 ## Spend ledger

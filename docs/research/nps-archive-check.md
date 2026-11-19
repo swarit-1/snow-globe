@@ -5,8 +5,8 @@
 **Tool:** `lookout-capture archive-check` ([`workers/capture/src/lookout_capture/archive_check.py`](../../workers/capture/src/lookout_capture/archive_check.py)). It ran on 19 Nov 2026 between 08:46 and 10:41 UTC.
 
 **Data:**
-- The machine-readable result is `$LOOKOUT_DATA_DIR/archive/archive_check_2026-11-19.json`. It holds fields derived from frames past the held-out guard (below), and its `request_totals_from_runs` misses one interrupted run (see "Budget used").
-- Contact sheets are in `$LOOKOUT_DATA_DIR/archive/archive_check/2026-11-19/`. **Every sheet includes tiles past the guard.**
+- The machine-readable result was written to `$LOOKOUT_DATA_DIR/archive/archive_check_2026-11-19.json`. It holds fields derived from frames past the held-out guard (below), so it is now in the quarantine folder (D-022). Its `request_totals_from_runs` misses one interrupted run (see "Budget used").
+- Contact sheets were written to `$LOOKOUT_DATA_DIR/archive/archive_check/2026-11-19/`. **Every sheet includes tiles past the guard,** so they are now in the quarantine folder too.
 - Downloaded frames are under `archive/<viewpoint_id>/`, each with a sidecar: 85 from before the guard and 22 past it.
 
 > **This check broke D-019's held-out guard.** D-019 allows archived frames, full size or thumbnail, only from before 1 Jun 2026, and summer 2026 is the design-H held-out season. The run viewed frames from 15 Jul 2026 (inside that season) and 17 Nov 2026 at all seven cameras. The record and its consequences are in [Guard breach](#guard-breach). Every finding below is stated from frames before the guard plus metadata, which D-019 allows for any date. Observations that rest on frames past the guard appear only in the breach record.
@@ -77,10 +77,10 @@
 - dHash change-point candidates at Point Reyes and Big Bend, splitting 2026-01-15 from 2026-07-15 (margins 8.2 and 8.3 bits).
 - 999×562 hires sizes on 2026-07-15 (Point Reyes) and on 2026-11-17 (all seven).
 
-**Still on disk.** Nothing has been moved or deleted, because that needs the owner's OK:
-- the 22 frames and their 22 sidecars under `archive/<viewpoint_id>/2026-07-15/` and `archive/<viewpoint_id>/2026-11-17/`;
+**Quarantined** by the lead on 19 Nov (D-022). These were moved, not deleted, to `$LOOKOUT_DATA_DIR/quarantine/held-out-breach-2026-11-19/`, whose README gives the undo steps:
+- the 22 frames and their 22 sidecars, from `archive/<viewpoint_id>/2026-07-15/` and `archive/<viewpoint_id>/2026-11-17/`;
 - the 7 contact sheets;
-- the derived fields in `archive_check_2026-11-19.json`.
+- `archive_check_2026-11-19.json`, which holds the derived fields.
 
 The search caches for those days are metadata and are allowed.
 
@@ -102,6 +102,11 @@ The search caches for those days are metadata and are allowed.
    One possibility is to keep summer 2026 and exclude 15 Jul 2026 from scoring at every camera. Moving to another summer is not available: every summer from 2021 to 2025 had a mid-July midday thumbnail viewed as development data.
 
 3. With the owner's OK, move the 22 frames, their sidecars and the 7 contact sheets to a quarantine folder outside `archive/`, without deleting them.
+
+**Done on 19 Nov (D-022 and D-023):**
+- The breach is recorded.
+- The season stays summer 2026, with 15 Jul 2026 excluded at every camera.
+- The files are quarantined; the lead made the move, which can be undone.
 
 ## Method
 
