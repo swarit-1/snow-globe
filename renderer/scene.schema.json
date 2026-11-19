@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lookout.invalid/schemas/scene.schema.json",
+  "title": "SceneSpec",
+  "description": "Everything one Tier 1 frame depends on (PRD section 9.2), renderer 0.2.0. Heights are metres above mean sea level unless a name says _agl; angles are degrees; azimuths are clockwise from true north. Mirrors validateScene() in renderer/src/scene.ts (a test checks they agree). Rules this schema cannot express, which validateScene() also enforces: seed == deriveSeed(viewpoint_id, run_init_utc); timestamps must be real instants (no 30 February; the patterns already exclude month 13, day 32, hour 24, second 60); valid_time_utc lies 0 to 384 h after run_init_utc; cover_profile distances and wind_series lead_h values strictly increase; wind_series read at the valid time is within 0.05 m/s of wind_u_ms / wind_v_ms; sun is within 1 degree of the solar position for valid_time_utc at the camera.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["viewpoint_id", "valid_time_utc", "run_init_utc", "renderer_version", "seed", "camera", "sun", "moon", "forecast", "haze", "plate"],
+  "properties": {
+    "viewpoint_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[a-z0-9]+(?:[-.][a-z0-9]+)*$",
+      "description": "Viewpoint id, for example rainier.paradise-mountain."
+    },
+    "valid_time_utc": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,9})?)?Z$",
+      "description": "Valid time, ISO 8601 in UTC with a Z suffix. Must be a real instant (checked by validateScene)."
+    },
+    "run_init_utc": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$",
+      "description": "Initialisation time of the forecast run, canonical YYYY-MM-DDTHH:MM:SSZ (the string deriveSeed hashes). PRD 9.5: the clouds of a run are fixed here and advect by the time integral of the wind up to valid_time_utc, which lies 0-384 h later (checked by validateScene)."
+    },
+    "renderer_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "description": "Renderer version the scene was issued for; render() is pure in (scene, renderer version)."
+    },
+    "seed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "PRD 9.5: deriveSeed(viewpoint_id, run_init_utc), 16 hex chars of SHA-256 of 'lookout-seed-v1|<viewpoint_id>|<run_init_utc>' (checked by validateScene). The same (viewpoint, run, valid time) always gives the same pixels."
+    },
+    "camera": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "lat", "lon", "elev_m_msl", "heading_deg", "pitch_deg", "roll_deg", "hfov_deg"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1, "maximum": 8192 },
+        "height": { "type": "integer", "minimum": 1, "maximum": 8192 },
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "elev_m_msl": { "type": "number", "minimum": -500, "maximum": 9000, "description": "Camera (lens) height above MSL." },
+        "heading_deg": { "type": "number", "minimum": -360, "maximum": 360, "description": "Azimuth of the optical axis, clockwise from true north." },
+        "pitch_deg": { "type": "number", "minimum": -90, "maximum": 90, "description": "Elevation of the optical axis, up positive." },
+        "roll_deg": { "type": "number", "minimum": -180, "maximum": 180, "description": "Rotation about the optical axis, positive = camera turned clockwise as seen from behind." },
+        "hfov_deg": { "type": "number", "exclusiveMinimum": 0, "maximum": 179, "description": "Full horizontal field of view; square pixels." },
+        "agl_m": { "type": "number", "minimum": 0, "maximum": 1000, "description": "Optional camera height above the ground under it (default 10 m); sets the v0 flat-ground height." }
+      }
+    },
+    "sun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alt_deg", "az_deg"],
+      "description": "Supplied by the caller for now (TODO(M2): computed inside via oculus-core WASM). validateScene rejects a Sun more than 1 degree from the NOAA solar position for valid_time_utc at the camera.",
+      "properties": {
+        "alt_deg": { "type": "number", "minimum": -90, "maximum": 90, "description": "Geometric (unrefracted) altitude." },
+        "az_deg": { "type": "number", "minimum": -360, "maximum": 360 }
+      }
+    },
+    "moon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alt_deg", "az_deg", "illuminated_fraction"],
+      "description": "Supplied by the caller; not checked yet (TODO(M2): computed inside via oculus-core WASM).",
+      "properties": {
+        "alt_deg": { "type": "number", "minimum": -90, "maximum": 90 },
+        "az_deg": { "type": "number", "minimum": -360, "maximum": 360 },
+        "illuminated_fraction": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "forecast": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layers", "ceiling_m_msl", "visibility_m", "precip_rate_mm_h", "wind_u_ms", "wind_v_ms"],
+      "properties": {
+        "layers": {
+          "type": "array",
+          "maxItems": 3,
+          "description": "At most one layer of each name.",
+          "allOf": [
+            { "contains": { "type": "object", "required": ["name"], "properties": { "name": { "const": "low" } } }, "minContains": 0, "maxContains": 1 },
+            { "contains": { "type": "object", "required": ["name"], "properties": { "name": { "const": "mid" } } }, "minContains": 0, "maxContains": 1 },
+            { "contains": { "type": "object", "required": ["name"], "properties": { "name": { "const": "high" } } }, "minContains": 0, "maxContains": 1 }
+          ],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "base_m_msl", "thickness_m", "cover_profile"],
+            "properties": {
+              "name": { "enum": ["low", "mid", "high"] },
+              "base_m_msl": { "type": "number", "minimum": -500, "maximum": 20000 },
+              "thickness_m": { "type": "number", "exclusiveMinimum": 0, "maximum": 15000 },
+              "cover_profile": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 16,
+                "description": "Forecast cover against great-circle distance from the camera along the view; linear between knots, constant beyond the ends. Distances strictly increasing (checked by validateScene).",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["distance_km", "cover_0_1"],
+                  "properties": {
+                    "distance_km": { "type": "number", "minimum": 0 },
+                    "cover_0_1": { "type": "number", "minimum": 0, "maximum": 1 }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ceiling_m_msl": {
+          "type": ["number", "null"],
+          "minimum": -500,
+          "maximum": 20000,
+          "description": "Base of the lowest broken/overcast layer. v0: a solid 300 m slab unless the height lies inside a declared layer."
+        },
+        "visibility_m": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0,
+          "maximum": 1000000,
+          "description": "Near-surface visibility diagnostic (HRRR VIS). Applied only below 100 m above ground (PRD 9.3), as the excess over clear-air haze."
+        },
+        "precip_rate_mm_h": { "type": "number", "minimum": 0, "maximum": 500, "description": "Accepted and hashed; not rendered in v0 (TODO(M2) pass 7)." },
+        "wind_u_ms": { "type": "number", "minimum": -150, "maximum": 150, "description": "Eastward wind at the valid time. Without wind_series, the clouds advect as if it had blown constantly since run_init_utc." },
+        "wind_v_ms": { "type": "number", "minimum": -150, "maximum": 150, "description": "Northward wind at the valid time (see wind_u_ms)." },
+        "visibility_epsilon": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.5, "description": "Optional Koschmieder contrast threshold (default 0.02, so beta = 3.912 / V)." },
+        "wind_series": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 400,
+          "description": "Optional wind against lead time since run_init_utc, for example HRRR's hourly winds: linear between knots, constant beyond. The cloud drift is its exact time integral from 0 to the valid time, so scrubbing across forecast hours is continuous. lead_h strictly increasing, and the series read at the valid time within 0.05 m/s of wind_u_ms / wind_v_ms (both checked by validateScene).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["lead_h", "u_ms", "v_ms"],
+            "properties": {
+              "lead_h": { "type": "number", "minimum": 0, "maximum": 384 },
+              "u_ms": { "type": "number", "minimum": -150, "maximum": 150 },
+              "v_ms": { "type": "number", "minimum": -150, "maximum": 150 }
+            }
+          }
+        },
+        "precip_type": { "enum": ["none", "rain", "snow", "freezing_rain", "ice_pellets", "mixed"], "description": "Optional precipitation type. Accepted and hashed; not rendered in v0 (TODO(M2) pass 7)." },
+        "rh_pct": { "type": "number", "minimum": 0, "maximum": 100, "description": "Optional near-surface relative humidity (%). Accepted and hashed; not rendered in v0 (TODO(M2) pass 6)." },
+        "pbl_height_m_agl": { "type": "number", "minimum": 0, "maximum": 10000, "description": "Optional boundary-layer height above ground (m; HRRR HPBL is above the surface). Accepted and hashed; not rendered in v0 (TODO(M2): haze layer depth)." }
+      }
+    },
+    "haze": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["beta_per_km"],
+      "properties": {
+        "beta_per_km": { "type": "number", "minimum": 0, "maximum": 10, "description": "Clear-air extinction, fitted per viewpoint on clear dev frames (PRD 9.3). v0: uniform below 2 km above the ground." }
+      }
+    },
+    "plate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sha256", "has_sky_mask", "has_depth"],
+      "description": "The plate set the scene was issued for. The file hashes put the plate in scene_hash (PRD 10.3 paint gating, cache keys) and are checked against the files when rendering.",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$", "description": "Asset id, for example rainier.paradise-mountain/plate-v1." },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 (hex) of the plate file's bytes." },
+        "has_sky_mask": { "type": "boolean", "description": "A sky mask image is supplied (R channel, 255 = sky). Without one, every pixel is terrain." },
+        "sky_mask_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of the sky-mask file; present exactly when has_sky_mask is true." },
+        "has_depth": { "type": "boolean", "description": "A depth image is supplied: RGB24 metres along the view ray = R*65536 + G*256 + B; 0 = unknown, 16777215 = sky." },
+        "depth_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of the depth file; present exactly when has_depth is true." },
+        "nominal_depth_m": { "type": "number", "minimum": 1, "maximum": 1000000, "description": "Optional distance assumed for terrain pixels when has_depth is false (default 15000 m)." }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "has_sky_mask": { "const": true } } },
+          "then": { "properties": { "sky_mask_sha256": true }, "required": ["sky_mask_sha256"] },
+          "else": { "not": { "properties": { "sky_mask_sha256": true }, "required": ["sky_mask_sha256"] } }
+        },
+        {
+          "if": { "properties": { "has_depth": { "const": true } } },
+          "then": { "properties": { "depth_sha256": true }, "required": ["depth_sha256"] },
+          "else": { "not": { "properties": { "depth_sha256": true }, "required": ["depth_sha256"] } }
+        }
+      ]
+    },
+    "meta": {
+      "type": "object",
+      "description": "Optional free-form provenance. Included in the scene hash; never read by the renderer."
+    }
+  }
+}

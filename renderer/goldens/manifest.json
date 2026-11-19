@@ -1,0 +1,47 @@
+{
+  "renderer_version": "0.2.0",
+  "backend": "swiftshader",
+  "gl_renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
+  "browser": "chromium 158.0.8127.18",
+  "platform": {
+    "os": "darwin",
+    "arch": "arm64"
+  },
+  "plate": {
+    "plate": {
+      "file": "plate/synthetic-plate.png",
+      "sha256": "f7f3e7b9957aad5fbaf141239c4dde161cd45a0825f15c3ba840454dd9927101",
+      "bytes": 36072
+    },
+    "skyMask": {
+      "file": "plate/synthetic-sky.png",
+      "sha256": "fc973305e37491a4c4c7c7f30ca456e201fca8ad9b5520bb3e59589fcefcccf6",
+      "bytes": 646
+    },
+    "depth": {
+      "file": "plate/synthetic-depth.png",
+      "sha256": "4c5f29e97249bbaf184c4af684cb4f8534c759fb29f6e72c22566044a23183c0",
+      "bytes": 35287
+    }
+  },
+  "goldens": {
+    "clear": {
+      "file": "clear.png",
+      "sha256": "81584c56b6ef961ed7c832fd7d599fbe1f730e4ecc243faa0ffed694949dc193",
+      "bytes": 34188,
+      "scene_hash": "787b75e8811e6e18c822b0a30e2deacca5dbc48a23b215b6b596c75a3928fe49"
+    },
+    "low-deck": {
+      "file": "low-deck.png",
+      "sha256": "d3d3f5502c03578af8fc90ee52f57de2cd47bd9e38a9fa743eaa63a2a42d143f",
+      "bytes": 34730,
+      "scene_hash": "ca9c64c2c49589266d488d8ba6e789fb0996f447314302e2627bbd1198cc132b"
+    },
+    "fog": {
+      "file": "fog.png",
+      "sha256": "3c250d19bacf87cc059fe89591fa26ccbe5e0bf989afc43f35c6fb3a56c432c9",
+      "bytes": 7037,
+      "scene_hash": "00398e530a706b2c5904052a5e4fa40308c2287deb3b38a4b8a8b3d7c6ecfcc3"
+    }
+  }
+}

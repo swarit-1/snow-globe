@@ -1,0 +1,42 @@
+{
+  "name": "@lookout/renderer",
+  "version": "0.1.0",
+  "description": "Lookout Tier 1 renderer v0 (WebGL2) with a CPU reference of the cloud-mask logic and a headless Chromium/SwiftShader runner (PRD section 9).",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./browser": "./src/browser.ts",
+    "./scene.schema.json": "./scene.schema.json"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:headless": "vitest run --project headless",
+    "build": "node scripts/build.ts",
+    "render": "node scripts/render.ts",
+    "bench": "node scripts/bench.ts",
+    "goldens:update": "node scripts/goldens-update.ts",
+    "plate:synthetic": "node scripts/make-synthetic-plate.ts",
+    "montecarlo": "node scripts/montecarlo.ts"
+  },
+  "dependencies": {
+    "esbuild": "0.28.2",
+    "jpeg-js": "0.4.4",
+    "playwright-core": "1.65.0",
+    "pngjs": "7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/pngjs": "6.0.5",
+    "ajv": "8.20.0",
+    "typescript": "6.0.3",
+    "vite": "8.3.6",
+    "vitest": "5.1.0"
+  }
+}

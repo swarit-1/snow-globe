@@ -1,0 +1,88 @@
+{
+  "viewpoint_id": "synthetic.test-ridge",
+  "valid_time_utc": "2026-11-18T19:00:00Z",
+  "run_init_utc": "2026-11-18T12:00:00Z",
+  "renderer_version": "0.2.0",
+  "seed": "fcb5d5bd95c61d46",
+  "camera": {
+    "width": 320,
+    "height": 180,
+    "lat": 46.786,
+    "lon": -121.735,
+    "elev_m_msl": 1650,
+    "heading_deg": 30,
+    "pitch_deg": 3,
+    "roll_deg": 0,
+    "hfov_deg": 60,
+    "agl_m": 10
+  },
+  "sun": {
+    "alt_deg": 22.816,
+    "az_deg": 166.653
+  },
+  "moon": {
+    "alt_deg": -20,
+    "az_deg": 60,
+    "illuminated_fraction": 0.55
+  },
+  "forecast": {
+    "layers": [
+      {
+        "name": "low",
+        "base_m_msl": 1000,
+        "thickness_m": 400,
+        "cover_profile": [
+          {
+            "distance_km": 0,
+            "cover_0_1": 0.9
+          },
+          {
+            "distance_km": 6,
+            "cover_0_1": 1
+          },
+          {
+            "distance_km": 30,
+            "cover_0_1": 0.95
+          }
+        ]
+      },
+      {
+        "name": "high",
+        "base_m_msl": 8000,
+        "thickness_m": 1500,
+        "cover_profile": [
+          {
+            "distance_km": 0,
+            "cover_0_1": 0.3
+          },
+          {
+            "distance_km": 60,
+            "cover_0_1": 0.45
+          }
+        ]
+      }
+    ],
+    "ceiling_m_msl": null,
+    "visibility_m": 25000,
+    "precip_rate_mm_h": 0,
+    "wind_u_ms": 6,
+    "wind_v_ms": -2
+  },
+  "haze": {
+    "beta_per_km": 0.04
+  },
+  "plate": {
+    "id": "synthetic.test-ridge/plate-v2",
+    "sha256": "f7f3e7b9957aad5fbaf141239c4dde161cd45a0825f15c3ba840454dd9927101",
+    "has_sky_mask": true,
+    "sky_mask_sha256": "fc973305e37491a4c4c7c7f30ca456e201fca8ad9b5520bb3e59589fcefcccf6",
+    "has_depth": true,
+    "depth_sha256": "4c5f29e97249bbaf184c4af684cb4f8534c759fb29f6e72c22566044a23183c0"
+  },
+  "meta": {
+    "golden": "low-deck",
+    "note": "Stratus deck 1000-1400 m filling the valley below the camera (1650 m): the camera looks over its ledge into the valley, so the deck covers about a third of the frame; terrain above 1400 m stays clear. Thin cirrus above.",
+    "run": "Seed = deriveSeed('synthetic.test-ridge', '2026-11-18T12:00:00Z'); clouds advect from the run's initialisation.",
+    "ephemeris": "Sun from the NOAA solar-position formula for the valid time and the camera (renderer/src/ephemeris/sun.ts). The Moon is a below-horizon placeholder: it is not checked until the oculus-core WASM lands (TODO(M2))."
+  }
+}

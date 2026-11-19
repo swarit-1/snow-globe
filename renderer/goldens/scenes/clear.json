@@ -1,0 +1,53 @@
+{
+  "viewpoint_id": "synthetic.test-ridge",
+  "valid_time_utc": "2026-11-18T21:00:00Z",
+  "run_init_utc": "2026-11-18T12:00:00Z",
+  "renderer_version": "0.2.0",
+  "seed": "fcb5d5bd95c61d46",
+  "camera": {
+    "width": 320,
+    "height": 180,
+    "lat": 46.786,
+    "lon": -121.735,
+    "elev_m_msl": 1650,
+    "heading_deg": 30,
+    "pitch_deg": 3,
+    "roll_deg": 0,
+    "hfov_deg": 60,
+    "agl_m": 10
+  },
+  "sun": {
+    "alt_deg": 22.087,
+    "az_deg": 197.277
+  },
+  "moon": {
+    "alt_deg": -35,
+    "az_deg": 80,
+    "illuminated_fraction": 0.55
+  },
+  "forecast": {
+    "layers": [],
+    "ceiling_m_msl": null,
+    "visibility_m": 50000,
+    "precip_rate_mm_h": 0,
+    "wind_u_ms": 4,
+    "wind_v_ms": 1.5
+  },
+  "haze": {
+    "beta_per_km": 0.03
+  },
+  "plate": {
+    "id": "synthetic.test-ridge/plate-v2",
+    "sha256": "f7f3e7b9957aad5fbaf141239c4dde161cd45a0825f15c3ba840454dd9927101",
+    "has_sky_mask": true,
+    "sky_mask_sha256": "fc973305e37491a4c4c7c7f30ca456e201fca8ad9b5520bb3e59589fcefcccf6",
+    "has_depth": true,
+    "depth_sha256": "4c5f29e97249bbaf184c4af684cb4f8534c759fb29f6e72c22566044a23183c0"
+  },
+  "meta": {
+    "golden": "clear",
+    "note": "Synthetic plate (renderer/goldens/plate). Clear sky; early-afternoon Sun behind and left of the camera.",
+    "run": "Seed = deriveSeed('synthetic.test-ridge', '2026-11-18T12:00:00Z'); clouds advect from the run's initialisation.",
+    "ephemeris": "Sun from the NOAA solar-position formula for the valid time and the camera (renderer/src/ephemeris/sun.ts). The Moon is a below-horizon placeholder: it is not checked until the oculus-core WASM lands (TODO(M2))."
+  }
+}
