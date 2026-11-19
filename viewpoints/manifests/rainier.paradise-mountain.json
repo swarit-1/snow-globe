@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "id": "rainier.paradise-mountain",
+  "place_id": "rainier",
+  "place": "Mount Rainier",
+  "aliases": [
+    "rainier",
+    "mount rainier",
+    "mt rainier",
+    "the mountain",
+    "paradise",
+    "mount rainer",
+    "mt rainer",
+    "rainer",
+    "ranier",
+    "mount ranier",
+    "tahoma",
+    "mount rainier national park",
+    "rainier paradise"
+  ],
+  "default": true,
+  "time_zone": "America/Los_Angeles",
+  "status": "msv",
+  "camera": {
+    "lat": 46.78455,
+    "lon": -121.74065,
+    "elevation_m": 1643,
+    "view_azimuth_deg": 348.8,
+    "view_azimuth_source": "computed: initial great-circle bearing from the camera position to the GNIS Mount Rainier summit point",
+    "position_uncertainty_m": 500,
+    "sources": [
+      {
+        "url": "https://www.nps.gov/mora/learn/photosmultimedia/webcams.htm",
+        "used_for": "camera listed only as 'Paradise' (\"Is the mountain out?\"); building not stated",
+        "accessed": "2026-11-19",
+        "note": "The East, West and Visitor Center cams are stated to be at the Henry M. Jackson Memorial Visitor Center; this one is not, so the JVC position is an assumption."
+      },
+      {
+        "url": "https://topoquest.com/place-detail.php?id=1984586",
+        "used_for": "lat/lon of the Henry M. Jackson Memorial Visitor Center (GNIS feature 1984586, mirror of USGS GNIS; 5,390 ft)",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://files.airnowtech.org/airnow/today/Monitoring_Site_Locations_V2.dat",
+        "used_for": "cross-check: 'Mt Rainier- Jackson Visitor Ctr' monitor at 46.784100, -121.740303, 1615.9 m",
+        "accessed": "2026-11-19",
+        "note": "57 m from the chosen position"
+      },
+      {
+        "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+        "used_for": "cross-check: GNIS 1533605 'Paradise' (populated place) at 46.786226, -121.735386",
+        "accessed": "2026-11-19",
+        "note": "442 m from the chosen position; the uncertainty radius covers the Paradise developed area"
+      },
+      {
+        "url": "https://epqs.nationalmap.gov/v1/json?x=-121.74065&y=46.78455&wkid=4326&units=Meters",
+        "used_for": "ground elevation 1642.7 m (USGS 3DEP via EPQS); mount height above ground unknown",
+        "accessed": "2026-11-19"
+      }
+    ]
+  },
+  "truth_camera": {
+    "operator": "National Park Service (Mount Rainier National Park)",
+    "kind": "park-cam",
+    "json_url": null,
+    "image_url": "https://www.nps.gov/webcams-mora/mountain.jpg",
+    "archive_code": null,
+    "archive_since": null,
+    "terms_url": "https://www.nps.gov/aboutus/disclaimer.htm",
+    "terms_checked": "2026-11-19",
+    "ownership_basis": "no ownership metadata in EXIF (Axis P1387); confirmation needed",
+    "confirmation": "to-request",
+    "interval_min_nominal": null,
+    "interval_min_measured": null,
+    "fixed_view": true,
+    "night_mode": "infrared",
+    "polite_caps": {
+      "max_images_per_hour": 4,
+      "poll_interval_s": 300,
+      "fetch_on_change": true
+    },
+    "publish_cleared": false,
+    "people_in_frame": true,
+    "view_label": "Mountain webcam, Paradise",
+    "image_px": [
+      1920,
+      1080
+    ]
+  },
+  "landmarks": [
+    {
+      "name": "Mount Rainier summit (Columbia Crest)",
+      "lat": 46.852832,
+      "lon": -121.760455,
+      "height_m": 4392,
+      "distance_km": 7.74,
+      "azimuth_deg": 348.8,
+      "band": "summit",
+      "px": null,
+      "sources": [
+        {
+          "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+          "used_for": "lat/lon: GNIS 1533614 'Mount Rainier' summit (Columbia Crest, GNIS 1517974, is 46.85282, -121.760388)",
+          "accessed": "2026-11-19"
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/Mount_Rainier",
+          "used_for": "height: official 14,410 ft (4,392 m), USGS 1956 survey",
+          "accessed": "2026-11-19",
+          "note": "USGS 3DEP gives 4391.4 m at this point; a 2024 independent GNSS survey found Columbia Crest 21.8 ft lower than in 1998 and the SW rim now highest (14,406.2 ft NAVD88). Irrelevant at pixel scale from 7.7 km."
+        }
+      ]
+    }
+  ],
+  "attribution": "Webcam imagery courtesy National Park Service. Derived images are not NPS products.",
+  "notes": [
+    "No NPS image archive exists for this camera. The NPS archive code 'mora' (from 2003-07-18) belongs to the Paradise air cam, which looks WSW and does not show the summit.",
+    "Night mode measured on one frame (2026-11-18 20:21 PST, ~/lookout-data/samples/mountain.jpg): monochrome, mean channel spread 0.01/255, mean luma 61.6.",
+    "EXIF carries DateTimeOriginal in local time plus TimeZoneOffset -8 and SubSecTimeOriginal; use lookout_common.images.exif_summary.",
+    "Update cadence undocumented; the 2026-11-19 stopgap saw a new Last-Modified at every 5-minute poll, so the 4-per-hour cap binds. Measure before filling interval_min_measured.",
+    "Faces a busy visitor area: people and vehicles must be blurred before any publication (PRD §15.1)."
+  ]
+}

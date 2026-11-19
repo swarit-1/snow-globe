@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "id": "smokies.look-rock",
+  "place_id": "smokies",
+  "place": "Great Smoky Mountains",
+  "aliases": [
+    "smokies",
+    "the smokies",
+    "great smoky mountains",
+    "smoky mountains",
+    "great smokies",
+    "smokey mountains",
+    "great smoky mountains national park",
+    "look rock",
+    "look rock tower"
+  ],
+  "default": true,
+  "time_zone": "America/New_York",
+  "status": "v1-candidate",
+  "camera": {
+    "lat": 35.63346,
+    "lon": -83.94158,
+    "elevation_m": 808,
+    "view_azimuth_deg": 90.0,
+    "view_azimuth_source": "NPS JSON feed viewdetail 'Looking East' (https://www.nps.gov/featurecontent/ard/webcams/json/grsmjson.txt)",
+    "position_uncertainty_m": 100,
+    "sources": [
+      {
+        "url": "https://files.airnowtech.org/airnow/today/Monitoring_Site_Locations_V2.dat",
+        "used_for": "lat/lon of the NPS monitor 'Look Rock - GSMNP' (AQS 470090101), elevation listed 793.3 m",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://www.epa.gov/castnet/grs420",
+        "used_for": "cross-check: CASTNET GRS420 at 35.633482, -83.941606",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+        "used_for": "cross-check: GNIS 1292030 'Look Rock' summit at 35.633441, -83.941482",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://services1.arcgis.com/fBc8EJBxQRMcHlei/ArcGIS/rest/services/Air_Quality_Monitoring_Map_WFL1/FeatureServer/9",
+        "used_for": "NPS ARD webcams layer: site 'Look Rock Observation Tower' at 35.63, -83.94 (0.01° precision; cross-check)",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://epqs.nationalmap.gov/v1/json?x=-83.94158&y=35.63346&wkid=4326&units=Meters",
+        "used_for": "ground elevation (USGS 3DEP via EPQS); mount height above ground unknown",
+        "accessed": "2026-11-19"
+      }
+    ]
+  },
+  "truth_camera": {
+    "operator": "National Park Service (Air Resources Division)",
+    "kind": "ard-aircam",
+    "json_url": "https://www.nps.gov/featurecontent/ard/webcams/json/grsmjson.txt",
+    "image_url": "https://www.nps.gov/featurecontent/ard/webcams/images/grsmlarge.jpg",
+    "archive_code": "grsm",
+    "archive_since": "1998-04-01",
+    "terms_url": "https://www.nps.gov/aboutus/disclaimer.htm",
+    "terms_checked": "2026-11-19",
+    "ownership_basis": "EXIF Artist/Copyright = National Park Service (spot check 2026-11-19)",
+    "confirmation": "to-request",
+    "interval_min_nominal": 15,
+    "interval_min_measured": null,
+    "fixed_view": true,
+    "night_mode": "unknown",
+    "polite_caps": {
+      "max_images_per_hour": 4,
+      "poll_interval_s": 300,
+      "fetch_on_change": true
+    },
+    "publish_cleared": false,
+    "people_in_frame": true,
+    "view_label": "View from Look Rock, looking east",
+    "image_px": [
+      3840,
+      2160
+    ]
+  },
+  "landmarks": [],
+  "attribution": "Webcam imagery courtesy National Park Service. Derived images are not NPS products.",
+  "notes": [
+    "Look Rock is in Tennessee: America/New_York.",
+    "3DEP ground elevation 808.4 m vs AirNow's 793.3 m (15 m apart); the camera is on or near the observation tower, so its height above ground is unknown.",
+    "archive_since is GetAvailableDays MinDay for 'grsm' (~/lookout-data/samples/nps-json/days_grsm.json, fetched 2026-11-19).",
+    "EXIF Artist and Copyright 'National Park Service', Software 'ARS_Digicam', 3840x2160: read from the first 64 KB of one live frame on 2026-11-19.",
+    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2)."
+  ]
+}

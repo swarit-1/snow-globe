@@ -1,0 +1,45 @@
+[project]
+name = "lookout-common"
+version = "0.1.0"
+description = "Shared helpers for Lookout workers: data paths, viewpoint manifests, storage (local/S3), polite HTTP, time parsing, JSONL logs, image helpers."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "httpx>=0.28",
+    "jsonschema>=4.23",
+    "tzdata>=2025.2",
+    "pillow>=11.0",
+]
+
+[project.scripts]
+lookout-viewpoints-check = "lookout_common.manifest:main"
+
+[project.optional-dependencies]
+s3 = ["boto3>=1.36"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.9",
+    "moto[s3]>=5.1",
+    "boto3>=1.36",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.6,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not network' --strict-markers"
+markers = [
+    "network: touches the network; excluded by default (run with -m network)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]

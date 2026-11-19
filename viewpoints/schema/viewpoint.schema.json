@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lookout:schema:viewpoint:1",
+  "title": "Lookout viewpoint manifest",
+  "description": "One file per viewpoint at viewpoints/manifests/<id>.json (PRD §8.2, Appendix A). Validated in CI by lookout_common.manifest, which also checks rules a schema cannot express: file name = id, place_id = prefix of id, IANA zone loads, one default per place, no alias shared across places, landmark distances match the camera position. Fields marked M2 are optional until the plate build.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "place_id",
+    "place",
+    "aliases",
+    "default",
+    "time_zone",
+    "status",
+    "camera",
+    "truth_camera",
+    "landmarks",
+    "attribution"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Manifest format version.",
+      "const": 1
+    },
+    "id": {
+      "description": "Viewpoint ID, <place>.<view> (CLAUDE.md).",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*\\.[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "place_id": {
+      "description": "The place this viewpoint belongs to; the part of id before the dot.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "place": {
+      "description": "Display name of the place.",
+      "type": "string",
+      "minLength": 1
+    },
+    "aliases": {
+      "description": "Lower-case names, nicknames and likely speech-to-text mishearings the parser matches (PRD §7.5).",
+      "type": "array",
+      "minItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9](?:[a-z0-9' -]*[a-z0-9])?$"
+      }
+    },
+    "default": {
+      "description": "True if this is the place's default viewpoint.",
+      "type": "boolean"
+    },
+    "time_zone": {
+      "description": "IANA zone of the place; all times resolve here (PRD §7.4).",
+      "type": "string",
+      "pattern": "^[A-Za-z]+(?:/[A-Za-z0-9_+-]+)+$"
+    },
+    "status": {
+      "description": "Build order (PRD §8.2): msv = MSV claims; third = built after the MSV; v1-candidate = captured, built later.",
+      "enum": ["msv", "third", "v1-candidate"]
+    },
+    "camera": {
+      "$ref": "#/$defs/camera"
+    },
+    "truth_camera": {
+      "$ref": "#/$defs/truth_camera"
+    },
+    "landmarks": {
+      "description": "Surveyed points in view. px stays null until the M2 pose solve.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/landmark"
+      }
+    },
+    "attribution": {
+      "description": "Credit line shown with any frame or derivative (PRD §15.4).",
+      "type": "string",
+      "minLength": 1
+    },
+    "notes": {
+      "description": "Free-text provenance notes.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "pose": {
+      "description": "M2: camera pose solved from landmarks (PRD §8.5 steps 3, 7, 8).",
+      "type": ["object", "null"],
+      "properties": {
+        "heading_deg": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "pitch_deg": { "type": "number", "minimum": -90, "maximum": 90 },
+        "roll_deg": { "type": "number", "minimum": -180, "maximum": 180 },
+        "fov_deg": { "type": "number", "exclusiveMinimum": 0, "maximum": 180 },
+        "pose_rms_px": { "type": "number", "minimum": 0 },
+        "pose_check_deg": { "type": "number", "minimum": 0 },
+        "pose_check_method": { "type": "string" }
+      }
+    },
+    "plate": {
+      "description": "M2: plate set files and licences (PRD §8.5, Appendix A).",
+      "type": ["object", "null"]
+    },
+    "haze_profile": {
+      "description": "M2: per-viewpoint clear-air haze fit (PRD §9.3).",
+      "type": ["object", "null"]
+    },
+    "camera_response": {
+      "description": "M2: fitted camera response (PRD §9.4).",
+      "type": ["object", "null"]
+    },
+    "forecast_samples": {
+      "description": "M2: where view rays meet each cloud layer, with grid cells (PRD §8.3).",
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "required": ["layer", "height_m", "lat", "lon"],
+        "properties": {
+          "layer": { "type": "string" },
+          "height_m": { "type": "number" },
+          "lat": { "$ref": "#/$defs/lat" },
+          "lon": { "$ref": "#/$defs/lon" },
+          "grid_cell": {
+            "type": ["array", "null"],
+            "items": { "type": "integer" },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      }
+    },
+    "truth_sources": {
+      "description": "M2: independent truth votes, e.g. webcam, goes18_acmc (PRD §8.1).",
+      "type": ["array", "null"],
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+    "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+    "https_url": { "type": "string", "pattern": "^https://[^\\s]+$" },
+    "iso_date": { "type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "used_for"],
+      "properties": {
+        "url": { "$ref": "#/$defs/https_url" },
+        "used_for": { "type": "string", "minLength": 1 },
+        "accessed": { "$ref": "#/$defs/iso_date" },
+        "note": { "type": "string" }
+      }
+    },
+    "camera": {
+      "description": "Camera site. Coordinates are WGS84; elevation is metres above mean sea level (NAVD88 where from USGS). position_uncertainty_m is an honest radius for the mount position.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lat",
+        "lon",
+        "elevation_m",
+        "view_azimuth_deg",
+        "position_uncertainty_m",
+        "sources"
+      ],
+      "properties": {
+        "lat": { "$ref": "#/$defs/lat" },
+        "lon": { "$ref": "#/$defs/lon" },
+        "elevation_m": { "type": "number", "minimum": -100, "maximum": 9000 },
+        "view_azimuth_deg": {
+          "description": "Nominal view direction, degrees clockwise from true north (feed viewdetail or computed). The solved heading is pose.heading_deg (M2).",
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 360
+        },
+        "position_uncertainty_m": { "type": "number", "exclusiveMinimum": 0 },
+        "view_azimuth_source": { "type": "string" },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/source" }
+        }
+      }
+    },
+    "polite_caps": {
+      "description": "Collection limits (PRD §15.3): fetch only on change, at most 4 images per rolling hour, poll no faster than every 5 minutes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_images_per_hour", "poll_interval_s", "fetch_on_change"],
+      "properties": {
+        "max_images_per_hour": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "poll_interval_s": { "type": "integer", "minimum": 300 },
+        "fetch_on_change": { "const": true }
+      }
+    },
+    "truth_camera": {
+      "description": "The feed that supplies truth frames, with its licence facts (PRD §15.1 Cameras).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operator",
+        "kind",
+        "json_url",
+        "image_url",
+        "archive_code",
+        "archive_since",
+        "terms_url",
+        "terms_checked",
+        "ownership_basis",
+        "confirmation",
+        "interval_min_nominal",
+        "fixed_view",
+        "night_mode",
+        "polite_caps",
+        "publish_cleared",
+        "people_in_frame"
+      ],
+      "properties": {
+        "operator": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["ard-aircam", "park-cam"] },
+        "json_url": {
+          "description": "NPS ARD JSON feed, or null when the camera has none (poll HTTP headers instead).",
+          "oneOf": [{ "$ref": "#/$defs/https_url" }, { "type": "null" }]
+        },
+        "image_url": { "$ref": "#/$defs/https_url" },
+        "archive_code": {
+          "description": "NPS /airwebcams archive location code (lower case), or null if there is no archive.",
+          "oneOf": [{ "type": "string", "pattern": "^[a-z]{4}$" }, { "type": "null" }]
+        },
+        "archive_since": {
+          "description": "First archive day (GetAvailableDays MinDay), or null.",
+          "oneOf": [{ "$ref": "#/$defs/iso_date" }, { "type": "null" }]
+        },
+        "terms_url": { "$ref": "#/$defs/https_url" },
+        "terms_checked": { "$ref": "#/$defs/iso_date" },
+        "ownership_basis": { "type": "string", "minLength": 1 },
+        "confirmation": { "enum": ["to-request", "requested", "confirmed"] },
+        "interval_min_nominal": {
+          "description": "Documented update interval in minutes, or null if undocumented (measure it).",
+          "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "null" }]
+        },
+        "interval_min_measured": {
+          "description": "Measured median update interval in minutes, filled by capture.",
+          "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "null" }]
+        },
+        "fixed_view": { "type": "boolean" },
+        "night_mode": {
+          "description": "What night frames look like: colour, infrared (monochrome), mixed, or unknown until checked (PRD §8.6 colour-mode gate).",
+          "enum": ["colour", "infrared", "mixed", "unknown"]
+        },
+        "polite_caps": { "$ref": "#/$defs/polite_caps" },
+        "publish_cleared": {
+          "description": "True only after written confirmation (PRD §15.1 Publication).",
+          "type": "boolean"
+        },
+        "people_in_frame": { "type": "boolean" },
+        "view_label": {
+          "description": "The operator's own caption, e.g. the feed's imagesite and viewdetail.",
+          "type": "string"
+        },
+        "image_px": {
+          "description": "Measured width and height of one full-size frame.",
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "if": {
+        "properties": { "publish_cleared": { "const": true } }
+      },
+      "then": {
+        "properties": { "confirmation": { "const": "confirmed" } }
+      }
+    },
+    "landmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "lat", "lon", "height_m", "distance_km", "band", "px"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "lat": { "$ref": "#/$defs/lat" },
+        "lon": { "$ref": "#/$defs/lon" },
+        "height_m": {
+          "description": "Elevation of the landmark above mean sea level, metres.",
+          "type": "number",
+          "minimum": -100,
+          "maximum": 9000
+        },
+        "distance_km": {
+          "description": "Great-circle distance from the camera.",
+          "type": "number",
+          "minimum": 0
+        },
+        "azimuth_deg": {
+          "description": "Initial bearing from the camera, degrees from true north.",
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 360
+        },
+        "band": {
+          "description": "Which landmark band it belongs to (PRD §8.5 masks); summit is the P1 target at Rainier.",
+          "enum": ["summit", "ridge", "skyline", "far", "mid", "near", "horizon", "shore"]
+        },
+        "px": {
+          "description": "Pixel position [x, y] in the full-size frame; null until M2.",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            { "type": "null" }
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/source" }
+        }
+      }
+    }
+  }
+}

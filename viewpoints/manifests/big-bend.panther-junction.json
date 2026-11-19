@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "id": "big-bend.panther-junction",
+  "place_id": "big-bend",
+  "place": "Big Bend",
+  "aliases": [
+    "big bend",
+    "big bend national park",
+    "big bend park",
+    "big bend texas",
+    "bigbend",
+    "panther junction"
+  ],
+  "default": true,
+  "time_zone": "America/Chicago",
+  "status": "v1-candidate",
+  "camera": {
+    "lat": 29.328538,
+    "lon": -103.205181,
+    "elevation_m": 1134,
+    "view_azimuth_deg": 0.0,
+    "view_azimuth_source": "NPS JSON feed viewdetail 'Looking North' (https://www.nps.gov/featurecontent/ard/webcams/json/bibejson.txt)",
+    "position_uncertainty_m": 700,
+    "sources": [
+      {
+        "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+        "used_for": "lat/lon of GNIS 1378830 'Panther Junction' (populated place)",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://services1.arcgis.com/fBc8EJBxQRMcHlei/ArcGIS/rest/services/Air_Quality_Monitoring_Map_WFL1/FeatureServer/9",
+        "used_for": "NPS ARD webcams layer: site 'Panther Junction Area' at 29.33, -103.21 (0.01° precision; cross-check)",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://files.airnowtech.org/airnow/today/Monitoring_Site_Locations_V2.dat",
+        "used_for": "not used for position: the Big Bend NP monitor (K-Bar, 29.3025, -103.1781) is about 3.7 km away and is not the camera site",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://epqs.nationalmap.gov/v1/json?x=-103.205181&y=29.328538&wkid=4326&units=Meters",
+        "used_for": "ground elevation (USGS 3DEP via EPQS); mount height above ground unknown",
+        "accessed": "2026-11-19"
+      }
+    ]
+  },
+  "truth_camera": {
+    "operator": "National Park Service (Air Resources Division)",
+    "kind": "ard-aircam",
+    "json_url": "https://www.nps.gov/featurecontent/ard/webcams/json/bibejson.txt",
+    "image_url": "https://www.nps.gov/featurecontent/ard/webcams/images/bibelarge.jpg",
+    "archive_code": "bibe",
+    "archive_since": "2004-10-05",
+    "terms_url": "https://www.nps.gov/aboutus/disclaimer.htm",
+    "terms_checked": "2026-11-19",
+    "ownership_basis": "EXIF Artist/Copyright = National Park Service (spot check 2026-11-19)",
+    "confirmation": "to-request",
+    "interval_min_nominal": 15,
+    "interval_min_measured": null,
+    "fixed_view": true,
+    "night_mode": "unknown",
+    "polite_caps": {
+      "max_images_per_hour": 4,
+      "poll_interval_s": 300,
+      "fetch_on_change": true
+    },
+    "publish_cleared": false,
+    "people_in_frame": true,
+    "view_label": "View from the Panther Junction Area, looking north",
+    "image_px": [
+      3840,
+      2160
+    ]
+  },
+  "landmarks": [],
+  "attribution": "Webcam imagery courtesy National Park Service. Derived images are not NPS products.",
+  "notes": [
+    "'big ben' is deliberately NOT an alias: it is a different place (London) a user may ask about.",
+    "The Chisos Mountains lie south of Panther Junction and the camera looks north, so 'chisos' is not an alias.",
+    "Position known only to the Panther Junction area (NPS gives 0.01°); refine at the M2 pose solve.",
+    "archive_since is GetAvailableDays MinDay for 'bibe' (~/lookout-data/samples/nps-json/days_bibe.json, fetched 2026-11-19).",
+    "EXIF Artist and Copyright 'National Park Service', Software 'ARS_Digicam', 3840x2160: read from the first 64 KB of one live frame on 2026-11-19.",
+    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2)."
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "id": "grand-canyon.yavapai",
+  "place_id": "grand-canyon",
+  "place": "Grand Canyon",
+  "aliases": [
+    "grand canyon",
+    "the grand canyon",
+    "grand canyon national park",
+    "yavapai point",
+    "yavapai",
+    "south rim",
+    "grand canyon south rim",
+    "grand canyon yavapai",
+    "grand canon",
+    "grand cannon"
+  ],
+  "default": true,
+  "time_zone": "America/Phoenix",
+  "status": "third",
+  "camera": {
+    "lat": 36.065981,
+    "lon": -112.118236,
+    "elevation_m": 2150,
+    "view_azimuth_deg": 315.0,
+    "view_azimuth_source": "NPS JSON feed viewdetail 'Looking Northwest' (https://www.nps.gov/featurecontent/ard/webcams/json/grcajson.txt)",
+    "position_uncertainty_m": 150,
+    "sources": [
+      {
+        "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+        "used_for": "GNIS 14044 'Yavapai Point' (cliff) at 36.066655, -112.118236",
+        "accessed": "2026-11-19",
+        "note": "That point sits on the cliff face (3DEP 2056 m). A 3DEP profile southward reaches the rim plateau (2150 m) 75 m south; the camera position is put there, at the rim where the Yavapai Geology Museum stands."
+      },
+      {
+        "url": "https://www.nps.gov/places/000/yavapai-geology-museum.htm",
+        "used_for": "museum is 'perched right on the very edge of the canyon rim at Yavapai Point' (no coordinates on the page)",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://services1.arcgis.com/fBc8EJBxQRMcHlei/ArcGIS/rest/services/Air_Quality_Monitoring_Map_WFL1/FeatureServer/9",
+        "used_for": "NPS ARD webcams layer: site 'Yavapai Point' at 36.06, -112.12 (0.01° precision; cross-check)",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://epqs.nationalmap.gov/v1/json?x=-112.118236&y=36.065981&wkid=4326&units=Meters",
+        "used_for": "ground elevation (USGS 3DEP via EPQS); mount height above ground unknown",
+        "accessed": "2026-11-19"
+      }
+    ]
+  },
+  "truth_camera": {
+    "operator": "National Park Service (Air Resources Division)",
+    "kind": "ard-aircam",
+    "json_url": "https://www.nps.gov/featurecontent/ard/webcams/json/grcajson.txt",
+    "image_url": "https://www.nps.gov/featurecontent/ard/webcams/images/grcalarge.jpg",
+    "archive_code": "grca",
+    "archive_since": "2001-11-08",
+    "terms_url": "https://www.nps.gov/aboutus/disclaimer.htm",
+    "terms_checked": "2026-11-19",
+    "ownership_basis": "EXIF Artist/Copyright = National Park Service (spot check 2026-11-19)",
+    "confirmation": "to-request",
+    "interval_min_nominal": 15,
+    "interval_min_measured": null,
+    "fixed_view": true,
+    "night_mode": "unknown",
+    "polite_caps": {
+      "max_images_per_hour": 4,
+      "poll_interval_s": 300,
+      "fetch_on_change": true
+    },
+    "publish_cleared": false,
+    "people_in_frame": true,
+    "view_label": "View from Yavapai Point, looking northwest",
+    "image_px": [
+      3840,
+      2160
+    ]
+  },
+  "landmarks": [],
+  "attribution": "Webcam imagery courtesy National Park Service. Derived images are not NPS products.",
+  "notes": [
+    "Arizona keeps MST all year: America/Phoenix, no DST (PRD §7.6 cross-zone tests).",
+    "The 3DEP elevation is sensitive here: 2056 m on the cliff vs 2150 m on the rim 75 m away. Confirm the mount height from the pose solve (M2).",
+    "archive_since is GetAvailableDays MinDay for 'grca' (~/lookout-data/samples/nps-json/days_grca.json, fetched 2026-11-19).",
+    "EXIF Artist and Copyright 'National Park Service', Software 'ARS_Digicam', 3840x2160: read from the first 64 KB of one live frame on 2026-11-19.",
+    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2)."
+  ]
+}

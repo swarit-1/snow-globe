@@ -1,0 +1,165 @@
+# CI only (PRD §11.3: GitHub Actions never schedules workers). No secrets, no AWS credentials, no
+# calls to NPS, NOAA or AWS: Python tests marked `network` are deselected, and Terraform runs with
+# `-backend=false` and never applies. A job whose project folder does not exist yet passes with a notice.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: python (${{ matrix.project }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [workers/common, workers/capture, workers/forecast, eval]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Is the project there yet?
+        id: present
+        run: |
+          if [ -f "${{ matrix.project }}/pyproject.toml" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ matrix.project }} does not exist yet; skipped"
+          fi
+      - if: steps.present.outputs.present == 'true'
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: ${{ matrix.project }}/uv.lock
+      - if: steps.present.outputs.present == 'true'
+        name: Python 3.13 and dependencies
+        working-directory: ${{ matrix.project }}
+        run: |
+          uv python install 3.13
+          if [ -f uv.lock ]; then uv sync --locked --all-extras; else uv sync --all-extras; fi
+      - if: steps.present.outputs.present == 'true'
+        name: ruff
+        working-directory: ${{ matrix.project }}
+        run: uv run ruff check .
+      - if: steps.present.outputs.present == 'true'
+        name: pytest (not network)
+        working-directory: ${{ matrix.project }}
+        run: uv run pytest -q -m "not network"
+      - if: steps.present.outputs.present == 'true' && matrix.project == 'workers/common'
+        name: Viewpoint manifests against the JSON schema
+        working-directory: workers/common
+        run: uv run lookout-viewpoints-check ../../viewpoints/manifests
+
+  rust:
+    name: rust (app)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Is the project there yet?
+        id: present
+        run: |
+          if [ -f app/Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::app/ does not exist yet; skipped"
+          fi
+      - if: steps.present.outputs.present == 'true'
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.1"
+      - if: steps.present.outputs.present == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app
+      # TODO(M1): when app/src-tauri joins the workspace, install the Tauri Linux build deps here
+      # (libwebkit2gtk-4.1-dev, librsvg2-dev, libayatana-appindicator3-dev) or exclude that crate.
+      - if: steps.present.outputs.present == 'true'
+        name: cargo test --workspace
+        working-directory: app
+        run: cargo test --workspace
+
+  renderer:
+    name: renderer (pnpm, headless Chromium)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Is the project there yet?
+        id: present
+        run: |
+          if [ -f renderer/package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::renderer/ does not exist yet; skipped"
+          fi
+      - if: steps.present.outputs.present == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.15.0
+      - if: steps.present.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: renderer/pnpm-lock.yaml
+      - if: steps.present.outputs.present == 'true'
+        name: pnpm install
+        working-directory: renderer
+        run: pnpm install --frozen-lockfile
+      - if: steps.present.outputs.present == 'true'
+        name: Headless Chromium for Playwright (SwiftShader WebGL2)
+        working-directory: renderer
+        run: pnpm exec playwright-core install --with-deps chromium
+      - if: steps.present.outputs.present == 'true'
+        name: pnpm test
+        working-directory: renderer
+        run: pnpm test
+
+  terraform:
+    name: terraform (fmt, validate)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Is the project there yet?
+        id: present
+        run: |
+          if ls infra/terraform/*.tf >/dev/null 2>&1; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::infra/terraform does not exist yet; skipped"
+          fi
+      - if: steps.present.outputs.present == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.1
+          terraform_wrapper: false
+      - if: steps.present.outputs.present == 'true'
+        name: terraform fmt -check
+        run: terraform -chdir=infra/terraform fmt -check -recursive -diff
+      - if: steps.present.outputs.present == 'true'
+        name: init -backend=false and validate (root module, then bootstrap if present)
+        env:
+          TF_IN_AUTOMATION: "1"
+          CHECKPOINT_DISABLE: "1"
+        run: |
+          for dir in infra/terraform infra/terraform/bootstrap; do
+            if ls "$dir"/*.tf >/dev/null 2>&1; then
+              echo "== $dir"
+              terraform -chdir="$dir" init -backend=false -input=false -no-color
+              terraform -chdir="$dir" validate -no-color
+            fi
+          done

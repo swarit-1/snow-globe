@@ -21,3 +21,21 @@ dist/
 .venv/
 __pycache__/
 .DS_Store
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Terraform: local state and plans can hold secrets; the lock file (.terraform.lock.hcl) is committed
+.terraform/
+*.tfstate*
+*.tfplan
+crash.log
+
+# Headless renderer test output
+test-results/
+playwright-report/
+
+# Forecast downloads belong in $LOOKOUT_DATA_DIR/cache, never in the repo
+*.grib2
+*.grib2.*

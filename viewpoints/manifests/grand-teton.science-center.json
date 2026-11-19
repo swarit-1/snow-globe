@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "id": "grand-teton.science-center",
+  "place_id": "grand-teton",
+  "place": "Grand Teton",
+  "aliases": [
+    "grand teton",
+    "the grand teton",
+    "grand teton national park",
+    "grand tetons",
+    "the tetons",
+    "tetons",
+    "teton range",
+    "teton science school",
+    "teton science center",
+    "jackson hole",
+    "grand titan"
+  ],
+  "default": true,
+  "time_zone": "America/Denver",
+  "status": "v1-candidate",
+  "camera": {
+    "lat": 43.67083,
+    "lon": -110.599403,
+    "elevation_m": 2123,
+    "view_azimuth_deg": 270.0,
+    "view_azimuth_source": "NPS JSON feed viewdetail 'Looking West' (https://www.nps.gov/featurecontent/ard/webcams/json/grtejson.txt)",
+    "position_uncertainty_m": 200,
+    "sources": [
+      {
+        "url": "https://files.airnowtech.org/airnow/today/Monitoring_Site_Locations_V2.dat",
+        "used_for": "lat/lon of the NPS monitor 'Grand Teton NP - Science School' (AQS 560390008), elevation listed 2106.3 m",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://www.nps.gov/grte/learn/news/press-release-11-86.htm",
+        "used_for": "the air quality station (webcam, ozone, met) is on the Teton Science Schools Kelly Campus, operating since Sept 2011 (per search summary)",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://services1.arcgis.com/fBc8EJBxQRMcHlei/ArcGIS/rest/services/Air_Quality_Monitoring_Map_WFL1/FeatureServer/9",
+        "used_for": "NPS ARD webcams layer: site 'Teton Science School' at 43.67, -110.60 (0.01° precision; cross-check)",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://epqs.nationalmap.gov/v1/json?x=-110.599403&y=43.67083&wkid=4326&units=Meters",
+        "used_for": "ground elevation (USGS 3DEP via EPQS); mount height above ground unknown",
+        "accessed": "2026-11-19"
+      }
+    ]
+  },
+  "truth_camera": {
+    "operator": "National Park Service (Air Resources Division)",
+    "kind": "ard-aircam",
+    "json_url": "https://www.nps.gov/featurecontent/ard/webcams/json/grtejson.txt",
+    "image_url": "https://www.nps.gov/featurecontent/ard/webcams/images/grtelarge.jpg",
+    "archive_code": "grte",
+    "archive_since": "2011-08-30",
+    "terms_url": "https://www.nps.gov/aboutus/disclaimer.htm",
+    "terms_checked": "2026-11-19",
+    "ownership_basis": "EXIF Artist/Copyright = National Park Service (spot check 2026-11-19)",
+    "confirmation": "to-request",
+    "interval_min_nominal": 15,
+    "interval_min_measured": null,
+    "fixed_view": true,
+    "night_mode": "unknown",
+    "polite_caps": {
+      "max_images_per_hour": 4,
+      "poll_interval_s": 300,
+      "fetch_on_change": true
+    },
+    "publish_cleared": false,
+    "people_in_frame": true,
+    "view_label": "View from Teton Science Center, looking west",
+    "image_px": [
+      3840,
+      2160
+    ]
+  },
+  "landmarks": [],
+  "attribution": "Webcam imagery courtesy National Park Service. Derived images are not NPS products.",
+  "notes": [
+    "3DEP ground elevation 2122.6 m differs from AirNow's listed 2106.3 m by 16 m; 3DEP is used.",
+    "archive_since is GetAvailableDays MinDay for 'grte' (~/lookout-data/samples/nps-json/days_grte.json, fetched 2026-11-19).",
+    "EXIF Artist and Copyright 'National Park Service', Software 'ARS_Digicam', 3840x2160: read from the first 64 KB of one live frame on 2026-11-19.",
+    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2)."
+  ]
+}

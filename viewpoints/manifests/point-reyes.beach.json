@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "id": "point-reyes.beach",
+  "place_id": "point-reyes",
+  "place": "Point Reyes",
+  "aliases": [
+    "point reyes",
+    "point reyes beach",
+    "point reyes national seashore",
+    "pt reyes",
+    "point rays",
+    "point raise",
+    "point reys",
+    "point ray",
+    "point reyes lighthouse",
+    "great beach",
+    "point reyes seashore"
+  ],
+  "default": true,
+  "time_zone": "America/Los_Angeles",
+  "status": "msv",
+  "camera": {
+    "lat": 37.99604,
+    "lon": -123.02,
+    "elevation_m": 150,
+    "view_azimuth_deg": 22.5,
+    "view_azimuth_source": "NPS JSON feed viewdetail 'Looking North-Northeast' (https://www.nps.gov/featurecontent/ard/webcams/json/porejson.txt)",
+    "position_uncertainty_m": 150,
+    "sources": [
+      {
+        "url": "https://www.nps.gov/pore/planyourvisit/weather.htm",
+        "used_for": "camera at the Point Reyes Lighthouse Visitor Center, looking NNE at Point Reyes Beach (per search summary of the NPS page)",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://www.nps.gov/pore/learn/photosmultimedia/webcams.htm",
+        "used_for": "same location statement, as recorded in docs/research/cameras.md source [3]",
+        "accessed": "2026-11-18"
+      },
+      {
+        "url": "https://topoquest.com/place-detail.php?id=1945938",
+        "used_for": "lat/lon of the Point Reyes Lighthouse Visitor Center (GNIS feature 1945938, mirror of USGS GNIS; 501 ft)",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://www.nps.gov/places/point-reyes-picnic-area-lighthouse-observation-deck.htm",
+        "used_for": "cross-check: lighthouse observation deck at 37.99645, -123.02099 (about 100 m away; DEM 155.3 m)",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://services1.arcgis.com/fBc8EJBxQRMcHlei/ArcGIS/rest/services/Air_Quality_Monitoring_Map_WFL1/FeatureServer/9",
+        "used_for": "NPS ARD webcams layer: site 'Point Reyes Visitor Center' at 38.00, -123.02 (0.01° precision; cross-check)",
+        "accessed": "2026-11-19"
+      },
+      {
+        "url": "https://epqs.nationalmap.gov/v1/json?x=-123.02&y=37.99604&wkid=4326&units=Meters",
+        "used_for": "ground elevation (USGS 3DEP via EPQS); mount height above ground unknown",
+        "accessed": "2026-11-19"
+      }
+    ]
+  },
+  "truth_camera": {
+    "operator": "National Park Service (Air Resources Division)",
+    "kind": "ard-aircam",
+    "json_url": "https://www.nps.gov/featurecontent/ard/webcams/json/porejson.txt",
+    "image_url": "https://www.nps.gov/featurecontent/ard/webcams/images/porelarge.jpg",
+    "archive_code": "pore",
+    "archive_since": "2004-01-06",
+    "terms_url": "https://www.nps.gov/aboutus/disclaimer.htm",
+    "terms_checked": "2026-11-19",
+    "ownership_basis": "EXIF Artist/Copyright = National Park Service (spot check 2026-11-19)",
+    "confirmation": "to-request",
+    "interval_min_nominal": 15,
+    "interval_min_measured": null,
+    "fixed_view": true,
+    "night_mode": "infrared",
+    "polite_caps": {
+      "max_images_per_hour": 4,
+      "poll_interval_s": 300,
+      "fetch_on_change": true
+    },
+    "publish_cleared": false,
+    "people_in_frame": true,
+    "view_label": "View of Point Reyes Beach, looking north-northeast",
+    "image_px": [
+      3840,
+      2160
+    ]
+  },
+  "landmarks": [],
+  "attribution": "Webcam imagery courtesy National Park Service. Derived images are not NPS products.",
+  "notes": [
+    "Night mode measured on one frame (2026-11-18 20:00 PST, ~/lookout-data/samples/porelarge.jpg): monochrome, mean channel spread 0.00/255, mean luma 22.8.",
+    "Looks along a public beach: people must be blurred before any publication (PRD §15.1).",
+    "archive_since is GetAvailableDays MinDay for 'pore' (~/lookout-data/samples/nps-json/days_pore.json, fetched 2026-11-19).",
+    "EXIF Artist and Copyright 'National Park Service', Software 'ARS_Digicam', 3840x2160: read from ~/lookout-data/samples/porelarge.jpg (2026-11-19).",
+    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2)."
+  ]
+}
