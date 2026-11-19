@@ -88,7 +88,8 @@ Metadata may be read for any date.
 
 **Node:** Node 24 with `pnpm`, TypeScript `strict`, and `vitest`. Headless rendering uses Playwright Chromium with SwiftShader.
 
-**Rust:** stable 1.98. `oculus-core` is a git dependency (`https://github.com/swarit-1/oculus`, rev `06809e6`, MIT, public). A local copy for reading is at `~/Documents/Oculus/oculus/core`.
+**Rust:** stable 1.98. `oculus-core` is a git dependency (`https://github.com/swarit-1/oculus`, rev `1b5410b`, public `main`, MIT; re-pinned from the unpushed `06809e6` on 19 Nov, `ephem.rs` identical). A local copy for reading is at `~/Documents/Oculus/oculus/core`.
+- Build with `CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target`. That keeps gigabytes of build output out of iCloud.
 
 **Other:** Terraform 1.16, Docker 29, Xcode 26.2 / Swift 6.2. There is no AWS CLI and no AWS credentials on this machine.
 
@@ -103,6 +104,8 @@ Metadata may be read for any date.
 | `renderer/` | pnpm package `@lookout/renderer`: WebGL2 Tier 1 renderer and headless runner | |
 | `app/core/` | Rust crate `lookout-core`: parser, time rules, ephemeris wrapper, solar events, trace, lifecycle | Cargo workspace at `app/Cargo.toml` |
 | `app/src-tauri/`, `app/src/`, `app/speech-macos/` | Tauri shell, overlay UI, Swift static library | M1 |
+| `bench/` | Replay and paint-capture harness, utterance scripts and reports | Voice recordings stay outside git, under `$LOOKOUT_DATA_DIR/fixtures/voice/` |
+| `spikes/` | Throwaway platform spikes, such as the M1 1a checks | Never shipped; the lead decides what moves into `app/` |
 | `viewpoints/` | `schema/viewpoint.schema.json` and `manifests/<viewpoint_id>.json` | Factual corrections allowed; say so in your report |
 | `infra/terraform/`, `infra/lambda/` | AWS serverless Terraform, and the Lambda container image | Never applied without the owner |
 | `docs/` | Research, council, review notes | |
