@@ -1,0 +1,33 @@
+[package]
+name = "lookout-core"
+version = "0.1.0"
+description = "Lookout core: utterance parser, time rules, ephemeris wrapper, solar events, trace and query lifecycle (PRD §7, §8.4, §10)."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[lib]
+name = "lookout_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "lookout-parse"
+path = "src/bin/lookout-parse.rs"
+
+[dependencies]
+oculus-core = { git = "https://github.com/swarit-1/oculus", rev = "06809e6141432119d399cd22f29f6f517bf0226d" }
+chrono = { version = "0.4.42", default-features = false, features = ["std", "now"] }
+chrono-tz = "0.10.4"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+thiserror = "2.0.12"
+strsim = "0.11.1"
+rphonetic = { version = "4.0.0", default-features = false }
+
+[dev-dependencies]
+proptest = "1.7.0"
+tempfile = "3.20.0"
+
+[lints]
+workspace = true

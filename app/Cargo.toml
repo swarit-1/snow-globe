@@ -1,0 +1,18 @@
+# Lookout Rust workspace (CLAUDE.md "Layout"). M1 adds `src-tauri` as a second member.
+[workspace]
+resolver = "3"
+members = ["core"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_in_result = "warn"
