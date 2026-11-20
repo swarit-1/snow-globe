@@ -276,3 +276,17 @@ def test_localize_policies():
     # Denver's fold, for the Grand Teton camera.
     got, flags = tu.localize(datetime(2026, 11, 1, 1, 15), "America/Denver")
     assert got == utc(2026, 11, 1, 7, 15) and flags == {FLAG_AMBIGUOUS}
+
+
+def test_steady_clock_is_the_sleep_inclusive_raw_clock():
+    """macOS: CLOCK_MONOTONIC_RAW (mach_continuous_time); Linux: CLOCK_BOOTTIME (D-077)."""
+    import sys
+    import time
+
+    if sys.platform == "darwin":
+        assert abs(tu.steady_clock() - time.clock_gettime(time.CLOCK_MONOTONIC_RAW)) < 1.0
+    elif hasattr(time, "CLOCK_BOOTTIME"):
+        assert abs(tu.steady_clock() - time.clock_gettime(time.CLOCK_BOOTTIME)) < 1.0
+    before = tu.steady_clock()
+    time.sleep(0.02)
+    assert tu.steady_clock() - before >= 0.019

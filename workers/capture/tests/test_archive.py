@@ -747,7 +747,7 @@ def test_archive_limiter_is_file_based_under_s3_storage(monkeypatch, data_root):
     monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "lookout-capture")
     assert MinIntervalLimiter("nps-archive", 5.0).mode == "process"
     limiter = archive_limiter()  # the archive's limiter stays file-based even there
-    assert limiter.mode == "file" and limiter.min_interval_s == 5.0
+    assert limiter.mode == "file" and limiter.min_interval_s == 5.05
     assert default_archive_client(LocalStorage(data_root)).limiter.mode == "file"
     assert (data_root / "state" / "ratelimit").is_dir()
 

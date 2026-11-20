@@ -11,11 +11,18 @@ NPS labels times with a zone *name* ("PST", "Pacific Standard Time"). The live f
 abbreviation fixes the UTC offset exactly. The archive's long name is checked against
 the viewpoint's zone and read as an honest civil-time label; the M0.5 archive check
 confirmed that, summer included (see :func:`parse_nps_archive_time`).
+
+:data:`steady_clock` is a monotonic clock that keeps counting while the machine sleeps, for
+measuring real elapsed time next to the wall clock (the request limiter, PRD §15.3).
 """
 
 from __future__ import annotations
 
+import functools
 import re
+import sys
+import time
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Literal
 from zoneinfo import ZoneInfo
@@ -33,6 +40,7 @@ __all__ = [
     "parse_iso_utc",
     "parse_nps_archive_time",
     "parse_nps_imagedate",
+    "steady_clock",
     "to_utc",
     "utcnow",
 ]
@@ -79,6 +87,31 @@ class NonexistentTimeError(ValueError):
 def utcnow() -> datetime:
     """Return the current time as an aware UTC datetime."""
     return datetime.now(UTC)
+
+
+def _steady_clock() -> Callable[[], float]:
+    """A monotonic clock (seconds) that keeps counting while the machine sleeps.
+
+    ``time.monotonic()`` is ``mach_absolute_time()`` on macOS and ``CLOCK_MONOTONIC`` on
+    Linux, and neither advances while the system sleeps. macOS's ``CLOCK_MONOTONIC_RAW``
+    (``mach_continuous_time``) and Linux's ``CLOCK_BOOTTIME`` count the sleep, and neither is
+    stepped or slewed like the wall clock. Falls back to ``time.monotonic``. The same choice
+    as ``lookout_capture.fetch.steady_clock`` (capture 0.2.1).
+    """
+    name = "CLOCK_MONOTONIC_RAW" if sys.platform == "darwin" else "CLOCK_BOOTTIME"
+    clock_id = getattr(time, name, None)
+    if clock_id is None:
+        return time.monotonic
+    try:
+        time.clock_gettime(clock_id)
+    except OSError:
+        return time.monotonic
+    return functools.partial(time.clock_gettime, clock_id)
+
+
+#: Real elapsed seconds on a sleep-inclusive monotonic clock (:func:`_steady_clock`). Only
+#: differences between two readings in one boot mean anything.
+steady_clock: Callable[[], float] = _steady_clock()
 
 
 def to_utc(moment: datetime) -> datetime:

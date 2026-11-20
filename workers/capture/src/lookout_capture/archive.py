@@ -93,7 +93,11 @@ __all__ = [
 
 API_ROOT = "https://www.nps.gov/airwebcams/"
 ARCHIVE_LIMITER_NAME = "nps-archive"
-ARCHIVE_MIN_INTERVAL_S = 5.0
+#: CLAUDE.md asks for archive requests at least 5 s apart, end to start. The limiter keeps its
+#: interval on the wall clock; the 50 ms more keeps the log's own stamps (``t`` cut to the
+#: millisecond, ``elapsed_ms`` rounded to 0.1 ms, and any wall-clock change during a request)
+#: at 5 s or more too (D-077). It costs under 1 % of loop time per 1,000 requests (loop_sim).
+ARCHIVE_MIN_INTERVAL_S = 5.05
 MAX_PAGES = 20
 MAX_ASSET_BYTES = 40_000_000
 #: A failing asset (transport error, HTTP 429/5xx, or a body that is not a JPEG) is tried at
@@ -681,7 +685,8 @@ def archive_limiter(
     hit nps.gov together. The archive rule is about this machine, so the limiter's state
     lives in the local ``state/ratelimit/`` folder whatever the storage backend. (An archive
     run on Lambda would be coordinated only within its container; none is scheduled.)
-    ``min_interval_s`` exists for tests; production code uses the 5 s default.
+    ``min_interval_s`` exists for tests; production code uses the 5.05 s default
+    (:data:`ARCHIVE_MIN_INTERVAL_S`: the rule's 5 s plus 50 ms for the log's stamps, D-077).
     """
     return MinIntervalLimiter(
         ARCHIVE_LIMITER_NAME,
@@ -698,7 +703,7 @@ def default_archive_client(
     transport: httpx.BaseTransport | None = None,
     runner: str = "cli",
 ) -> ArchiveClient:
-    """An :class:`ArchiveClient` on :func:`polite_client` with the shared 5 s limiter.
+    """An :class:`ArchiveClient` on :func:`polite_client` with the shared 5.05 s limiter.
 
     Redirects are not followed (:meth:`ArchiveClient._send`).
     """

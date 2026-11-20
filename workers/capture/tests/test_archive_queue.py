@@ -743,7 +743,7 @@ def test_the_production_queue_client_is_polite_and_made_only_when_there_is_work(
         assert (timeout.connect, timeout.read) == (CONNECT_TIMEOUT_S, READ_TIMEOUT_S) == (5.0, 10.0)
         assert client.request_deadline_s == REQUEST_DEADLINE_S == 20.0
         assert STEP_MAX_S == REQUEST_DEADLINE_S + READ_TIMEOUT_S
-        assert client.limiter.min_interval_s == 5.0 and client.limiter.mode == "file"
+        assert client.limiter.min_interval_s == 5.05 and client.limiter.mode == "file"
         assert client.client.headers["User-Agent"] == user_agent()
         assert user_agent().startswith("Lookout/0.1")
         assert client.share_host_backoff and client.storage is storage
