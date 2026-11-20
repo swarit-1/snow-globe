@@ -1,7 +1,10 @@
 # Lookout Lambda image (PRD §11.2, §11.3): one arm64 image for every scheduled job.
-#   capture  -> lookout_capture.lambda_handler.handler    (the default CMD below)
-#   forecast -> lookout_forecast.lambda_handler.handler
-# Terraform sets each function's handler with image_config.command (infra/terraform/lambda.tf).
+#   capture  -> lookout_capture.lambda_handler.handler
+#   forecast -> lookout_forecast.lambda_handler.handler    (the default CMD below)
+# Terraform sets each function's handler with image_config.command (infra/terraform/lambda.tf), so the default CMD
+# only matters for a local `docker run`. It is the forecast handler, which reads only NOAA's public bucket: a local
+# run that forgets the command must never become a second NPS fetcher (CLAUDE.md, PRD §15.3).
+# infra/lambda/smoke.sh tests the image locally without ever invoking the capture handler.
 #
 # Build context is the repo root. infra/lambda/Dockerfile.dockerignore (BuildKit reads it because it sits next to
 # this file, and it overrides any root .dockerignore) lets in only workers/{common,capture,forecast} and
@@ -9,9 +12,13 @@
 #   docker buildx build --platform linux/arm64 --provenance=false -f infra/lambda/Dockerfile .
 # (Lambda rejects images built with provenance attestations.)
 
-ARG PYTHON_BASE=public.ecr.aws/lambda/python:3.13
+# Both bases are pinned by digest, so one commit always builds the same image. AWS republishes the python:3.13 tag
+# often (two builds 12 minutes apart on 20 Nov 2026 got sha256:683d87bf... and then sha256:41cce764...). The digest
+# below is the multi-platform index; its linux/arm64 image is Python 3.13.18. To take AWS's patches, bump it on
+# purpose before a deploy (infra/README.md, "The Lambda image").
+ARG PYTHON_BASE=public.ecr.aws/lambda/python:3.13@sha256:41cce7642ee5093340804000b66a79c91d5668ad66449c4a0ece277b4912a1ce
 # Same uv release as the dev toolchain (uv 0.11.6), so `uv export` reads the lock files the same way.
-ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.11.6
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.11.6@sha256:b1e699368d24c57cda93c338a57a8c5a119009ba809305cc8e86986d4a006754
 
 FROM ${UV_IMAGE} AS uv
 
@@ -63,7 +70,10 @@ COPY viewpoints/schema ${LAMBDA_TASK_ROOT}/viewpoints/schema
 # Smoke test: import both handlers the way Lambda will (from LAMBDA_TASK_ROOT), so a missing module or a
 # dependency that cannot load (eccodes, say) fails the build instead of every scheduled run
 # (Runtime.ImportModuleError). Nothing runs: importing a handler module calls no handler.
+# The base image ships its own boto3 and botocore in /var/lang (1.43.127 in the pinned base; the lock files pin
+# 1.44.6). The runtime puts LAMBDA_TASK_ROOT first on sys.path, so the locked copies win. The check fails the build
+# if boto3 or botocore ever drops out of the lock files, which would silently swap in the base image's version.
 RUN PYTHONPATH="${LAMBDA_TASK_ROOT}" PYTHONDONTWRITEBYTECODE=1 python3 -c \
-    "import lookout_capture.lambda_handler as c, lookout_forecast.lambda_handler as f; assert callable(c.handler) and callable(f.handler)"
+    "import boto3, botocore, lookout_capture.lambda_handler as c, lookout_forecast.lambda_handler as f; assert callable(c.handler) and callable(f.handler); assert all(m.__file__.startswith('$LAMBDA_TASK_ROOT/') for m in (boto3, botocore)), (boto3.__file__, botocore.__file__)"
 
-CMD ["lookout_capture.lambda_handler.handler"]
+CMD ["lookout_forecast.lambda_handler.handler"]

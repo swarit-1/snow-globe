@@ -12,6 +12,7 @@ Carried over from Oculus's Terraform: the state bootstrap, the S3 and ECR patter
 | `terraform/` | Everything else. State is in S3 with S3-native locking (`use_lockfile`, no DynamoDB). |
 | `lambda/Dockerfile`, `lambda/Dockerfile.dockerignore` | The image. The build context is the repo root, but only `workers/{common,capture,forecast}` and `viewpoints/{manifests,schema}` get in. |
 | `lambda/build.sh` | `docker buildx build --platform linux/arm64 --provenance=false` (Lambda rejects provenance attestations). |
+| `lambda/smoke.sh`, `lambda/smoke_probe.py` | Local smoke test of a built image: an offline probe of both handlers, then the forecast handler under the Lambda Runtime Interface Emulator. It never invokes capture ([The Lambda image](#the-lambda-image)). |
 | `deploy.sh` | The owner's one-command deploy. It checks, prints the plan and asks before changing anything. |
 | `test.sh` | Every check that needs no AWS credentials. |
 
@@ -163,6 +164,8 @@ echo "$TAG"
 
 The tag is the git commit, plus `-dirty-<time>` when `workers/`, `viewpoints/` or `infra/lambda/` has uncommitted changes.
 
+To test the image before pushing it, build it locally with `infra/lambda/build.sh` and run `infra/lambda/smoke.sh lookout-lambda:<tag>` ([The Lambda image](#the-lambda-image)).
+
 **6b.5 Stop every local NPS fetcher** (see step 0).
 
 **6b.6 Phase 2: everything else.**
@@ -289,7 +292,7 @@ aws budgets execute-budget-action --account-id "$(aws sts get-caller-identity --
 | S3 storage, previous versions | Versioning. Every logged record rewrites the day's log, so 2,600–4,900 records a day at 250–400 bytes (250 is the mean of the stopgap's local log, 19 Nov) leave 0.8–4.8 GB of old log versions a day. They are kept 1–2 days (`log_noncurrent_version_days` = 1). State and other overwrites add 0.1–0.4 GB at 30 days. At a 30-day log setting this line would be $0.58–3.31. | **$0.02–0.23** | [S3 pricing](https://aws.amazon.com/s3/pricing/) |
 | S3 requests | 278k–347k PUT at $0.005 per 1,000, and 329k–398k GET at $0.0004 per 1,000 (counted from the code, as above). DELETE and lifecycle expirations are free. | **$1.52–1.89** | [S3 pricing](https://aws.amazon.com/s3/pricing/) |
 | S3 ↔ Lambda, NOAA → Lambda transfer | Same region | **$0** | [S3 pricing](https://aws.amazon.com/s3/pricing/) |
-| ECR | Up to 5 images, 0.5–4 GB stored (image size not yet measured), at $0.10 per GB. New customers get 500 MB a month free for 12 months. ECR → Lambda in the same region is free. | **$0–0.40** | [ECR pricing](https://aws.amazon.com/ecr/pricing/) |
+| ECR | Up to 5 images, 0.5–4 GB stored, at $0.10 per GB. The image measured 294 MB compressed on 20 Nov ([The Lambda image](#the-lambda-image)), so 5 images take at most 1.47 GB, which is $0.15. New customers get 500 MB a month free for 12 months. ECR → Lambda in the same region is free. | **$0–0.40** | [ECR pricing](https://aws.amazon.com/ecr/pricing/) |
 | CloudWatch Logs | 17–86 MB a month (1–5 KB per run, assumed). Ingestion is $0.50 per GB, storage $0.03 per GB, 30-day retention. Free: 5 GB a month. | **$0** (≤ $0.05 without the free tier) | [CloudWatch pricing](https://aws.amazon.com/cloudwatch/pricing/) |
 | CloudWatch alarms | 4 standard alarms at $0.10 each. Free: 10 alarms. | **$0** ($0.40 without the free tier) | [CloudWatch pricing](https://aws.amazon.com/cloudwatch/pricing/) |
 | SNS email | A handful of alarm emails. The first 1,000 a month are free. | **$0** | AWS price list (AmazonSNS) |
@@ -338,6 +341,71 @@ How this compares with the PRD:
 - **Evidence is recoverable.** The data bucket is versioned and no worker role can delete a version. A buggy overwrite of a frame, forecast file or state document can be undone for 30 days, and of a log for 1 day: `aws s3api list-object-versions --bucket <data bucket> --prefix <key>`, then copy the old version back.
 - **Takedowns delete every version.** PRD §15.5 removes a frame from storage within 7 days. On a versioned bucket a plain delete keeps the previous version for 30 days, so delete each version as the owner: `aws s3api list-object-versions` for the key, then `aws s3api delete-object --version-id <id>` for each one, delete markers included.
 
+## The Lambda image
+
+One arm64 image runs both jobs (PRD §11.3). Terraform picks each function's handler with `image_config.command`. The image's default command is the forecast handler, so a local `docker run` that forgets the command reads NOAA's public bucket and never becomes a second NPS fetcher.
+
+**Build** with `infra/lambda/build.sh`. It loads `lookout-lambda:<tag>` into the local Docker; `--push REPO` pushes instead (step 6b.4). The build imports both handlers and fails if a module or a native library cannot load. It also fails if boto3 or botocore would come from the base image's own copy (1.43.127) instead of the locked one (1.44.6).
+
+**Both base images are pinned by digest** in the Dockerfile, so one commit always builds the same image. AWS republishes `public.ecr.aws/lambda/python:3.13` often: two builds 12 minutes apart on 20 Nov got different digests. To take AWS's patches, bump the pin on purpose before a deploy:
+
+```bash
+docker buildx imagetools inspect public.ecr.aws/lambda/python:3.13 | sed -n 's/^Digest: *//p'
+# put that digest in PYTHON_BASE in infra/lambda/Dockerfile, then build, smoke-test and commit
+```
+
+**Measured on 20 Nov 2026** (MacBook Air M4, Docker Desktop 29.5.3, BuildKit 0.30.0, native linux/arm64):
+
+| What | Value |
+|---|---|
+| Cold build: both bases pulled, 28 wheels downloaded | 20.0 s |
+| Rebuild after AWS republished the base: base pulled again, wheels from the uv cache | 15.8 s |
+| Rebuild with nothing changed | 1.1 s |
+| Compressed size: what ECR stores and Lambda pulls | 293.9 MB. The AWS base is 200.3 MB, `/var/task` 93.6 MB, manifests and schema 10 KB. |
+| Unpacked size | 1.25 GB. `/var/task` is 319 MiB: ecCodes and eckit 183 MiB (eckit bundles PROJ, curl and OpenSSL 1.1.1k), numpy 64 MiB, botocore 31 MiB. |
+| Runtime | Python 3.13.18, awslambdaric 4.2.2, Amazon Linux 2023 (glibc 2.34) |
+| `/var/task`, exactly the two lock files | anyio 4.16.0, attrs 26.1.0, boto3 1.44.6, botocore 1.44.6, certifi 2026.10.23, cffi 2.1.1, eccodes 2.50.1 (ecCodes library 2.50.0), eccodeslib 2.50.0.34, eckitlib 2.5.0.34, findlibs 0.1.5, h11 0.16.0, httpcore 1.0.9, httpx 0.28.1, idna 3.20, jmespath 1.1.0, jsonschema 4.26.0, jsonschema-specifications 2025.9.1, numpy 2.5.5, pillow 13.0.0, pycparser 3.12, python-dateutil 2.9.0.post0, referencing 0.37.0, rpds-py 2026.9.1, s3transfer 0.19.3, six 1.17.0, typing_extensions 4.16.0, tzdata 2026.6, urllib3 2.8.0; lookout-common 0.1.0, lookout-capture 0.2.0, lookout-forecast 0.1.0 |
+| Base image's own packages, behind `/var/task` on the runtime's `sys.path` | awslambdaric 4.2.2, boto3 1.43.127, botocore 1.43.127, jmespath 1.1.0, pip 26.2.2, python-dateutil 2.9.0.post0, s3transfer 0.19.3, simplejson 4.3.0, six 1.17.0, snapshot-restore-py 1.0.0, urllib3 2.8.0 |
+
+**Smoke test:** `infra/lambda/smoke.sh lookout-lambda:<tag>`; `--offline` runs step 1 only. It builds, pushes and deploys nothing. It prints `key=value` results and the full package list, and exits 1 if a check fails.
+
+1. **Offline probe.** First, the image's default command must not be the capture handler. The probe then runs with no network, a read-only root file system and a non-root user. `smoke_probe.py` puts `sys.path` in the runtime's order and resolves both handler strings with the runtime's own loader, as Lambda does at init. It checks that the pinned packages and `libeccodes.so` load from `/var/task`. It also builds what the capture handler builds before its first request: the 8 manifests, S3 storage for a made-up bucket, and the HTTP client with the project User-Agent. It uses none of them.
+2. **Forecast invoke.** The forecast handler runs under the Runtime Interface Emulator that ships in the AWS base image, and is invoked twice. Storage is `LOOKOUT_STORAGE=local`, in a new temporary directory that the script deletes. The profile is tiny: `VIS:surface`, forecast hour 0, 10 MB a run, 1 h lookback. The container gets 2048 MB with no swap, 1.16 vCPU (Lambda gives one vCPU per 1,769 MB), a 2 GB `/tmp`, a read-only root and a non-root user. Checks:
+   - the first call extracts a run;
+   - the second call finds it already written;
+   - no GRIB file is left behind;
+   - the handler logs no error.
+
+**No local test invokes the capture handler.** It polls nps.gov, and the capture loop is the only NPS fetcher. Capture is checked only by the import in the build and by the offline probe.
+
+Two runs on 20 Nov, at 00:17Z and 00:26Z. Run 1 used the first build, on the base published before 00:12Z. Run 2 used the final image, through `smoke.sh`. Both extracted HRRR run 2026111923 f00, because run 2026112000 was not on S3 yet.
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| Runtime init (the emulator's `INIT REPORT`) | 267 ms | 299 ms |
+| Call 1, handler (`INVOKE RTDONE`) | 1,278 ms | 1,222 ms |
+| Call 1, bytes from NOAA | 3,588,572 | 3,588,572 |
+| Call 1, files written | 11 files, 126,583 bytes | 11 files, 126,584 bytes |
+| Call 2, handler | 187 ms | 209 ms |
+| Call 2, bytes and files | 285 bytes; nothing written | the same |
+| Peak memory (container cgroup, emulator included) | 137.8 MiB | 138.4 MiB |
+
+- **Call 1's bytes** came from 3 listings (7,495 bytes), one `.idx` (9,000) and two ranged GETs (3,572,077). The ranged GETs fetch `VIS:surface` plus the `HGT:surface` terrain, which every run's first hour includes.
+- **Call 1's files** were:
+  - 8 forecast files of 15.2–15.5 KB each;
+  - the day's `forecast_log` (2,860 bytes: 5 `lag` events and 1 `run` event);
+  - the run's state marker (1,754 bytes);
+  - the lock file (54 bytes).
+  
+  No GRIB file was left in `cache/hrrr/`.
+- **Call 2** made one listing, of the run that was not on S3 yet. It skipped 2026111923 as written.
+
+**Reading these numbers:**
+- **The emulator's own `REPORT` line misleads.** It shows "Init Duration: 0.04 ms" and "Max Memory Used: 2048 MB". On the first call, its "Duration" also includes init. The script reports the `INIT REPORT` and `INVOKE RTDONE` lines and the cgroup's `memory.peak` instead.
+- **These are laptop numbers.** NOAA was reached over the internet, not from inside us-east-1. The CPU was an M4 capped at 1.16 vCPU, not Graviton. A real cold start also loads the image, which the emulator skips.
+
+**Known gap before deploying this image (20 Nov).** The capture code in this image writes `thumbs/` and `cache/staging/`, and deletes staged copies under `cache/staging/` (workers/capture/README.md, "IAM"). `local.jobs` in `terraform/main.tf` grants neither yet. The forecast job's `cache/*` grant would also overlap `cache/staging/`. Until the grants change, this image would lose the frames of the six hourly cameras on Lambda.
+
 ## Checks
 
 ```bash
@@ -360,6 +428,8 @@ It needs no credentials, and no plan or apply touches AWS. It runs:
 - tflint, when installed.
 
 The first `terraform init` downloads the AWS provider from the Terraform registry.
+
+`infra/lambda/smoke.sh` is not part of `test.sh`. It needs a built image, and its forecast step reads NOAA's bucket ([The Lambda image](#the-lambda-image)).
 
 ## Not built yet
 
