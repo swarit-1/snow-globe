@@ -27,7 +27,7 @@ I'm building **Lookout**, a non-commercial, open-source portfolio project. It re
 
 **How I collect images:**
 - Live images are checked at most every 5 minutes, and an image is downloaded only when it has changed. That is no more than 4 images per camera per hour.
-- Archive images (AirWebCams) are fetched one request at a time, at least 5 seconds apart. The first pass is about [N] frames.
+- Archive images (AirWebCams) are fetched one request at a time, at least 5 seconds apart, and at most 1,000 requests a day. The first pass is about 4,300 frames over five days (about 0.25 GB), and about 22,700 frames (about 1.3 GB) by mid-December.
 - Every request identifies the project in its User-Agent.
 
 **What I'd like to confirm:**

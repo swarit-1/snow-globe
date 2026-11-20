@@ -219,7 +219,7 @@ These are judgements on upscaled 100×56 thumbnails, made on 19 Nov. Only the pa
 | Viewpoint | 3:2 epoch | 16:9 epoch, before 1 Jun 2026 |
 |---|---|---|
 | Point Reyes | 2022-01-29 and 2023-01-16 are framed differently: the beach sweeps from mid-left in 2023, from the centre in 2022. Three of the five samples are fog-white, so the 3:2 view can't be confirmed. | Same framing in 2024-01, 2024-07, 2025-01, 2025-07 and 2026-01. 2023-07-15 is fog. |
-| Grand Canyon | Same framing 2021-01 → 2024-01: white rock wedge bottom left, horizon at ~35 %. | Same framing in 2024-07, 2025-07 and 2026-01. **2025-01-15 lacks the bottom-left wedge**: possibly a temporary re-aim. Check it on the full frame. |
+| Grand Canyon | Same framing 2021-01 → 2024-01 by eye: white rock wedge bottom left, horizon at ~35 %. **Corrected 20 Nov (D-042):** the full 999×666 hires of 2021-01-15 and 2024-01-15 differ by a re-aim of +48.9 to +52.0 px across and −29.1 to −30.5 px up (about 5 %), measured by the backtest pair's registration, too small for the thumbnails to show. | Same framing in 2024-07, 2025-07 and 2026-01. **2025-01-15 lacks the bottom-left wedge**: possibly a temporary re-aim. Check it on the full frame. |
 | Grand Teton | **2021–2022:** a large conifer on the right edge. **2023-07-13 to 2024-07-15:** no conifer; the range sits right of centre. | **2025-01-15:** conifer centre-right. **2025-07 and 2026-01:** conifer at the right edge. That makes at least two views in the 16:9 epoch. |
 | Yosemite | Similar ridge framing 2021–2023 (snow and haze vary). | Same framing 2024-01 → 2026-01. The tightest dHash cluster: 9–25 bits. |
 | Acadia | Similar 2021-01 → 2023-07 (a white building at left when leafless). | Same framing 2024-01 → 2026-01. |
@@ -234,7 +234,7 @@ These are judgements on upscaled 100×56 thumbnails, made on 19 Nov. Only the pa
 |---|---|---|---|
 | **Point Reyes** (MSV) | **Yes, for K2 (fog)** | Jul 2023 → now. Development: summers 2024 and 2025, winters 2023/24 to 2025/26. Held out: summer 2026. | Fits PRD §13.4, "K2 on a summer hindcast season". The breach touched its held-out season: one thumbnail and the hires of 15 Jul 2026. Exclude the 2021–2022 3:2 epoch, which is a different camera. |
 | Rainier (MSV, P1) | **No: design P only** | None | No archive for the park camera (below). D-019 stands. |
-| **Grand Canyon** | **Yes** | Jul 2024 → now (≈ 2.3 years). The 3:2 epoch, Dec 2020 → Jan 2024 (3+ years at 999×666), is a second usable span, but not for the summer-2026 held-out season. | Check 2025-01-15 on full frames before relying on winter 2024/25. |
+| **Grand Canyon** | **Yes** | Jul 2024 → now (≈ 2.3 years). The 3:2 epoch, Dec 2020 → Jan 2024 (3+ years at 999×666), is a second usable span, but not for the summer-2026 held-out season, and (corrected 20 Nov, D-042) only after a full-frame registration across dates: it holds at least two aims. | Check 2025-01-15 on full frames before relying on winter 2024/25. |
 | **Grand Teton** | **Not without finer epoch mapping** | At least two views in the 16:9 epoch: 2025-01-15 differs from 2025-07 and 2026-01. | **Drop it as the deep-archive P1 candidate in D-019.** Grand Canyon or the Smokies would serve that role better. |
 | **Yosemite** | **Yes** | Jan 2024 → now | The most stable 16:9 epoch by dHash. 2021–2022 had few days (232 and 260). |
 | **Acadia** | **Yes** | Jan 2024 → now | Coastal fog on the Atlantic side. 2024–2025: 366 and 359 days. |
