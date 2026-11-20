@@ -188,6 +188,9 @@ class HrrrBucket:
     threads that have ended; the open clients never outnumber the live threads that
     used the bucket. ``transport`` exists for tests (``httpx.MockTransport``). Use as a
     context manager, or call :meth:`close`.
+
+    ``listing_sink``, if set, is called with ``(prefix, body)`` for every ListObjectsV2
+    page received, before it is parsed (``--save-listings`` uses it to record fixtures).
     """
 
     def __init__(
@@ -215,6 +218,7 @@ class HrrrBucket:
         self._local = threading.local()
         self._clients: list[tuple[threading.Thread, httpx.Client]] = []
         self._clients_lock = threading.Lock()
+        self.listing_sink: Callable[[str, bytes], None] | None = None
 
     def __enter__(self) -> HrrrBucket:
         return self
@@ -303,6 +307,8 @@ class HrrrBucket:
         if continuation_token:
             params["continuation-token"] = continuation_token
         body = self._get(f"{self.base_url}/?{urlencode(params)}", "listing")
+        if self.listing_sink is not None:
+            self.listing_sink(prefix, body)
         return parse_list_page(body)
 
     def list_objects(self, prefix: str, *, max_pages: int = 100) -> list[S3Object]:

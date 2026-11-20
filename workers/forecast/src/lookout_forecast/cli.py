@@ -1,14 +1,20 @@
-"""``lookout-forecast``: the forecast worker's command line (PRD §8.3, §11.2).
+"""``lookout-forecast``: the forecast worker's command line (PRD §8.3, §11.2; D-027).
 
 Commands (all but ``status --offline`` read NOAA's bucket):
 
 - ``latest``: extract the newest complete run.
-- ``run YYYYMMDDHH``: extract one run.
+- ``run YYYYMMDDHH``: extract one run (``--hours 24 25`` for exactly those hours).
 - ``backfill --start --end``: extract archived runs (availability modelled).
-- ``status``: what is written, the lag log, and (online) what is on S3.
+- ``tick``: one call of the Lambda handler, the code path the scheduled Lambda runs, with
+  the ``LOOKOUT_FORECAST_*`` environment; prints its summary and exits 1 if a run failed in
+  the call (4 if every failure was a cap refusal), else 0.
+- ``status``: what is written, the lag log by method, and (online) what is on S3.
 - ``plan YYYYMMDDHH``: bytes per field per hour, from the inventories only.
 - ``grid-check``, ``datum-check``: the evidence behind the grid mapping and the datums.
-- ``lag-survey --start --end``: publication lags of past runs from S3 listings (no GRIB).
+- ``lag-survey --start [--end] [--log]``: publication lags of past runs from S3 listings
+  (no GRIB). With ``--log``, every listed hour not logged yet (live or survey) becomes a
+  survey ``lag`` event in ``forecast_log/lag_survey/<today>.jsonl`` (D-027).
+- ``lag-check RUN ...``: chosen runs' S3 stamps next to the lag model (no GRIB, no writes).
 
 Shared options: ``--max-fh N``, ``--fields F ...`` (inventory names, aliases or unique
 variables, e.g. ``VIS "HGT:cloud base" LCDC``), ``--only VIEWPOINT``, ``--max-mb N`` (refuse a
@@ -33,7 +39,7 @@ import logging
 import os
 import sys
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import UTC, timedelta
 from pathlib import Path
@@ -44,9 +50,9 @@ from lookout_common.paths import cache_dir
 from lookout_common.storage import LockTimeoutError, Storage, storage_from_env
 from lookout_common.timeutil import isoformat_z, utcnow
 
-from .availability import LagModel, read_lag_events
+from .availability import LagModel
 from .bucket import BucketError, HrrrBucket
-from .discovery import find_latest_complete, list_run
+from .discovery import RunListing, find_latest_complete, list_run
 from .extract import (
     BandwidthCapError,
     ExtractOptions,
@@ -56,10 +62,12 @@ from .extract import (
     RunResult,
     marker_key,
     plan_run,
+    requested_hours,
     run_covered,
 )
 from .fields import CATALOGUE, resolve_fields
-from .hrrr import STORAGE_SOURCE, format_run_id, max_fh, parse_run_id, run_hours
+from .hrrr import STORAGE_SOURCE, format_run_id, max_fh, parse_run_id
+from .laglog import METHOD_LIVE, METHODS, SURVEY_LOCK, SurveyLogger, read_lag_log
 
 __all__ = ["DEFAULT_BACKFILL_TOTAL_MB", "DEFAULT_CLI_MAX_MB", "build_parser", "main"]
 
@@ -85,6 +93,53 @@ def _positive_float(text: str) -> float:
     if not value > 0:
         raise argparse.ArgumentTypeError(f"must be > 0, got {text}")
     return value
+
+
+def _hour(text: str) -> int:
+    value = int(text)
+    if value < 0:
+        raise argparse.ArgumentTypeError(f"a forecast hour is >= 0, got {text}")
+    return value
+
+
+def _add_hours_option(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--hours",
+        nargs="+",
+        type=_hour,
+        default=None,
+        metavar="FH",
+        help="exactly these forecast hours (e.g. --hours 24 25), instead of 0..--max-fh",
+    )
+
+
+def _add_save_listings_option(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--save-listings",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="also save every ListObjectsV2 answer as received, one XML file per page",
+    )
+
+
+def _listing_saver(folder: Path) -> Callable[[str, bytes], None]:
+    """A :attr:`.bucket.HrrrBucket.listing_sink` that saves each page as received.
+
+    ``hrrr.20240114/conus/hrrr.t12z.wrfsfcf`` becomes ``hrrr.20240114_conus_hrrr.t12z.wrfsfcf.xml``;
+    a prefix answered again (a second listing, or a continuation page) gets ``.2.xml``,
+    ``.3.xml`` and so on. For recorded test fixtures.
+    """
+    folder.mkdir(parents=True, exist_ok=True)
+    answers: Counter[str] = Counter()
+
+    def save(prefix: str, body: bytes) -> None:
+        name = prefix.strip("/").replace("/", "_") or "root"
+        answers[name] += 1
+        suffix = "" if answers[name] == 1 else f".{answers[name]}"
+        (folder / f"{name}{suffix}.xml").write_bytes(body)
+
+    return save
 
 
 def _add_extract_options(parser: argparse.ArgumentParser) -> None:
@@ -142,6 +197,7 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run", help="extract one run")
     run.add_argument("run_id", help="YYYYMMDDHH")
     _add_extract_options(run)
+    _add_hours_option(run)
     run.add_argument(
         "--allow-incomplete",
         action="store_true",
@@ -168,6 +224,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_extract_options(backfill)
 
+    tick = sub.add_parser(
+        "tick", help="one call of the Lambda handler with the LOOKOUT_FORECAST_* environment"
+    )
+    tick.add_argument(
+        "--uncapped",
+        action="store_true",
+        help="run even without LOOKOUT_FORECAST_MAX_MB (the handler then has no per-run cap)",
+    )
+    tick.add_argument("--json", action="store_true", help="print the handler's summary as JSON")
+
     status = sub.add_parser("status", help="what is written, the lag log, and what is on S3")
     status.add_argument("--offline", action="store_true", help="do not contact the bucket")
     status.add_argument("--hours", type=int, default=6, help="runs to list on S3 (online)")
@@ -176,6 +242,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan = sub.add_parser("plan", help="bytes per field per hour, from the inventories only")
     plan.add_argument("run_id")
     plan.add_argument("--max-fh", type=int, default=None)
+    _add_hours_option(plan)
     plan.add_argument("--fields", nargs="+", default=None)
     plan.add_argument("--json", action="store_true")
 
@@ -189,13 +256,39 @@ def build_parser() -> argparse.ArgumentParser:
     datum.add_argument("--fh", type=int, default=0)
 
     survey = sub.add_parser(
-        "lag-survey", help="publication lags of past runs from S3 listings (no GRIB, no writes)"
+        "lag-survey",
+        help="publication lags of past runs from S3 listings (no GRIB); --log logs them",
     )
     survey.add_argument("--start", required=True, help="first run, YYYYMMDDHH")
-    survey.add_argument("--end", required=True, help="last run, YYYYMMDDHH (inclusive)")
+    survey.add_argument(
+        "--end",
+        default=None,
+        help="last run, YYYYMMDDHH (inclusive; default: the newest complete run)",
+    )
+    survey.add_argument(
+        "--lookback-h",
+        type=int,
+        default=8,
+        help="without --end: how many hours back to look for the newest complete run",
+    )
     survey.add_argument(
         "--pause-s", type=float, default=0.2, help="pause between listings (seconds)"
     )
+    survey.add_argument(
+        "--log",
+        action="store_true",
+        help=(
+            "log every listed hour not logged yet (live or survey) as a survey lag event in "
+            "forecast_log/lag_survey/<today>.jsonl; without it nothing is written"
+        ),
+    )
+    _add_save_listings_option(survey)
+
+    check = sub.add_parser(
+        "lag-check", help="chosen runs' S3 stamps next to the lag model (listings only, no writes)"
+    )
+    check.add_argument("run_ids", nargs="+", metavar="YYYYMMDDHH")
+    _add_save_listings_option(check)
     return parser
 
 
@@ -208,13 +301,17 @@ def _options(args: argparse.Namespace, *, allow_incomplete: bool = False) -> Ext
     """Flags win; without a flag, the Lambda's environment variables apply here too.
 
     The per-run cap falls back to :data:`DEFAULT_CLI_MAX_MB`, so a laptop run is never
-    uncapped.
+    uncapped. ``--hours`` (``run`` only) replaces ``--max-fh`` and the environment's
+    ``LOOKOUT_FORECAST_MAX_FH``; giving it with ``--max-fh`` is an error.
     """
     fields = args.fields
     if fields is None and _env("LOOKOUT_FORECAST_FIELDS"):
         fields = [_env("LOOKOUT_FORECAST_FIELDS")]
+    hours = getattr(args, "hours", None)
     max_fh = args.max_fh
-    if max_fh is None and _env("LOOKOUT_FORECAST_MAX_FH"):
+    if hours is not None and max_fh is not None:
+        raise ValueError("give --hours or --max-fh, not both")
+    if hours is None and max_fh is None and _env("LOOKOUT_FORECAST_MAX_FH"):
         max_fh = int(_env("LOOKOUT_FORECAST_MAX_FH") or 0)
     max_mb = args.max_mb
     raw_cap = _env("LOOKOUT_FORECAST_MAX_MB")
@@ -233,6 +330,7 @@ def _options(args: argparse.Namespace, *, allow_incomplete: bool = False) -> Ext
         max_bytes=int(max_mb * 1e6),
         workers=args.workers,
         force=args.force,
+        hours=tuple(hours) if hours is not None else None,
     )
 
 
@@ -262,9 +360,27 @@ def _summary(result: RunResult) -> str:
     return "\n".join(lines)
 
 
-def _extract(extractor: Extractor, run_start: Any, opts: ExtractOptions, as_json: bool) -> int:
+def _nothing_written(result: RunResult) -> str:
+    reasons = "; ".join(f"{vp}: {why}" for vp, why in sorted(result.skipped.items()))
+    return (
+        f"run {result.run_id}: nothing to write, nothing downloaded ({reasons}); "
+        "use --force to rewrite"
+    )
+
+
+def _extract(
+    extractor: Extractor,
+    run_start: Any,
+    opts: ExtractOptions,
+    as_json: bool,
+    *,
+    listing: RunListing | None = None,
+) -> int:
     try:
-        result = extractor.extract(run_start, opts)
+        if listing is None:
+            result = extractor.extract(run_start, opts)
+        else:  # a listing of this run made moments ago: it is not listed again
+            result = extractor.extract(run_start, opts, listing=listing)
     except RunIncompleteError as exc:
         print(f"not ready: {exc}", file=sys.stderr)
         return EXIT_NOT_READY
@@ -281,6 +397,8 @@ def _extract(extractor: Extractor, run_start: Any, opts: ExtractOptions, as_json
         event = result.to_event()
         event["files"] = result.written
         _print(event)
+    elif not result.hours:
+        print(_nothing_written(result))
     else:
         print(_summary(result))
     return EXIT_OK
@@ -294,7 +412,7 @@ def _cmd_latest(args: argparse.Namespace, storage: Storage, bucket: HrrrBucket) 
         return EXIT_NOT_READY
     extractor = Extractor(storage, bucket, load_manifests())
     ids = [vp.id for vp in extractor.viewpoints(opts.viewpoint_ids)]
-    hours = run_hours(listing.run_start, opts.max_fh)
+    hours = requested_hours(listing.run_start, opts)
     if not opts.force and run_covered(
         storage,
         listing.run_start,
@@ -307,7 +425,7 @@ def _cmd_latest(args: argparse.Namespace, storage: Storage, bucket: HrrrBucket) 
             "(use --force to rewrite)"
         )
         return EXIT_OK
-    return _extract(extractor, listing.run_start, opts, args.json)
+    return _extract(extractor, listing.run_start, opts, args.json, listing=listing)
 
 
 def _cmd_run(args: argparse.Namespace, storage: Storage, bucket: HrrrBucket) -> int:
@@ -338,7 +456,7 @@ def _cmd_backfill(args: argparse.Namespace, storage: Storage, bucket: HrrrBucket
         run_id = format_run_id(current)
         if args.synoptic_only and max_fh(current) != 48:
             continue
-        hours = run_hours(current, opts.max_fh)
+        hours = requested_hours(current, opts)
         if not opts.force and run_covered(
             storage, current, viewpoint_ids=ids, field_names=names, hours=hours, accept_missing=True
         ):
@@ -368,6 +486,9 @@ def _cmd_backfill(args: argparse.Namespace, storage: Storage, bucket: HrrrBucket
         except Exception as exc:  # one bad archived run must not end the backfill
             log.exception("run %s failed", run_id)
             results.append({"run": run_id, "status": f"error: {type(exc).__name__}: {exc}"})
+            continue
+        if not result.hours:  # every file holds fields or hours this request lacks
+            results.append({"run": run_id, "status": f"kept: {result.skipped}"})
             continue
         results.append(
             {
@@ -407,7 +528,12 @@ def _cache_bytes() -> int:
     return sum(p.stat().st_size for p in root.rglob("*") if p.is_file())
 
 
+def _by_method(counts: Any) -> dict[str, int]:
+    return {m: int((counts or {}).get(m, 0)) for m in METHODS}
+
+
 def _cmd_status(args: argparse.Namespace, storage: Storage, bucket: HrrrBucket | None) -> int:
+    """What is written, the lag log (counted by method) and the lag model, plus S3 if online."""
     manifests = load_manifests()
     files: dict[str, Any] = {}
     for vp_id in sorted(manifests):
@@ -417,8 +543,9 @@ def _cmd_status(args: argparse.Namespace, storage: Storage, bucket: HrrrBucket |
             if k.endswith("z.json")
         ]
         files[vp_id] = {"files": len(keys), "latest": keys[-1].rsplit("/", 1)[-1] if keys else None}
-    events = read_lag_events(storage)
-    model = LagModel.from_events(events)
+    lag_log = read_lag_log(storage)
+    model = LagModel.from_events(lag_log.events)
+    live_model = LagModel.from_events(lag_log.events, methods={METHOD_LIVE})
     day = utcnow().astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     lag_table = {}
     for fh in (0, 1, 2, 6, 12, 18, 24, 36, 48):
@@ -429,6 +556,7 @@ def _cmd_status(args: argparse.Namespace, storage: Storage, bucket: HrrrBucket |
             "lag_min_hi": round(max(r[0] for r in rows) / 60, 1),
             "methods": dict(Counter(r[1] for r in rows)),
             "pooled_samples": int(model.pooled_samples.get(fh, 0)),
+            "pooled_samples_by_method": _by_method(model.pooled_samples_by_method.get(fh)),
             "cycles": len(rows),
             "cycles_with_min_samples": sum(r[2] >= model.min_samples for r in rows),
         }
@@ -436,8 +564,12 @@ def _cmd_status(args: argparse.Namespace, storage: Storage, bucket: HrrrBucket |
         "now_utc": isoformat_z(utcnow()),
         "storage": repr(storage),
         "forecast_files": files,
-        "lag_events": len(events),
+        # One per (run, hour): a run re-extracted after a field-set change is counted once.
+        "lag_events": len(lag_log.events),
+        "lag_log": lag_log.summary(),
         "availability_model": lag_table,
+        "lag_model_cells": model.cell_summary(),
+        "lag_model_cells_live_only": live_model.cell_summary(),
         "cache_bytes": _cache_bytes(),
     }
     if bucket is not None:
@@ -465,13 +597,25 @@ def _cmd_status(args: argparse.Namespace, storage: Storage, bucket: HrrrBucket |
         )
         for vp_id, info in files.items():
             print(f"  {vp_id:30s} {info['files']:5d} file(s), latest {info['latest']}")
-        print(f"lag events logged: {out['lag_events']} (modelled lag over the cycles of each hour)")
+        summary = out["lag_log"]
+        by_method = ", ".join(f"{m} {n}" for m, n in summary["by_method"].items())
+        dropped = ", ".join(f"{m} {n}" for m, n in summary["duplicates_dropped"].items())
+        print(
+            f"lag events: {summary['events']} ({by_method}; duplicates dropped: {dropped}; "
+            f"invalid {summary['invalid']}); modelled lag over the cycles of each hour:"
+        )
         for fh, row in lag_table.items():
             methods = ", ".join(f"{m} x{n}" for m, n in sorted(row["methods"].items()))
             print(
                 f"  {fh}: {row['lag_min_lo']:6.1f}-{row['lag_min_hi']:6.1f} min; "
                 f"{row['pooled_samples']} lag(s) logged; {methods}"
             )
+        cells = out["lag_model_cells"]
+        print(
+            f"cells (cycle hour, forecast hour): {cells['left_fallback']} of {cells['cells']} "
+            f"have left the {cells['fallback_lag_min']:.0f} min fallback "
+            f"({out['lag_model_cells_live_only']['left_fallback']} on live lags alone)"
+        )
         for row in out.get("bucket_runs", []):
             print(
                 f"  run {row['run']}: {row['on_s3']} on S3, complete={row['complete']}, "
@@ -482,7 +626,11 @@ def _cmd_status(args: argparse.Namespace, storage: Storage, bucket: HrrrBucket |
 
 def _cmd_plan(args: argparse.Namespace, bucket: HrrrBucket) -> int:
     result = plan_run(
-        bucket, parse_run_id(args.run_id), fields=resolve_fields(args.fields), max_fh=args.max_fh
+        bucket,
+        parse_run_id(args.run_id),
+        fields=resolve_fields(args.fields),
+        max_fh=args.max_fh,
+        hours=args.hours,
     )
     if args.json:
         _print(result)
@@ -508,6 +656,141 @@ def _cmd_plan(args: argparse.Namespace, bucket: HrrrBucket) -> int:
     return EXIT_OK
 
 
+def _tick_lines(summary: dict[str, Any]) -> str:
+    transfer = summary.get("transfer", {})
+    requests = ", ".join(f"{n} {k}" for k, n in sorted(transfer.get("requests", {}).items()))
+    rows = summary.get("runs", [])
+    lines = [
+        f"tick {summary.get('now_utc')}: extracted {summary.get('extracted')} run(s); "
+        f"downloaded {transfer.get('total_bytes', 0) / 1e6:.2f} MB"
+        + (f" in {requests} request(s)" if requests else "")
+    ]
+    for row in rows:
+        if row.get("status") == "written":
+            continue
+        extra = (
+            f", {row['hours']} hour(s), {row['files']} file(s), "
+            f"{row['bytes'] / 1e6:.2f} MB, {row['seconds']} s"
+            if "files" in row
+            else ""
+        )
+        lines.append(f"  run {row['run']}: {row['status']}{extra}")
+    written = sum(row.get("status") == "written" for row in rows)
+    lines.append(f"  {written} run(s) already written")
+    return "\n".join(lines)
+
+
+def _cmd_tick(args: argparse.Namespace) -> int:
+    """One call of :func:`.lambda_handler.handler`, the call the scheduled Lambda makes.
+
+    Nothing is changed on the way: the handler reads ``LOOKOUT_FORECAST_FIELDS``, ``_MAX_FH``,
+    ``_MAX_MB``, ``_LOOKBACK_H``, ``_STALE_H``, ``_MAX_RUNS``, ``_WORKERS``, ``_RESERVE_S``,
+    ``_TIMEOUT_S`` and the storage variables itself, with no Lambda context (so its time
+    budget comes from ``LOOKOUT_FORECAST_TIMEOUT_S``). The only thing added is a refusal to
+    start without ``LOOKOUT_FORECAST_MAX_MB`` unless ``--uncapped``: the handler has no
+    per-run cap of its own, and a laptop must keep NOAA downloads small (CLAUDE.md).
+
+    The exit status says whether a run failed in this call (:func:`_tick_exit`), so a loop
+    that calls ``tick`` can tell without parsing the summary.
+    """
+    if not _env("LOOKOUT_FORECAST_MAX_MB") and not args.uncapped:
+        print(
+            "tick: LOOKOUT_FORECAST_MAX_MB is not set, so the handler would extract whole runs "
+            "with no per-run cap (all 22 fields cost about 450 MB for an 18 h run); set it "
+            "(the local stand-in uses 40) or pass --uncapped",
+            file=sys.stderr,
+        )
+        return EXIT_ERROR
+    from . import lambda_handler
+
+    summary = lambda_handler.handler({}, None)
+    if args.json:
+        _print(summary)
+    else:
+        print(_tick_lines(summary))
+    return _tick_exit(summary)
+
+
+def _tick_exit(summary: dict[str, Any]) -> int:
+    """``tick``'s exit status: 0 unless a run of this call failed (an ``error:`` row).
+
+    :data:`EXIT_CAP` when every failure was a cap refusal (``BandwidthCapError``), else
+    :data:`EXIT_ERROR`. Runs that are waiting, deferred or backing off from an earlier
+    failure are not failures of this call.
+    """
+    errors = [
+        str(row.get("status", ""))
+        for row in summary.get("runs", [])
+        if str(row.get("status", "")).startswith("error:")
+    ]
+    if not errors:
+        return EXIT_OK
+    if all(status.startswith("error: BandwidthCapError") for status in errors):
+        return EXIT_CAP
+    return EXIT_ERROR
+
+
+def _cmd_lag_survey(args: argparse.Namespace, bucket: HrrrBucket) -> int:
+    """``lag-survey``: list past runs (no GRIB); with ``--log``, log the hours not logged yet."""
+    from .evidence import lag_survey
+
+    start = parse_run_id(args.start)
+    before = bucket.ledger.snapshot()
+    searched: dict[Any, RunListing] = {}
+    if args.end is not None:
+        end, end_rule = parse_run_id(args.end), "given"
+    else:
+        latest = find_latest_complete(bucket, lookback_h=args.lookback_h)
+        if latest is None:
+            print(f"no complete run in the last {args.lookback_h} h; give --end", file=sys.stderr)
+            return EXIT_NOT_READY
+        end, end_rule = latest.run_start, "the newest complete run"
+        searched[latest.run_start] = latest  # the survey re-uses it instead of listing it again
+    if end < start:
+        print("--end is before --start", file=sys.stderr)
+        return EXIT_ERROR
+    if not args.log:
+        out = lag_survey(bucket, start, end, pause_s=args.pause_s, listings=searched)
+    else:
+        storage = storage_from_env()
+        try:
+            with storage.lock(SURVEY_LOCK, timeout_s=5.0, ttl_s=6 * 3600.0):
+                cells_before = LagModel.from_storage(storage).cell_summary()
+                logger = SurveyLogger(storage, since=start)
+                out = lag_survey(
+                    bucket, start, end, pause_s=args.pause_s, logger=logger, listings=searched
+                )
+                out["lag_model_cells"] = {
+                    "before": cells_before,
+                    "after": LagModel.from_storage(storage).cell_summary(),
+                }
+        except LockTimeoutError as exc:
+            print(f"busy: another logging survey holds the lock ({exc})", file=sys.stderr)
+            return EXIT_NOT_READY
+    out["end_rule"] = end_rule
+    # ``transfer`` is the survey's own listings; this adds the newest-complete search.
+    out["transfer_with_end_search"] = bucket.ledger.since(before)
+    _print(out)
+    return EXIT_OK
+
+
+def _cmd_lag_check(args: argparse.Namespace, bucket: HrrrBucket) -> int:
+    """``lag-check``: each run's S3-stamp lags next to the lag model (live + survey, live only)."""
+    from .evidence import lag_check
+
+    runs = [parse_run_id(run_id) for run_id in args.run_ids]
+    events = read_lag_log(storage_from_env()).events
+    _print(
+        lag_check(
+            bucket,
+            runs,
+            LagModel.from_events(events),
+            live_model=LagModel.from_events(events, methods={METHOD_LIVE}),
+        )
+    )
+    return EXIT_OK
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Entry point of the ``lookout-forecast`` console script."""
     args = build_parser().parse_args(argv)
@@ -515,24 +798,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         level=logging.INFO if args.verbose else logging.WARNING,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    if args.command == "status" and args.offline:
-        return _cmd_status(args, storage_from_env(), None)
-    with HrrrBucket() as bucket:
-        try:
+    try:
+        if args.command == "tick":
+            return _cmd_tick(args)  # the handler opens its own bucket client and storage
+        if args.command == "status" and args.offline:
+            return _cmd_status(args, storage_from_env(), None)
+        with HrrrBucket() as bucket:
+            if getattr(args, "save_listings", None) is not None:
+                bucket.listing_sink = _listing_saver(args.save_listings)
             if args.command == "plan":
                 return _cmd_plan(args, bucket)
             if args.command == "lag-survey":
-                from .evidence import lag_survey
-
-                _print(
-                    lag_survey(
-                        bucket,
-                        parse_run_id(args.start),
-                        parse_run_id(args.end),
-                        pause_s=args.pause_s,
-                    )
-                )
-                return EXIT_OK
+                return _cmd_lag_survey(args, bucket)
+            if args.command == "lag-check":
+                return _cmd_lag_check(args, bucket)
             if args.command in {"grid-check", "datum-check"}:
                 from .evidence import datum_check, grid_check
 
@@ -559,9 +838,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return _cmd_backfill(args, storage, bucket)
             if args.command == "status":
                 return _cmd_status(args, storage, bucket)
-        except (BucketError, ValueError, KeyError) as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return EXIT_ERROR
+    except (BucketError, ValueError, KeyError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
     return EXIT_ERROR  # pragma: no cover - argparse rejects unknown commands
 
 

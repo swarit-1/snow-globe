@@ -9,4 +9,4 @@ run selection), :mod:`.output` (file schema), :mod:`.extract` (one run end to en
 :mod:`.cli` and :mod:`.lambda_handler`.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

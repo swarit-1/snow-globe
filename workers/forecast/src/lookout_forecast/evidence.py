@@ -9,8 +9,13 @@
   the terrain; a depth above ground over high terrain mostly is.
 - :func:`lag_survey` lists past runs (no GRIB) and summarises their publication lags:
   the evidence for the lag model's cycle keying and its 120 min fallback (§8.3, §13.9).
+  With a :class:`.laglog.SurveyLogger` it also logs them as survey ``lag`` events, which
+  feed the lag model (D-008 as amended on 2026-11-19).
+- :func:`lag_check` lists chosen runs (no GRIB) and puts the lags their S3 stamps imply
+  next to what the lag model gives for the same hours: the evidence for whether an
+  archived run's ``LastModified`` still says when it was published.
 
-The first two delete their GRIB downloads before returning.
+The first two delete their GRIB downloads before returning; the last two only list.
 """
 
 from __future__ import annotations
@@ -28,13 +33,15 @@ from lookout_common.manifest import Viewpoint
 from lookout_common.paths import cache_dir
 from lookout_common.timeutil import isoformat_z, utcnow
 
+from .availability import SOURCE_ARCHIVED_STAMP, ArchivedStamps, LagModel, archived_availability
 from .bucket import HrrrBucket
 from .decode import ecc_version, iter_handles, message_metadata, values_and_mask
-from .discovery import list_run
+from .discovery import RunListing, list_run
 from .fields import field_by_name
 from .grid import GRID_KEYS, HRRR_CONUS, LambertConformalGrid
-from .hrrr import format_run_id, object_url
+from .hrrr import as_run_start, format_run_id, object_url
 from .idx import group_contiguous, message_ranges, parse_idx
+from .laglog import SurveyLogger
 
 __all__ = [
     "COVER_FIELDS",
@@ -45,6 +52,7 @@ __all__ = [
     "grid_check",
     "haversine_km",
     "implied_height_m",
+    "lag_check",
     "lag_survey",
     "summarise_lags",
 ]
@@ -568,45 +576,173 @@ def lag_survey(
     *,
     pause_s: float = 0.2,
     sleep: Callable[[float], None] | None = None,
+    logger: SurveyLogger | None = None,
+    listings: Mapping[datetime, RunListing] | None = None,
 ) -> dict[str, Any]:
     """Publication lags of past runs from S3 ``LastModified`` (one listing per run, no GRIB).
 
     For each hourly run from ``start`` to ``end`` (inclusive), every hour whose GRIB2 and
     ``.idx`` are both listed gives lag = the later ``LastModified`` - run start, the
     quantity the live ``lag`` events record. A re-uploaded object only makes its lag
-    later. Nothing is written: the lag model reads live ``lag`` events only (PRD §8.3).
+    later; an hour with a stamp more than 24 h after the run start (a rewritten object,
+    :data:`.discovery.STAMP_TRUST_H`) is left out of the statistics and never logged, and
+    ``stamps_not_trusted`` lists it. ``listings`` are listings the caller has just made
+    (the newest-complete search that chose ``end``): those runs are not listed again.
+    Without ``logger`` nothing is written. With one, each listing's hours that are not
+    logged yet (live or survey) become survey ``lag`` events in
+    ``forecast_log/lag_survey/<day>.jsonl``, flushed in batches and once more at the end,
+    even if a listing fails (:class:`.laglog.SurveyLogger`).
     """
     import time
-
-    from .discovery import list_run as _list_run
-    from .hrrr import as_run_start
 
     pause = sleep or time.sleep
     run = as_run_start(start)
     last = as_run_start(end)
     if last < run:
         raise ValueError("end is before start")
+    known = {as_run_start(when): listing for when, listing in (listings or {}).items()}
     before = bucket.ledger.snapshot()
     rows: list[dict[str, Any]] = []
     incomplete: dict[str, list[int]] = {}
-    while run <= last:
-        listing = _list_run(bucket, run)
-        if listing.missing_hours:
-            incomplete[listing.run_id] = listing.missing_hours
-        for fh in listing.ready_hours:
-            available = listing.hour(fh).availability_utc
-            assert available is not None
-            rows.append(
-                {"run": listing.run_id, "fh": fh, "lag_s": (available - run).total_seconds()}
-            )
-        run += timedelta(hours=1)
-        if run <= last and pause_s > 0:
-            pause(pause_s)
-    return {
+    untrusted: dict[str, list[int]] = {}
+    reused: list[str] = []
+    try:
+        while run <= last:
+            listing = known.get(run)
+            if listing is None:
+                listing = list_run(bucket, run)
+            else:
+                reused.append(listing.run_id)
+            if listing.missing_hours:
+                incomplete[listing.run_id] = listing.missing_hours
+            for fh in listing.ready_hours:
+                files = listing.hour(fh)
+                if not files.stamps_trusted(run):
+                    untrusted.setdefault(listing.run_id, []).append(fh)
+                    continue
+                available = files.availability_utc
+                assert available is not None
+                rows.append(
+                    {"run": listing.run_id, "fh": fh, "lag_s": (available - run).total_seconds()}
+                )
+            if logger is not None:
+                logger.add(listing)
+            run += timedelta(hours=1)
+            if run <= last and pause_s > 0 and known.get(run) is None:
+                pause(pause_s)
+    finally:
+        if logger is not None:
+            logger.flush()
+    out = {
         "first_run": format_run_id(as_run_start(start)),
         "last_run": format_run_id(last),
         "incomplete_runs": incomplete,
+        "stamps_not_trusted": untrusted,
+        "listings_reused": reused,
         **summarise_lags(rows),
+        "transfer": bucket.ledger.since(before),
+        "checked_utc": isoformat_z(utcnow()),
+    }
+    if logger is not None:
+        out["log"] = logger.report()
+    return out
+
+
+def lag_check(
+    bucket: HrrrBucket,
+    runs: Sequence[datetime],
+    model: LagModel,
+    *,
+    live_model: LagModel | None = None,
+) -> dict[str, Any]:
+    """S3-stamp lags of chosen runs next to the lag model (one listing per run, no GRIB).
+
+    For every listed hour: the GRIB2 and ``.idx`` stamps, the lag they imply (the later
+    stamp - run start, as a live ``lag`` event would record it), and the lag, method and
+    samples of ``model`` for that cycle and hour (with ``live_model``, also what live lags
+    alone would give). A run whose objects were copied or re-uploaded long after it was
+    published shows lags far above the model's; one that kept its publication stamps shows
+    lags like the live ones. Each hour also gets the availability an archived run of it is
+    given (:func:`.availability.archived_availability`: the model, never before the trusted
+    stamps), so the report shows which hours the stamps set. Writes nothing.
+    """
+    from statistics import median
+
+    before = bucket.ledger.snapshot()
+    reports: list[dict[str, Any]] = []
+    for run_start in runs:
+        listing = list_run(bucket, as_run_start(run_start))
+        rows: list[dict[str, Any]] = []
+        for fh in listing.ready_hours:
+            files = listing.hour(fh)
+            available = files.availability_utc
+            assert available is not None and files.grib is not None and files.idx is not None
+            lag = (available - listing.run_start).total_seconds()
+            seconds, method, n = model.lag_s(listing.run_start, fh)
+            when, source, note = archived_availability(
+                model,
+                listing.run_start,
+                fh,
+                ArchivedStamps(files.grib.last_modified, files.idx.last_modified),
+            )
+            row: dict[str, Any] = {
+                "fh": fh,
+                "grib_last_modified": isoformat_z(files.grib.last_modified),
+                "idx_last_modified": isoformat_z(files.idx.last_modified),
+                "lag_min": round(lag / 60, 2),
+                "model_lag_min": round(seconds / 60, 2),
+                "model_method": method,
+                "model_samples": n,
+                "lag_minus_model_min": round((lag - seconds) / 60, 2),
+                "availability_lag_min": round((when - listing.run_start).total_seconds() / 60, 2),
+                "availability_source": source,
+                "s3_stamps_ignored": note["s3_stamps_ignored"],
+            }
+            if live_model is not None:
+                live_s, live_method, _ = live_model.lag_s(listing.run_start, fh)
+                row["live_only_model_lag_min"] = round(live_s / 60, 2)
+                row["live_only_model_method"] = live_method
+            rows.append(row)
+        lags = [row["lag_min"] for row in rows]
+        stamps = [
+            stamp
+            for fh in listing.ready_hours
+            for stamp in (listing.hour(fh).grib, listing.hour(fh).idx)
+            if stamp is not None
+        ]
+        reports.append(
+            {
+                "run": listing.run_id,
+                "cycle_hour": listing.run_start.hour,
+                "listed_utc": isoformat_z(listing.listed_utc, "seconds"),
+                "age_days_at_listing": round(
+                    (listing.listed_utc - listing.run_start).total_seconds() / 86400, 2
+                ),
+                "ready_hours": len(listing.ready_hours),
+                "expected_hours": len(listing.expected),
+                "missing_hours": listing.missing_hours,
+                "lag_min": (
+                    {"min": min(lags), "median": round(median(lags), 2), "max": max(lags)}
+                    if lags
+                    else None
+                ),
+                "hours_later_than_model": sum(row["lag_minus_model_min"] > 0 for row in rows),
+                "hours_set_by_stamps": sum(
+                    row["availability_source"] == SOURCE_ARCHIVED_STAMP for row in rows
+                ),
+                "hours_with_ignored_stamps": sum(bool(row["s3_stamps_ignored"]) for row in rows),
+                "earliest_last_modified": (
+                    isoformat_z(min(s.last_modified for s in stamps)) if stamps else None
+                ),
+                "latest_last_modified": (
+                    isoformat_z(max(s.last_modified for s in stamps)) if stamps else None
+                ),
+                "hours": rows,
+            }
+        )
+    return {
+        "runs": reports,
+        "model": {"lags_by_method": model.lags_by_method, "min_samples": model.min_samples},
         "transfer": bucket.ledger.since(before),
         "checked_utc": isoformat_z(utcnow()),
     }

@@ -113,6 +113,9 @@ def test_live_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> 
     assert not [p for p in (target / "cache" / "hrrr").rglob("*.grib2*") if p.is_file()]
     if event:
         assert event["transfer"]["total_bytes"] < 150e6
-        assert event["transfer"]["requests"]["listing"] >= 1  # this run's own counts
+        # This run's own counts. Its listing was made by the newest-complete search and handed
+        # to the extractor (0.2.0), so the run lists nothing of its own.
+        assert "listing" not in event["transfer"]["requests"]
+        assert event["transfer"]["requests"]["idx"] == 3
     with capsys.disabled():
         print(json.dumps(_summary(event, docs, seconds), indent=1))

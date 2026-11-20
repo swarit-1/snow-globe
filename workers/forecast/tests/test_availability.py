@@ -9,6 +9,7 @@ from lookout_common.storage import LocalStorage
 
 from lookout_forecast.availability import (
     FALLBACK_LAG_MIN,
+    ArchivedStamps,
     LagModel,
     Lookup,
     availability_from_document,
@@ -95,7 +96,9 @@ def test_cycle_hour_p95_once_a_cell_has_enough_lags() -> None:
         "method": "p95-cycle-hour",
         "lag_s": 3023.0,
         "samples": 25,
+        "samples_by_method": {"live": 25, "survey": 0},  # events without a method are live
         "pooled_samples": 50,
+        "pooled_samples_by_method": {"live": 50, "survey": 0},
         "min_samples": 20,
     }
     # 08Z has no logged lag of its own: fallback, even though f03 has 50 pooled lags.
@@ -244,7 +247,15 @@ def test_availability_from_document() -> None:
     plain = availability_from_document(live, use_fetch_time=False)
     assert plain[0] == (datetime(2026, 11, 19, 6, 53, 49, tzinfo=UTC), "live-s3-lastmodified")
     archived = _doc(live=False, fetched="2026-11-22T07:20:00Z", hours={0: "2026-11-19T06:52Z"})
-    assert availability_from_document(archived) == {0: Lookup.USE_MODEL}
+    assert availability_from_document(archived) == {0: Lookup.USE_MODEL}  # no stamps recorded
+    archived["hours"][0].update(
+        grib_last_modified_utc="2026-11-19T06:51:56Z", idx_last_modified_utc="2026-11-19T06:52:00Z"
+    )
+    assert availability_from_document(archived) == {
+        0: ArchivedStamps(
+            datetime(2026, 11, 19, 6, 51, 56, tzinfo=UTC), datetime(2026, 11, 19, 6, 52, tzinfo=UTC)
+        )
+    }
 
 
 @pytest.fixture
@@ -299,7 +310,10 @@ def test_archived_files_are_remodelled_from_the_current_log(stored, storage) -> 
     assert hour5["availability_source"] == "modeled"
     assert hour5["availability_model"]["method"] == "conservative-fallback"
     assert hour5["availability_utc"] == "2026-11-16T09:00:00Z"  # run start + 120 min
-    assert stored_availability(storage, RAINIER)(run, 5) is Lookup.USE_MODEL
+    # The fake published f05 at 07:55:00 (.idx 07:55:04): earlier than the model.
+    assert hour5["availability_model"]["s3_floor_utc"] == "2026-11-16T07:55:04Z"
+    stamps = ArchivedStamps(run + timedelta(minutes=55), run + timedelta(minutes=55, seconds=4))
+    assert stored_availability(storage, RAINIER)(run, 5) == stamps
 
     # 25 live 07Z runs later, f05 of 07Z has a p95 of 73.5 min: selection uses it.
     later = LagModel.from_events(
@@ -309,8 +323,10 @@ def test_archived_files_are_remodelled_from_the_current_log(stored, storage) -> 
     choice = select_stored_run(storage, RAINIER, issue, run + timedelta(hours=5), lag_model=later)
     assert choice is not None and choice.run_id == "2026111607"
     assert choice.availability_utc == run + timedelta(minutes=73.5)
+    assert choice.availability_source == "modeled"
     assert choice.availability_model is not None
     assert choice.availability_model["method"] == "p95-cycle-hour"
+    assert choice.availability_model["s3_floor_utc"] == "2026-11-16T07:55:04Z"
     # The stored file still says 09:00 (what was known when it was written).
     assert (
         storage.read_json(f"forecast/hrrr/{RAINIER}/2026111607z.json")["hours"][5][
@@ -318,3 +334,45 @@ def test_archived_files_are_remodelled_from_the_current_log(stored, storage) -> 
         ]
         == "2026-11-16T09:00:00Z"
     )
+
+
+def test_survey_lags_enter_the_model_and_live_wins_for_the_same_hour(tmp_path) -> None:
+    """D-027: survey lags count like live ones; per (run, hour) the live one is kept."""
+    storage = LocalStorage(tmp_path / "data", check=False)
+    survey = [
+        {
+            "event": "lag",
+            "run": f"202611{k + 1:02d}23",
+            "fh": 9,
+            "lag_s": 111.0 * 60,
+            "method": "survey",
+        }
+        for k in range(20)
+    ]
+    storage.append_jsonl_many("forecast_log/lag_survey/2026-11-21.jsonl", survey)
+    # The live worker saw 2026110123 f09 at 110 min; that lag replaces the survey's.
+    storage.append_jsonl(
+        "forecast_log/2026-11-01.jsonl", dict(survey[0], lag_s=110.0 * 60, method=None)
+    )
+    model = LagModel.from_storage(storage)
+    z23 = datetime(2026, 11, 22, 23, tzinfo=UTC)
+    assert model.lag_s(z23, 9) == (111.0 * 60, "p95-cycle-hour", 20)
+    assert model.describe(z23, 9)["samples_by_method"] == {"live": 1, "survey": 19}
+    assert model.lags_by_method == {"live": 1, "survey": 19}
+    live_only = LagModel.from_storage(storage, methods={"live"})
+    assert live_only.lag_s(z23, 9) == (FALLBACK_LAG_MIN * 60, "conservative-fallback", 1)
+    with pytest.raises(ValueError, match="unknown lag method"):
+        LagModel.from_events([dict(survey[0], method="guess")])
+
+
+def test_cell_summary_counts_the_576_cells() -> None:
+    empty = LagModel().cell_summary()
+    assert empty["cells"] == 24 * 19 + 4 * 30 == 576
+    assert empty["left_fallback"] == 0 and empty["fallback_cells_at_fallback_lag"] == 576
+    events = [e for k in range(20) for e in _events(f"20261118{k:02d}", {0: 3000.0})]
+    events += _events("2026111715", {12: 131.2 * 60})  # later than the fallback
+    summary = LagModel.from_events(events).cell_summary()
+    # f00 has 20 pooled lags: the 20 cycles with a lag of their own leave the fallback.
+    assert summary["by_method"]["p95-forecast-hour-or-cycle-max"] == 20
+    assert summary["left_fallback"] == 20
+    assert summary["fallback_cells_above_fallback_lag"] == 1

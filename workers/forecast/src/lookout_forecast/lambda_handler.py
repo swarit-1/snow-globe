@@ -11,8 +11,18 @@ written yet:
 - anything else is left for a later call.
 
 It is idempotent: the state marker of a run says which viewpoints, fields and hours are
-written, and a covered run costs one small storage read and no bucket request. New runs
-stop being started when less than ``LOOKOUT_FORECAST_RESERVE_S`` seconds remain.
+written, and a covered run costs one small storage read and no bucket request. A run whose
+files hold fields or hours the current settings lack (the field set changed to one that is
+not a superset) is ``kept``: files are never narrowed, so extracting it would write nothing,
+and it costs no bucket request either. A run that is extracted is listed once: the listing
+that shows it is ready is handed to the extractor. New runs stop being started when less
+than ``LOOKOUT_FORECAST_RESERVE_S`` seconds remain.
+
+A wider field set (as on 20 Nov at 02:39 UTC, when ``PRES:cloud base`` was added) makes every
+run of the look-back uncovered, so each is extracted again: its files are rewritten with the
+new fields and its ``run`` and ``lag`` events are logged again. Readers keep one lag per
+(run, hour) (:mod:`.laglog`). A rewritten live file's ``fetch_finished_utc`` is the new
+fetch, so the design-P availability of its hours can only move later, never earlier.
 
 One run's failure never stops the others. A failed run gets an ``error`` event in
 ``forecast_log`` and a back-off record (:mod:`.backoff`): a cap refusal waits for the
@@ -53,11 +63,13 @@ from .extract import (
     Extractor,
     RunIncompleteError,
     RunNotFoundError,
+    requested_hours,
     run_covered,
+    write_decisions,
 )
 from .fields import resolve_fields
 from .grid import HRRR_CONUS, LambertConformalGrid
-from .hrrr import floor_hour, format_run_id, run_hours
+from .hrrr import floor_hour, format_run_id
 
 __all__ = ["handler", "process_pending"]
 
@@ -81,6 +93,15 @@ def _error_text(exc: BaseException) -> str:
 def _spent(bucket: HrrrBucket, before: Mapping[str, Any]) -> int:
     """Bytes the bucket client received since the ``before`` snapshot."""
     return int(bucket.ledger.since(before)["total_bytes"])
+
+
+def _kept(reasons: Mapping[str, str | None]) -> str:
+    """Status of a run whose files this call would not rewrite (no viewpoint to write)."""
+    counts: dict[str, int] = {}
+    for reason in reasons.values():
+        counts[str(reason)] = counts.get(str(reason), 0) + 1
+    why = "; ".join(f"{n} viewpoint(s): {reason}" for reason, n in sorted(counts.items()))
+    return f"kept: nothing to write ({why}); files are never narrowed"
 
 
 def process_pending(
@@ -146,11 +167,21 @@ def process_pending(
     for back in range(lookback_h + 1):
         run = newest - timedelta(hours=back)
         run_id = format_run_id(run)
-        hours = run_hours(run, opts.max_fh)
+        try:
+            hours = requested_hours(run, opts)
+        except ValueError as exc:  # explicit hours this cycle does not produce
+            runs.append({"run": run_id, "status": f"skipped: {exc}"})
+            continue
         if run_covered(
             storage, run, viewpoint_ids=ids, field_names=names, hours=hours, accept_missing=True
         ):
             runs.append({"run": run_id, "status": "written"})
+            continue
+        reasons = write_decisions(
+            storage, run, viewpoint_ids=ids, field_names=names, hours=hours, force=opts.force
+        )
+        if all(reason is not None for reason in reasons.values()):
+            runs.append({"run": run_id, "status": _kept(reasons)})
             continue
         if halt is not None:
             runs.append({"run": run_id, "status": f"deferred: {halt}"})
@@ -169,7 +200,7 @@ def process_pending(
         before = bucket.ledger.snapshot()
         row: dict[str, Any] = {"run": run_id}
         try:
-            listing = list_run(bucket, run, now=moment)
+            listing = list_run(bucket, run, now=clock())
         except BucketError as exc:
             row.update(status=f"error: {_error_text(exc)}", bytes=_spent(bucket, before))
             fail(run, row, exc, None)
@@ -188,7 +219,8 @@ def process_pending(
             continue
         run_opts = replace(opts, allow_incomplete=bool(wanted_missing))
         try:
-            result = extractor.extract(run, run_opts)
+            # The listing just made is handed over, so the run is listed once, not twice.
+            result = extractor.extract(run, run_opts, listing=listing)
         except (RunNotFoundError, RunIncompleteError) as exc:
             runs.append({"run": run_id, "status": f"not ready: {exc}"})
             continue
@@ -206,6 +238,9 @@ def process_pending(
             row.update(status=f"error: {_error_text(exc)}", bytes=_spent(bucket, before))
             fail(run, row, exc, "error")
             runs.append(row)
+            continue
+        if not result.hours:  # another writer got there first: nothing left to write
+            runs.append({"run": run_id, "status": _kept(result.skipped)})
             continue
         if failure is not None:
             backoff.resolve_failure(storage, run, now=clock())

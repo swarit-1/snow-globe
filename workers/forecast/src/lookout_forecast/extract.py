@@ -2,19 +2,26 @@
 
 For a run, :class:`Extractor`:
 
-1. lists the run (one ListObjectsV2 request) and checks the hours it needs exist;
+1. lists the run (one ListObjectsV2 request, unless the caller passes the listing it has
+   just made) and checks the hours it needs exist: ``0..max_fh``, or exactly
+   :attr:`ExtractOptions.hours`;
 2. maps every viewpoint's sample points to grid cells (:mod:`.points`);
-3. fetches each hour's ``.idx`` and plans the byte ranges of the requested fields
+3. stops before any other request if no viewpoint's file would be written
+   (:func:`write_decisions`: every file already holds these fields and hours, or holds
+   fields or hours this request lacks and is never narrowed);
+4. fetches each hour's ``.idx`` and plans the byte ranges of the requested fields
    (refusing to start if the plan exceeds the byte cap). ``HGT:surface``, the model's
    static terrain, is planned for the first hour only, whether or not it was requested;
    it fills ``model_terrain_m`` and, if requested, every hour of its field;
-4. downloads each hour's ranges into ``$LOOKOUT_DATA_DIR/cache/hrrr/<run>/``, decodes them
+5. downloads each hour's ranges into ``$LOOKOUT_DATA_DIR/cache/hrrr/<run>/``, decodes them
    once for all viewpoints, and deletes the subset at once;
-5. writes one JSON file per viewpoint, a state marker, ``lag`` events (live runs only) and
+6. writes one JSON file per viewpoint, a state marker, ``lag`` events (live runs only) and
    a ``run`` event to ``forecast_log/<day>.jsonl``.
 
 Nothing is written for a run unless every requested hour decoded; the next scheduled
-attempt starts again from the listing.
+attempt starts again from the listing. A re-extraction (a wider field set or more hours)
+rewrites the files and logs the run's ``run`` and ``lag`` events again; readers keep one
+lag per (run, hour) (:mod:`.laglog`).
 """
 
 from __future__ import annotations
@@ -35,7 +42,7 @@ from lookout_common.storage import Storage
 from lookout_common.timeutil import isoformat_z, utcnow
 
 from . import __version__
-from .availability import LagModel, lag_events
+from .availability import ArchivedStamps, LagModel, archived_availability
 from .bucket import HrrrBucket
 from .decode import DecodedMessage, decode_subset, ecc_version
 from .discovery import HourFiles, RunListing, list_run
@@ -65,10 +72,13 @@ from .idx import (
     parse_idx,
     select_entry,
 )
+from .laglog import lag_events
 from .output import KIND, SCHEMA_VERSION, encode_document, validate_document
 from .points import GriddedPoint, flat_indices, sample_points
 
 __all__ = [
+    "SKIP_ALREADY_WRITTEN",
+    "SKIP_WOULD_NARROW",
     "BandwidthCapError",
     "ExtractOptions",
     "Extractor",
@@ -77,8 +87,14 @@ __all__ = [
     "RunResult",
     "marker_key",
     "plan_run",
+    "requested_hours",
     "run_covered",
+    "write_decisions",
 ]
+
+#: Why :func:`write_decisions` leaves a viewpoint's existing file alone.
+SKIP_ALREADY_WRITTEN = "already written with these fields and hours"
+SKIP_WOULD_NARROW = "existing file has fields or hours this run lacks"
 
 LOCK_NAME = "forecast-hrrr"
 MODEL_VERSION_NOTE = (
@@ -116,7 +132,13 @@ class BandwidthCapError(RuntimeError):
 
 @dataclass(frozen=True)
 class ExtractOptions:
-    """What to extract and how hard to try."""
+    """What to extract and how hard to try.
+
+    The hours are ``0..max_fh`` (every hour the run produces when ``max_fh`` is None), or
+    exactly ``hours`` when given: for example the two hours that bracket one valid time of
+    a backtest pair (``lookout-forecast run --hours``). ``hours`` is stored sorted and
+    without repeats, and cannot be combined with ``max_fh``.
+    """
 
     fields: tuple[FieldSpec, ...] = CATALOGUE
     max_fh: int | None = None
@@ -126,6 +148,19 @@ class ExtractOptions:
     max_bytes: int | None = None
     workers: int = 4
     force: bool = False
+    hours: tuple[int, ...] | None = None
+
+    def __post_init__(self) -> None:
+        if self.hours is None:
+            return
+        if self.max_fh is not None:
+            raise ValueError("give either hours or max_fh, not both")
+        hours = tuple(self.hours)
+        if not hours:
+            raise ValueError("hours is empty")
+        if not all(isinstance(fh, int) and not isinstance(fh, bool) and fh >= 0 for fh in hours):
+            raise ValueError(f"hours must be integers >= 0, got {list(hours)!r}")
+        object.__setattr__(self, "hours", tuple(sorted(set(hours))))
 
 
 @dataclass
@@ -163,7 +198,8 @@ class RunResult:
     viewpoints: list[str]
     written: list[str]
     planned_bytes: int
-    #: Requests, bytes and seconds of this extraction only (listing included).
+    #: Requests, bytes and seconds of this extraction only: its listing included, unless the
+    #: caller handed one over (``listing=``), in which case the caller's counts hold it.
     transfer: dict[str, Any]
     bytes_by_field: dict[str, dict[int, int]]
     seconds_total: float
@@ -205,6 +241,83 @@ class RunResult:
 def marker_key(run_start: datetime) -> str:
     """State marker of an extracted run: ``state/forecast/hrrr/<YYYYMMDDHH>z.json``."""
     return state_key(f"forecast/{STORAGE_SOURCE}/{format_run_id(run_start)}z.json")
+
+
+def _explicit_hours(run_start: datetime, hours: Sequence[int]) -> list[int]:
+    """``hours`` sorted, after checking that the run produces every one of them."""
+    last = max_fh(run_start)
+    beyond = sorted({fh for fh in hours if fh > last})
+    if beyond:
+        raise ValueError(
+            f"run {format_run_id(run_start)} stops at f{last:02d}; it has no "
+            + ", ".join(f"f{fh:02d}" for fh in beyond)
+        )
+    return sorted(set(hours))
+
+
+def requested_hours(run_start: datetime, options: ExtractOptions) -> list[int]:
+    """The forecast hours ``options`` ask of this run (PRD §8.3).
+
+    Exactly :attr:`ExtractOptions.hours` when given (``ValueError`` if the run stops
+    earlier), else ``0..max_fh``. The second goes through this module's ``run_hours``, which
+    eval's backtest pair still replaces for one call (``lookout_eval.pair_forecast``).
+    """
+    if options.hours is not None:
+        return _explicit_hours(run_start, options.hours)
+    return run_hours(run_start, options.max_fh)
+
+
+def _write_decision(
+    entry: Mapping[str, Any] | None,
+    file_exists: bool,
+    field_names: Sequence[str],
+    hours: Sequence[int],
+    force: bool,
+) -> str | None:
+    """Why one viewpoint's file would not be written (None: it would be)."""
+    if not entry or force or not file_exists:
+        return None
+    old_fields = set(entry.get("field_names", []))
+    old_hours = set(entry.get("forecast_hours", []))
+    if set(field_names) <= old_fields and set(hours) <= old_hours:
+        return SKIP_ALREADY_WRITTEN
+    if not (old_fields <= set(field_names) and old_hours <= set(hours)):
+        # Never replace a file with one that lacks some of its fields or hours.
+        return SKIP_WOULD_NARROW
+    return None
+
+
+def write_decisions(
+    storage: Storage,
+    run_start: datetime,
+    *,
+    viewpoint_ids: Sequence[str],
+    field_names: Sequence[str],
+    hours: Sequence[int],
+    force: bool = False,
+) -> dict[str, str | None]:
+    """For each viewpoint, why its file would not be written by this request (None: it would).
+
+    A file is left alone when it already holds these fields and hours
+    (:data:`SKIP_ALREADY_WRITTEN`) or holds fields or hours the request lacks
+    (:data:`SKIP_WOULD_NARROW`: a file is never narrowed), unless ``force``. The same rule
+    decides at write time, so when every value is a reason, extracting the run would write
+    nothing, and nothing should be downloaded for it. A run whose fields changed to a set
+    that is not a superset is such a case: without this check, every tick would download it
+    again and write nothing.
+    """
+    marker = storage.read_json(marker_key(run_start), default=None)
+    entries = marker.get("viewpoints", {}) if isinstance(marker, dict) else {}
+    return {
+        vp: _write_decision(
+            entries.get(vp),
+            storage.exists(forecast_key(STORAGE_SOURCE, vp, run_start)),
+            field_names,
+            hours,
+            force,
+        )
+        for vp in viewpoint_ids
+    }
 
 
 def run_covered(
@@ -324,18 +437,34 @@ class Extractor:
         return target, fetched, time.monotonic() - started
 
     # -- the run ----------------------------------------------------------------------
-    def extract(self, run_start: datetime, options: ExtractOptions | None = None) -> RunResult:
-        """Extract one run for the chosen viewpoints and write the files (see module doc)."""
+    def extract(
+        self,
+        run_start: datetime,
+        options: ExtractOptions | None = None,
+        *,
+        listing: RunListing | None = None,
+    ) -> RunResult:
+        """Extract one run for the chosen viewpoints and write the files (see module doc).
+
+        ``listing`` is a listing of this run the caller has just made (the Lambda lists a
+        run to decide whether it is ready); it is used instead of listing the run again.
+        When no viewpoint's file would be written (:func:`write_decisions`), nothing is
+        downloaded or logged: the result has no hours, ``written`` is empty and
+        ``skipped`` says why.
+        """
         opts = options or ExtractOptions()
         run_start = as_run_start(run_start)
         run_id = format_run_id(run_start)
         t0 = time.monotonic()
         started = self.clock()
         ledger_before = self.bucket.ledger.snapshot()
-        listing = list_run(self.bucket, run_start, now=started)
+        wanted_hours = requested_hours(run_start, opts)  # before any request
+        if listing is None:
+            listing = list_run(self.bucket, run_start, now=started)
+        elif listing.run_start != run_start:
+            raise ValueError(f"the listing given is of run {listing.run_id}, not {run_id}")
         if not listing.exists:
             raise RunNotFoundError(f"run {run_id} is not in the bucket")
-        wanted_hours = run_hours(run_start, opts.max_fh)
         missing = [fh for fh in wanted_hours if fh in listing.missing_hours]
         if missing and not opts.allow_incomplete:
             raise RunIncompleteError(run_id, missing)
@@ -357,6 +486,36 @@ class Extractor:
 
         with self.storage.lock(LOCK_NAME, timeout_s=30.0, ttl_s=900.0):
             self.clean_cache()
+            decisions = write_decisions(
+                self.storage,
+                run_start,
+                viewpoint_ids=[vp.id for vp in viewpoints],
+                field_names=names,
+                hours=hours,
+                force=opts.force,
+            )
+            if all(reason is not None for reason in decisions.values()):
+                # Nothing would be written: no inventory, no GRIB, no log events.
+                self.skipped = {vp: str(reason) for vp, reason in decisions.items()}
+                return RunResult(
+                    run_id=run_id,
+                    live=live,
+                    run_complete=listing.complete,
+                    hours=[],
+                    field_names=names,
+                    viewpoints=[vp.id for vp in viewpoints],
+                    written=[],
+                    planned_bytes=0,
+                    transfer=self.bucket.ledger.since(ledger_before),
+                    bytes_by_field={},
+                    seconds_total=time.monotonic() - t0,
+                    seconds_download=0.0,
+                    seconds_decode=0.0,
+                    s3_lags_s=_s3_lags(listing),
+                    fetch_started_utc=started,
+                    fetch_finished_utc=self.clock(),
+                    skipped=dict(self.skipped),
+                )
             plans = self._plan_all(listing, hours, names, opts.workers)
             planned = sum(plan.planned_bytes for plan in plans)
             if opts.max_bytes is not None and planned > opts.max_bytes:
@@ -390,10 +549,7 @@ class Extractor:
             )
             self._missing_at_write = missing
             written = self._write(run_start, documents, names, done, opts.force)
-            lag_by_fh = {
-                fh: round((listing.hour(fh).availability_utc - run_start).total_seconds(), 3)  # type: ignore[operator]
-                for fh in listing.ready_hours
-            }
+            lag_by_fh = _s3_lags(listing)
             result = RunResult(
                 run_id=run_id,
                 live=live,
@@ -571,11 +727,16 @@ class Extractor:
         available = files.availability_utc
         assert available is not None
         run_start = listing.run_start
+        model: dict[str, Any] | None
         if live:
             availability, source, model = available, "live-s3-lastmodified", None
-        else:
-            availability = self.lag_model.availability(run_start, item.plan.fh)
-            source, model = "modeled", self.lag_model.describe(run_start, item.plan.fh)
+        else:  # modelled, but never before the hour's own trusted stamps (PRD §13.9)
+            availability, source, model = archived_availability(
+                self.lag_model,
+                run_start,
+                item.plan.fh,
+                ArchivedStamps(files.grib.last_modified, files.idx.last_modified),
+            )
         return {
             "fh": item.plan.fh,
             "valid_time_utc": isoformat_z(valid_time(run_start, item.plan.fh)),
@@ -621,17 +782,12 @@ class Extractor:
         self.skipped = {}
         for vp_id, doc in documents.items():
             key = forecast_key(STORAGE_SOURCE, vp_id, run_start)
-            previous = marker["viewpoints"].get(vp_id)
-            if previous and not force and self.storage.exists(key):
-                old_fields = set(previous.get("field_names", []))
-                old_hours = set(previous.get("forecast_hours", []))
-                if set(names) <= old_fields and set(hours) <= old_hours:
-                    self.skipped[vp_id] = "already written with these fields and hours"
-                    continue
-                if not (old_fields <= set(names) and old_hours <= set(hours)):
-                    # Never replace a file with one that lacks some of its fields or hours.
-                    self.skipped[vp_id] = "existing file has fields or hours this run lacks"
-                    continue
+            reason = _write_decision(
+                marker["viewpoints"].get(vp_id), self.storage.exists(key), names, hours, force
+            )
+            if reason is not None:
+                self.skipped[vp_id] = reason
+                continue
             self.storage.put_bytes(key, encode_document(doc), content_type="application/json")
             marker["viewpoints"][vp_id] = {
                 "field_names": names,
@@ -669,6 +825,16 @@ def _hour_ranges(
                 missing.append(name)
     ranges = message_ranges(entries, present, file_size=file_size)
     return ranges, missing, first and TERRAIN_FIELD not in names
+
+
+def _s3_lags(listing: RunListing) -> dict[int, float]:
+    """S3 lag (the later stamp - run start, seconds) of every ready hour of a listing."""
+    out: dict[int, float] = {}
+    for fh in listing.ready_hours:
+        available = listing.hour(fh).availability_utc
+        assert available is not None
+        out[fh] = round((available - listing.run_start).total_seconds(), 3)
+    return out
 
 
 def _bytes_by_field(done: Sequence[_HourDone]) -> dict[str, dict[int, int]]:
@@ -775,9 +941,14 @@ def _notes(vp: Viewpoint, done: Sequence[_HourDone], names: Sequence[str], live:
         notes.append(
             "Archived run: availability_utc is modeled (run start + the lag model of "
             "lookout_forecast.availability.LagModel when this file was written: the p95 of "
-            "logged live lags for this cycle and hour, or a conservative 120 min until enough "
-            "are logged; availability_model says which). availability.select_stored_run "
-            "recomputes it from the current log. S3 LastModified is kept for reference only."
+            "the lags logged for this cycle and hour, live or surveyed from S3 listings, or a "
+            "conservative 120 min until enough are logged; availability_model says which and "
+            "counts the samples by method), but never before the hour's own S3 LastModified "
+            "stamps: where they are later than the model, they are the availability "
+            "(availability_source archived-s3-lastmodified, availability_model.s3_floor_utc). "
+            "A stamp more than 24 h after the run start is a rewritten object and is ignored "
+            "(s3_stamps_ignored). availability.select_stored_run recomputes the model from the "
+            "current log and applies the same stamps."
         )
     missing = sorted({name for item in done for name in item.plan.missing_fields})
     if missing:
@@ -796,17 +967,24 @@ def plan_run(
     fields: Sequence[FieldSpec] = CATALOGUE,
     max_fh: int | None = None,
     workers: int = 4,
+    hours: Sequence[int] | None = None,
 ) -> dict[str, Any]:
     """Bytes each field would cost per forecast hour, from the inventories alone.
 
     Plans exactly what :meth:`Extractor.extract` would download (the terrain once, with
-    the first hour). Downloads only the listing and the ``.idx`` files (about 10 KB
-    each), no GRIB data.
+    the first hour) for ``0..max_fh``, or exactly ``hours`` when given (as
+    :attr:`ExtractOptions.hours`). Downloads only the listing and the ``.idx`` files
+    (about 10 KB each), no GRIB data.
     """
     run_start = as_run_start(run_start)
+    if hours is not None and max_fh is not None:
+        raise ValueError("give either hours or max_fh, not both")
+    wanted = (
+        _explicit_hours(run_start, hours) if hours is not None else run_hours(run_start, max_fh)
+    )
     ledger_before = bucket.ledger.snapshot()
     listing = list_run(bucket, run_start)
-    hours = [fh for fh in run_hours(run_start, max_fh) if fh in listing.ready_hours]
+    ready = [fh for fh in wanted if fh in listing.ready_hours]
     names = [spec.name for spec in fields]
 
     def one(fh: int) -> tuple[int, dict[str, int], int, list[str]]:
@@ -814,12 +992,12 @@ def plan_run(
         assert files.grib is not None and files.idx is not None
         entries = parse_idx(bucket.get_text(files.idx.key))
         ranges, absent, _ = _hour_ranges(
-            entries, names, first=fh == hours[0], file_size=files.grib.size
+            entries, names, first=fh == ready[0], file_size=files.grib.size
         )
         return fh, {r.field: r.length for r in ranges}, files.grib.size, absent
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        rows = list(pool.map(one, hours))
+        rows = list(pool.map(one, ready))
     labels = names if TERRAIN_FIELD in names else [*names, f"{TERRAIN_FIELD} (terrain only)"]
     per_field = {
         label: {
@@ -833,7 +1011,7 @@ def plan_run(
     file_bytes = {fh: size for fh, _, size, _ in rows}
     return {
         "run": listing.run_id,
-        "hours": hours,
+        "hours": ready,
         "missing_hours": listing.missing_hours,
         "fields": names,
         "fields_missing_from_idx": {fh: absent for fh, _, _, absent in rows if absent},

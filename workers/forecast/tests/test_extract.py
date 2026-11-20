@@ -9,14 +9,20 @@ import pytest
 from lookout_common.jsonl import read_jsonl
 
 from lookout_forecast.decode import DecodeError
+from lookout_forecast.discovery import list_run
 from lookout_forecast.extract import (
+    SKIP_ALREADY_WRITTEN,
+    SKIP_WOULD_NARROW,
     BandwidthCapError,
     ExtractOptions,
     Extractor,
     RunIncompleteError,
     RunNotFoundError,
     marker_key,
+    plan_run,
+    requested_hours,
     run_covered,
+    write_decisions,
 )
 from lookout_forecast.fields import resolve_fields
 from lookout_forecast.grid import HRRR_CONUS
@@ -335,3 +341,97 @@ def test_terrain_only_request_fetches_one_hour(
     terrain = [expected_value(3, 0, p["i"], p["j"]) for p in doc["points"]]
     assert doc["values"][0] == [terrain, terrain, terrain]
     assert not [p for p in (data_root / "cache").rglob("*") if p.is_file()]
+
+
+def _requests(fake: FakeBucket, kind: str) -> int:
+    """Requests of one kind the fake bucket served: listing, idx or grib."""
+    paths = [r.url.path for r in fake.requests]
+    if kind == "listing":
+        return sum(path in {"", "/"} for path in paths)
+    if kind == "idx":
+        return sum(path.endswith(".idx") for path in paths)
+    return sum(path.endswith(".grib2") for path in paths)
+
+
+def test_options_hours_are_validated_and_normalised() -> None:
+    assert ExtractOptions(hours=(25, 24, 25)).hours == (24, 25)
+    for bad in ((), (-1,), (True,), (2.0,)):
+        with pytest.raises(ValueError):
+            ExtractOptions(hours=bad)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="not both"):
+        ExtractOptions(hours=(1,), max_fh=2)
+    assert requested_hours(RUN, ExtractOptions(max_fh=2)) == [0, 1, 2]
+    assert requested_hours(RUN, ExtractOptions(hours=(48, 24))) == [24, 48]
+    with pytest.raises(ValueError, match="stops at f18"):
+        requested_hours(RUN + timedelta(hours=1), ExtractOptions(hours=(17, 24)))
+
+
+def test_explicit_hours_fetch_only_those_hours(
+    run_in_bucket, bucket, storage, manifests, small_grid, data_root
+) -> None:
+    """The backtest pair's request: the two hours that bracket one valid time (f24, f25)."""
+    extractor = _extractor(storage, bucket, manifests, small_grid, data_root, hours_after=72)
+    opts = _options(max_fh=None, hours=(25, 24))
+    plan = plan_run(bucket, RUN, fields=opts.fields, hours=opts.hours)
+    assert plan["hours"] == [24, 25]
+    result = extractor.extract(RUN, opts)
+    assert result.hours == [24, 25] and result.written == [KEY]
+    doc = result.documents[RAINIER]
+    assert doc["forecast_hours"] == [24, 25] and doc["missing_hours"] == []
+    asked = {r.url.path.lstrip("/") for r in run_in_bucket.grib_requests()}
+    assert asked == {object_key(RUN, 24), object_key(RUN, 25)}
+    # The static terrain comes with the first hour asked for, f24.
+    assert [r["field"] for r in doc["hours"][0]["byte_ranges"]] == FIELDS
+    assert result.transfer["bytes"]["grib"] == plan["total_bytes"]
+    assert run_covered(storage, RUN, viewpoint_ids=[RAINIER], field_names=FIELDS, hours=[24, 25])
+    with pytest.raises(ValueError, match="stops at f18"):
+        extractor.extract(RUN + timedelta(hours=1), _options(max_fh=None, hours=(24,)))
+
+
+def test_the_module_run_hours_still_decides_without_explicit_hours(
+    run_in_bucket, bucket, storage, manifests, small_grid, data_root, monkeypatch
+) -> None:
+    """eval's pair_forecast.only_hours replaces extract.run_hours for one call (until it moves
+    to ExtractOptions.hours); planner and extractor must keep going through that global."""
+    from lookout_forecast import extract
+
+    monkeypatch.setattr(extract, "run_hours", lambda run_start, limit=None: [31, 32])
+    assert plan_run(bucket, RUN, fields=_options().fields)["hours"] == [31, 32]
+    result = _extractor(storage, bucket, manifests, small_grid, data_root).extract(
+        RUN, _options(max_fh=None)
+    )
+    assert result.hours == [31, 32]
+
+
+def test_nothing_is_downloaded_when_nothing_would_be_written(
+    run_in_bucket, bucket, storage, manifests, small_grid, data_root
+) -> None:
+    extractor = _extractor(storage, bucket, manifests, small_grid, data_root)
+    extractor.extract(RUN, _options())
+    for opts, reason in (
+        (_options(), SKIP_ALREADY_WRITTEN),
+        (_options(fields=tuple(resolve_fields(["VIS", "MCDC"]))), SKIP_WOULD_NARROW),
+    ):
+        run_in_bucket.requests.clear()
+        result = extractor.extract(RUN, opts)
+        assert result.hours == [] and result.written == [] and result.skipped == {RAINIER: reason}
+        assert (_requests(run_in_bucket, "idx"), _requests(run_in_bucket, "grib")) == (0, 0)
+        assert result.transfer["requests"] == {"listing": 1}
+    assert write_decisions(
+        storage, RUN, viewpoint_ids=[RAINIER], field_names=FIELDS, hours=[0, 1, 2], force=True
+    ) == {RAINIER: None}
+    log = read_jsonl(data_root / "forecast_log" / f"{RUN + timedelta(hours=2):%Y-%m-%d}.jsonl")
+    assert [r["event"] for r in log].count("run") == 1  # the no-ops logged nothing
+
+
+def test_a_fresh_listing_is_used_instead_of_listing_again(
+    run_in_bucket, bucket, storage, manifests, small_grid, data_root
+) -> None:
+    listing = list_run(bucket, RUN, now=RUN + timedelta(hours=2))
+    run_in_bucket.requests.clear()
+    extractor = _extractor(storage, bucket, manifests, small_grid, data_root)
+    result = extractor.extract(RUN, _options(), listing=listing)
+    assert result.written == [KEY] and _requests(run_in_bucket, "listing") == 0
+    assert "listing" not in result.transfer["requests"]
+    with pytest.raises(ValueError, match="listing given is of run"):
+        extractor.extract(RUN + timedelta(hours=1), _options(), listing=listing)

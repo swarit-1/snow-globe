@@ -128,10 +128,10 @@ def test_one_failing_run_does_not_stop_the_others(setup, storage, monkeypatch) -
     """Review finding 4 (T4): an ecCodes error in 07Z used to abort the call before 06Z."""
     real = Extractor.extract
 
-    def flaky(self, run_start, options=None):
+    def flaky(self, run_start, options=None, **kwargs):
         if run_start == R07:
             raise eccodes.GribInternalError("decoding failed")
-        return real(self, run_start, options)
+        return real(self, run_start, options, **kwargs)
 
     monkeypatch.setattr(Extractor, "extract", flaky)
     summary = setup(now=NOW, max_runs=10)
@@ -152,7 +152,7 @@ def test_a_busy_lock_defers_the_rest_of_the_call(setup, storage, monkeypatch) ->
     """Review finding 4 (T5): LockTimeoutError used to escape the handler."""
     calls: list[datetime] = []
 
-    def locked(self, run_start, options=None):
+    def locked(self, run_start, options=None, **kwargs):
         calls.append(run_start)
         raise LockTimeoutError("lock 'forecast-hrrr' busy for 30.0 s")
 
@@ -205,11 +205,11 @@ def test_errors_back_off_exponentially_then_recover(
     broken = {"on": True}
     tried: list[datetime] = []
 
-    def flaky(self, run_start, options=None):
+    def flaky(self, run_start, options=None, **kwargs):
         tried.append(self.clock())
         if broken["on"]:
             raise OSError(28, "No space left on device")
-        return real(self, run_start, options)
+        return real(self, run_start, options, **kwargs)
 
     monkeypatch.setattr(Extractor, "extract", flaky)
     run = functools.partial(
@@ -241,3 +241,24 @@ def test_a_failing_listing_defers_the_rest_of_the_call(setup, fake, storage) -> 
     assert summary["transfer"]["retries"] == 3  # one listing, four attempts
     assert [r["run"] for r in _log(storage) if r["event"] == "error"] == ["2026111909"]
     assert backoff.read_failure(storage, datetime(2026, 11, 19, 9, tzinfo=UTC)) is None
+
+
+def test_explicit_hours_skip_the_cycles_that_stop_before_them(setup, fake, storage) -> None:
+    summary = setup(now=NOW, max_runs=10, options=replace(OPTIONS, hours=(24, 25)))
+    status = _status(summary)
+    assert status["2026111906"] == "extracted"
+    assert status["2026111907"].startswith("skipped: run 2026111907 stops at f18")
+    doc = storage.read_json(f"forecast/hrrr/{RAINIER}/2026111906z.json")
+    assert doc["forecast_hours"] == [24, 25]
+
+
+def test_an_extracted_run_is_listed_once(setup, fake) -> None:
+    """The infra smoke saw each extracted run listed twice (the handler, then the extractor)."""
+    fake.requests.clear()
+    summary = setup(now=NOW, max_runs=10)
+    listed = [r.url.params["prefix"] for r in fake.requests if r.url.path in {"", "/"}]
+    extracted = [row["run"] for row in summary["runs"] if row["status"].startswith("extracted")]
+    assert len(extracted) == 4
+    for run_id in extracted:
+        assert sum(f"t{run_id[8:]}z" in p and run_id[:8] in p for p in listed) == 1
+    assert summary["transfer"]["requests"]["listing"] == 9  # 09Z..01Z: one listing each

@@ -4,7 +4,14 @@ The Lookout forecast worker (PRD §8.3, §11.2). It reads HRRR directly from NOA
 bucket `noaa-hrrr-bdp-pds` over anonymous HTTPS, fetches only the byte ranges of the fields it
 needs (from each hour's `.idx`), decodes them with ecCodes, samples every viewpoint's points and
 writes one JSON file per viewpoint per run. It also logs the publication lag of every forecast
-hour, which is the availability model for archived runs.
+hour, live and from S3 listings of past runs (D-027), which is the availability model for
+archived runs.
+
+Version 0.2.0 (20 Nov 2026): survey lag log, `tick`, `lag-check`, explicit hour lists, one
+listing per extracted run, no download for a run that would write nothing, and archived hours
+that are never available before their own S3 stamps. It reads every file, state marker and log
+written by 0.1.0. Live files it writes are valid under the 0.1.0 schema; archived files are not
+(see "Compatibility" below).
 
 Python 3.13, uv, path dependency on `../common` (`lookout-common[s3]`).
 
@@ -18,13 +25,15 @@ uv run pytest -m network -s tests/test_live.py        # live smoke, about 21 MB
 | Command | Does |
 |---|---|
 | `lookout-forecast latest [--max-fh N] [--fields F ...] [--only VP]` | Extract the newest complete run (skips it if already written) |
-| `lookout-forecast run YYYYMMDDHH [...] [--allow-incomplete]` | Extract one run (only the hours it needs must exist) |
+| `lookout-forecast run YYYYMMDDHH [...] [--allow-incomplete] [--hours FH ...]` | Extract one run (only the hours it needs must exist); `--hours 24 25` extracts exactly those hours instead of 0..`--max-fh` |
 | `lookout-forecast backfill --start YYYYMMDDHH --end YYYYMMDDHH [--every-h N] [--synoptic-only] [--max-total-mb N]` | Archived runs; availability is modelled |
-| `lookout-forecast status [--offline] [--hours N]` | Files written, lag model, cache size, and (online) which runs are on S3 |
-| `lookout-forecast plan YYYYMMDDHH [--fields ...]` | Bytes per field per hour, from the inventories only (no GRIB download) |
+| `lookout-forecast tick [--json] [--uncapped]` | One call of the Lambda handler, `handler({}, None)`: the code path the scheduled Lambda runs, with the `LOOKOUT_FORECAST_*` environment; prints its summary (`--json`: the handler's return value, unchanged). Exits 0, or 1 if a run failed in the call (4 if every failure was a cap refusal), so a loop can tell without parsing the JSON. Refuses to start without `LOOKOUT_FORECAST_MAX_MB` unless `--uncapped` |
+| `lookout-forecast status [--offline] [--hours N]` | Files written, the lag log by method (live, survey, duplicates dropped), the lag model and how many of its 576 cells have left the fallback, cache size, and (online) which runs are on S3 |
+| `lookout-forecast plan YYYYMMDDHH [--fields ...] [--hours FH ...]` | Bytes per field per hour, from the inventories only (no GRIB download) |
 | `lookout-forecast grid-check YYYYMMDDHH [--write-fixture PATH]` | Compare the grid mapping with ecCodes' latitude/longitude arrays |
 | `lookout-forecast datum-check YYYYMMDDHH` | Compare the height fields with the model terrain and with `PRES:cloud base` |
-| `lookout-forecast lag-survey --start YYYYMMDDHH --end YYYYMMDDHH` | Publication lags of past runs from S3 listings (one per run, no GRIB, writes nothing) |
+| `lookout-forecast lag-survey --start YYYYMMDDHH [--end YYYYMMDDHH] [--log] [--save-listings DIR]` | Publication lags of past runs from S3 listings (one per run, no GRIB; the run the newest-complete search found is not listed again). `--end` defaults to the newest complete run. Without `--log` it writes nothing; with it, every listed hour not logged yet (live or survey) becomes a survey lag event in `forecast_log/lag_survey/<today>.jsonl`. An hour with a stamp more than 24 h after the run start (a rewritten object) is left out and never logged (`stamps_not_trusted`) |
+| `lookout-forecast lag-check YYYYMMDDHH ... [--save-listings DIR]` | Each run's S3-stamp lags next to the lag model (live + survey, and live only), and the availability an archived run of it gets (`availability_lag_min`, `availability_source`, `hours_set_by_stamps`, `hours_with_ignored_stamps`); one listing per run, writes nothing |
 
 Shared options: `--max-mb N` refuses a run whose planned download is larger (planned from the
 inventories, before any GRIB byte is fetched); `--force` rewrites existing files; `--json`.
@@ -43,12 +52,31 @@ about 24 MB per forecast hour: 453.0 MB for an 18 h run (2026111910), 1,202.1 MB
 never overshoot it. `HGT:surface`, the static model terrain, is fetched once per run, with the
 first hour (it was 8 % of a whole-run download when fetched every hour).
 
-Lambda: `lookout_forecast.lambda_handler.handler`. Each call processes, newest first, every run of
-the last `LOOKOUT_FORECAST_LOOKBACK_H` (12) hours that is not written yet: complete runs, plus runs
-still incomplete after `LOOKOUT_FORECAST_STALE_H` (4) hours, with their missing hours recorded. A
-run already covered costs one small storage read. Other settings: `LOOKOUT_FORECAST_MAX_RUNS` (4),
-`LOOKOUT_FORECAST_WORKERS` (8), `LOOKOUT_FORECAST_MAX_MB` (no default in the Lambda),
-`LOOKOUT_FORECAST_RESERVE_S` (180).
+Lambda: `lookout_forecast.lambda_handler.handler` (`lookout-forecast tick` makes the same call
+locally). Each call processes, newest first, every run of the last `LOOKOUT_FORECAST_LOOKBACK_H`
+(12) hours that is not written yet: complete runs, plus runs still incomplete after
+`LOOKOUT_FORECAST_STALE_H` (4) hours, with their missing hours recorded. A run already covered
+costs one small storage read. A run that is extracted is listed once: the handler hands the
+listing that showed it ready to the extractor (0.1.0 listed it twice, about 3.6-13 KB more per
+run). Other settings: `LOOKOUT_FORECAST_MAX_RUNS` (4), `LOOKOUT_FORECAST_WORKERS` (8),
+`LOOKOUT_FORECAST_MAX_MB` (no default in the Lambda), `LOOKOUT_FORECAST_RESERVE_S` (180),
+`LOOKOUT_FORECAST_TIMEOUT_S` (600, used without a Lambda context).
+
+**Field-set changes.** Files are never narrowed: a file is rewritten only by an extraction that
+holds all its fields and hours (or with `--force`).
+- A wider field set (20 Nov, 02:39 UTC: `PRES:cloud base` added to the stand-in's profile) makes
+  every run of the look-back uncovered, so each is extracted again (about 24 MB each), its files
+  are rewritten and its `run` and `lag` events are logged a second time. Readers cope: the lag log
+  keeps one lag per (run, hour) and counts the dropped duplicates (`status`: 160 on 20 Nov), `status`
+  counts files, not run events, and a survey logs nothing for those hours. A rewritten live file's
+  `fetch_finished_utc` is the new fetch, so its design-P availability can only move later.
+- A field set that is not a superset (one field swapped for another) would write nothing. 0.1.0,
+  which the running snapshot still has, fetches such runs again on every tick and writes nothing:
+  reproduced on the committed code with the fake bucket (3 runs re-fetched on each of 3 ticks,
+  0 files written). With the stand-in's profile that would be up to 4 runs of about 24 MB per
+  5-minute tick until they leave the 12 h look-back. 0.2.0 reports them `kept` and makes no
+  bucket request for them; `run`, `latest` and `backfill` likewise download nothing when no file
+  would be written.
 
 One run's failure never stops the others: any exception (ecCodes, a full `/tmp`, a bug) becomes an
 `error` event and a back-off record, and the call moves on to older runs. A cap refusal is not
@@ -62,7 +90,9 @@ the call to the next tick. Each row of the summary reports the bytes that run co
 | Key | Content |
 |---|---|
 | `forecast/hrrr/<viewpoint_id>/<YYYYMMDDHH>z.json` | One run for one viewpoint; schema `src/lookout_forecast/schema/forecast_run.schema.json` |
-| `forecast_log/<YYYY-MM-DD>.jsonl` | `lag` events (`run`, `fh`, `last_modified`, `lag_s`, ...) for every listed hour of a live run; one `run` event per extraction (that extraction's own bytes, seconds, requests); `error` events from the Lambda (`kind`, `attempts`, `next_try_utc`, `bytes`) |
+| `forecast_log/<YYYY-MM-DD>.jsonl` | `lag` events (`run`, `fh`, `last_modified`, `lag_s`, ..., `"method": "live"`; 0.1.0 wrote no `method`, which reads as live) for every listed hour of a live run; one `run` event per extraction (that extraction's own bytes, seconds, requests); `error` events from the Lambda (`kind`, `attempts`, `next_try_utc`, `bytes`). Every extraction appends to it: the Lambda (or the local stand-in), `tick`, `run`, `latest`, `backfill`, and anything else that calls `Extractor.extract`, such as eval's backtest pair (its archived run wrote a `run` event there on 19 Nov, 23:13 UTC). Survey events never go here |
+| `forecast_log/lag_survey/<YYYY-MM-DD>.jsonl` | Survey `lag` events (`"method": "survey"`, plus `listed_utc`), written only by `lag-survey --log`, dated by the UTC day of the write; one per (run, hour) not already logged |
+| `state/locks/forecast-lag-survey.lock` | Held by `lag-survey --log`, so two surveys never log the same hour twice |
 | `state/forecast/hrrr/<YYYYMMDDHH>z.json` | Which viewpoints, fields and hours are written (idempotency) |
 | `state/forecast/hrrr/<YYYYMMDDHH>z.failure.json` | The Lambda's back-off record for a failed run; marked `resolved_utc` once the run is written |
 | `cache/hrrr/<run>/*.subset.grib2` | Each hour's byte ranges, deleted as soon as they are decoded |
@@ -70,8 +100,9 @@ the call to the next tick. Each row of the summary reports the bytes that run co
 A forecast file holds: `schema_version`, `source` (`noaa-hrrr-bdp-pds`), `model` (`hrrr-conus`),
 `model_version` (null: not encoded in GRIB2), `run_start_utc`, `live`, `fetch_started_utc` and
 `fetch_finished_utc`, the `grid`, and per forecast hour `valid_time_utc`, the object `url`,
-`availability_utc` and `availability_source` (`live-s3-lastmodified` or `modeled`, with the model
-used), `lag_s`, every message's byte range and the requests actually made; `missing_hours` lists
+`availability_utc` and `availability_source` (`live-s3-lastmodified`; for archived runs `modeled`
+or `archived-s3-lastmodified`, with the model used and the stamp floor in `availability_model`),
+`lag_s`, every message's byte range and the requests actually made; `missing_hours` lists
 the hours asked for that were not on S3 (as the state marker does). `points` lists each
 sample point (`id`, `kind` camera/ray/landmark/neighborhood, `lat`, `lon`, `i`, `j`, `cell_lat`,
 `cell_lon`, `model_terrain_m`, `distance_km`, `azimuth_deg`, `name`). `fields` gives each field's
@@ -91,11 +122,42 @@ start: availability is then the later of the GRIB2 and `.idx` `LastModified` sta
 **Archived runs** get a modelled availability that must never be early (an early time leaks a newer
 run into a prediction, PRD §13.9). `availability.LagModel` keys the lag by the run's cycle hour
 *and* forecast hour, because cycles differ (evidence below), and for hour `fh` of cycle `c` uses:
-1. the p95 of the live lags logged for (`c`, `fh`) once there are 20 (`p95-cycle-hour`);
+1. the p95 of the lags logged for (`c`, `fh`) once there are 20 (`p95-cycle-hour`);
 2. else, once `fh` has 20 lags over all cycles and (`c`, `fh`) has one: the later of that pooled
    p95 (the PRD §8.3 rule) and the largest lag logged for (`c`, `fh`)
    (`p95-forecast-hour-or-cycle-max`);
 3. else **120 min**, or the largest lag logged for (`c`, `fh`) if later (`conservative-fallback`).
+
+"Logged" means live and survey lags (D-027). They are kept apart (`method`; a live lag wins where
+both exist), counted apart (`samples_by_method`, `pooled_samples_by_method` in `availability_model`
+and `status`), and `LagModel.from_storage(storage, methods={"live"})` gives the live-only model.
+**Survey lags enter the p95** because:
+- they are the same measurement: on 20 Nov the survey re-listed 594 hours already logged live, and
+  all 594 lags were equal (largest difference 0.0 s);
+- a later listing can only show the same stamps or, after a re-upload, later ones, so a survey can
+  only err late; and the January 2024 runs still carry their publication stamps (below);
+- the live log alone is censored: the stand-in's f00-f02 profile processes a run as soon as f02 is
+  up, so a later hour is logged live only if it was published before that moment, which drops
+  exactly the late hours. 2026111911 (processed at 78.0 min) lacks f09, published at 79.1 min after
+  f10-f13; 2026111912 (56.5 min) has 5 of its 49 hours. The survey filled both (6 and 44 hours).
+
+**An archived hour is never available before its own S3 stamps say it was published** (PRD
+§13.9; review finding, 20 Nov). Its availability is the later of the model and the stamp floor
+(`availability.archived_availability`, `discovery.publication_floor`): the later of its GRIB2
+and `.idx` `LastModified`, as for a live run. A stamp more than **24 h** after the run start is a
+rewritten object, not a publication, and is ignored (`s3_stamps_ignored`); if only the GRIB2
+stamp counts, the floor is that stamp + 300 s (the `.idx` came 3-188 s after its GRIB2 in 5,374
+listed hours). Where the stamps win, `availability_source` is `archived-s3-lastmodified`. Why:
+the model is fitted on November 2026 lags, and other seasons published some hours later. On 20
+Nov, 18 archived runs were listed (2015-07 to 2026-03, 442,353 bytes, no GRIB). Of the 686 hours
+whose two stamps count (14 runs), 49 were published after the time the live + survey model
+gives, by up to 6.37 min (2021031512 f32): 18 in 2021031512, 17 in 2023071500, 10 in 2023011518
+(the live-only model: 3). With the floor none is, and 91 hours take their stamp (42 of them in
+the two runs whose `.idx` was rewritten, from the GRIB2 stamp + 300 s). Rewritten stamps exist:
+every `.idx` of 2020120312 and 2021011500 is stamped 17 Feb 2021 (75.7 and 33.6 days late) while
+their GRIB2 files keep publication stamps; both objects of 2015071512 and 2018071512 carry
+2020-2021 stamps. A survey never logs an hour with such a stamp, and readers count a lag above
+24 h as invalid (one would set its cell's lag to weeks).
 
 The typical lags of `docs/research/forecast.md` (f00 52 min, f18 85 min, f48 108 min) are not used:
 37.3 % of the surveyed lags were later than them, and they were earlier than all 19 lags logged for
@@ -106,9 +168,20 @@ issue, valid)` returns the newest *stored* run whose needed hours were available
 time, with the actual lead. A run or hour that is not stored is skipped (the search falls back to
 an older run; it is never modelled into existence). A live hour counts as available at the later
 of its S3 time and the file's `fetch_finished_utc`, since Lookout could not use it earlier (design P).
-An archived hour is re-modelled from the current log: the `availability_utc` stored in an archived
-file is only what the model said when the file was written. `select_run_for_issue` is the same rule
-without storage. 24 h leads only come from 00/06/12/18Z runs.
+An archived hour is re-modelled from the current log (the `availability_utc` stored in an archived
+file is only what the model said when the file was written) and never placed before the stamps the
+file records. `select_run_for_issue` is the same rule without storage: with no `availability`
+callback it can only model, which can be earlier than the run's stamps; pass
+`availability.listed_availability(bucket)` (one listing per candidate run) to apply the floor
+before a run is stored, as a backtest pair should. 24 h leads only come from 00/06/12/18Z runs.
+
+**Compatibility.** `schema_version` is still 1, because eval's `forecast_io` accepts only 1. Files
+written by 0.2.0 are read by 0.1.0's code paths unchanged, and live files validate under the 0.1.0
+schema. Archived files do not: `availability_model` has `samples_by_method`,
+`pooled_samples_by_method`, `s3_floor_utc` and `s3_stamps_ignored`, and `availability_source` may be
+`archived-s3-lastmodified` (checked on the fake bucket: 0 errors for a live file, 2 for an archived
+one, 4 when the stamps won). Validate archived files with the 0.2.0 schema; a bump to 2 needs eval
+to accept both.
 
 ## Fields and datums
 
@@ -171,6 +244,10 @@ GRIB data).
 | Earlier smoke (first build, 09:54 UTC): run 2026111908, same request | 25.4 MB; its "3 listings" included the `latest` search, and HGT:surface was fetched every hour. Its 8 files in `~/lookout-data/forecast/hrrr/*/2026111908z.json` come from that build |
 | Publication lag, 2026111908 / 2026111910 (logged) | f00 53.3 / 51.3 min, f02 57.2 / 55.3, f06 64.6 / 63.8, f18 86.4 / 85.6; out of order: 08Z f05 73.5, 10Z f04 70.6 |
 | Publication lag survey: 124 runs, 2026-11-14 06Z to 2026-11-19 09Z (`lag-survey`, 2.0 MB of listings) | 2,986 hour-lags; 37.3 % later than the forecast.md curve; per-hour p95 up to 25 min above it (f11 97.1 vs 72.2 min); 3 lags above 120 min (0.10 %, all 2026111715, max 131.2 min); every 23Z run published f06-f18 at ~111 min while other cycles' medians were 62.6-85.1 min |
+| `lag-survey --log`, 2026-11-12 00Z to 2026-11-20 01Z (2026112001, the newest complete run) (20 Nov, 03:11-03:12 UTC) | 194 runs, 0 incomplete; 4,676 listed hour-lags; **4,082 survey events logged** (594 hours were already logged live, all 594 with equal lags); 194 listings, 3,160,172 bytes, 0 retries, 53 s wall; 3 lags above 120 min (the same 2026111715 hours, max 131.17 min). The log then held 4,679 lags of 195 runs (597 live, 4,082 survey) |
+| Lag-model cells (24 cycles x f00-f18 + 4 synoptic cycles x f19-f48 = 576) | Off the 120 min fallback: 436 before the survey (live lags alone; 140 on it), **576 after** (all by rule 2; no cell has 20 lags yet, 8-9 each) |
+| Archived runs 2024011412 and 2024011418 (`lag-check`, one listing each, 48,786 bytes, no GRIB) | Stamps from 2024-01-14 12:49:49-13:47:13Z and 18:50:46-19:48:57Z: lags 49.9-107.2 and 50.8-109.0 min, 49/49 hours each, the same shape as live runs 1,040 days later. So the archive keeps publication times. Every hour is 1.27-32.0 min earlier than the model (tightest: 18Z f38, 99.60 vs 100.87 min); none is later |
+| 18 archived runs, 2015071512 to 2026031518 (`lag-check`, one listing each, 442,353 bytes, no GRIB; replayed with the final code against the live + survey log, 20 Nov 06 UTC) | 14 runs keep both stamps (686 hours, lags 49.9-116.5 min); 2020120312 and 2021011500 keep GRIB2 stamps only (their `.idx` are stamped 17 Feb 2021); 2015071512 and 2018071512 keep neither. 49 of the 686 hours were published after the model's time (up to 6.37 min, 2021031512 f32; live-only model: 3); with the stamp floor 0 are, and 91 hours take their stamp |
 | HGT:surface across hours, run 2026111906 | identical at f00, f01, f18, f48 (max difference 0.0 m over 1,905,141 cells; 2,153,695-byte messages); 8.6 MB downloaded to check |
 | All 22 fields, whole run (terrain once) | 453.0 MB (18 h run 2026111910, 14.95 % of the GRIB2 files); 1,202.1 MB (48 h run 2026111906, 15.04 %); the plan itself costs one listing and one `.idx` per hour (546,827 bytes for 49 hours) |
 | Costliest fields (MB per hour) | HPBL 2.99, HGT:cloud base 2.83, UGRD 2.38, VGRD 2.38, HGT:surface 2.15 (now once per run), ceiling 1.86, top 1.72, RH 1.65, VIS 1.50 |
@@ -214,7 +291,16 @@ its `pyproject.toml` changes.
   extractor inputs.
 - `TODO(M0.5)`: the laptop profile (which fields and hours `make forecast-latest` asks for) is the
   lead's call; until then the 150 MB default cap refuses a whole-run download.
-- `TODO(M1)`: with the worker logging every run, the lag model leaves the 120 min fallback after
-  about 1 day for f00-f18 and 5 days for f19-f48 (20 synoptic runs), and reaches per-cycle p95s
-  after about 20 days. Seeding it from `lag-survey` (which can only err late) would make that
-  immediate; that is the lead's decision (PRD §8.3 says "live-measured").
+- `TODO(M1)`: no cell has the 20 lags rule 1 needs yet (8-9 each after the 20 Nov survey); a
+  survey of about 12 more days gets there. Run `lag-survey --log --start <the last surveyed run, or
+  earlier>` now and then: overlap costs only listings (about 8-33 KB a run) and logs nothing twice,
+  while starting after the last surveyed run would skip runs that were incomplete or not yet
+  published when it ran. The live log alone cannot get there for f03 and later: the stand-in's
+  f00-f02 profile logs a later hour only if it was already published (in the 13 first extractions
+  made 55.5-78.7 min after their run start, 48 of 268 f03+ hours were listed), so those cells
+  would get a p95 of their early hours only.
+- `TODO(M1)`: the model is fitted on November 2026 lags. Stored archived runs are now floored by
+  their own stamps, so an early model can no longer leak; it still decides which run is chosen
+  when the model is later than the stamps, and it is all there is for a run with no trusted
+  stamp. Surveying the design-H seasons (listings only, about 24-33 KB per synoptic run; the
+  survey skips rewritten stamps) is the lead's decision.

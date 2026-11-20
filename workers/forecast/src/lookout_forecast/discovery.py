@@ -8,6 +8,13 @@ An hour is usable only once both objects exist (the worker needs the inventory t
 range requests), so its availability is the later of the two ``LastModified`` stamps.
 S3 gives a multipart upload the time the upload *started*; using the later ``.idx`` stamp
 (written a few seconds after the GRIB2) keeps the estimate from running early.
+
+**Old stamps are not always publication times** (PRD §13.9). Most archived runs keep them
+(14 of the 18 listed on 20 Nov 2026, from 2021-03 to 2026-03), but some objects were rewritten
+long after the run: the ``.idx`` files of 2020120312 and 2021011500 carry 17 Feb 2021 stamps
+while their GRIB2 files keep stamps 54-115 min after the run start, and both objects of
+2015071512 and 2018071512 carry 2020-2021 stamps. :func:`publication_floor` therefore counts
+a stamp only within :data:`STAMP_TRUST_H` of the run start.
 """
 
 from __future__ import annotations
@@ -31,13 +38,56 @@ from .hrrr import (
 )
 
 __all__ = [
+    "IDX_AFTER_GRIB_MARGIN_S",
+    "STAMP_TRUST_H",
     "HourFiles",
     "RunListing",
     "find_latest_complete",
     "group_runs",
     "list_day",
     "list_run",
+    "publication_floor",
 ]
+
+#: A ``LastModified`` stamp later than this after its run's start says when the object was
+#: copied or rewritten, not when the hour was published. Listed on 20 Nov 2026: published hours
+#: carried stamps 46.6-131.2 min after the run start (4,688 hours of 195 runs of 12-20 Nov
+#: 2026, and 784 hours of 16 archived runs of Dec 2020 - Mar 2026, whose largest was 116.5
+#: min), while rewritten objects were 33.6 days to 5.6 years late. 24 h is also the
+#: extractor's live window: a stamp the live worker would have used.
+STAMP_TRUST_H = 24.0
+#: When only an hour's GRIB2 stamp can be trusted (its ``.idx`` was rewritten later), the hour
+#: counts as usable this long after the GRIB2 stamp: in 5,374 hours of 209 runs listed with
+#: both stamps trusted, the ``.idx`` came 3-188 s after its GRIB2 (median 4 s, 99th percentile
+#: 9 s; the 188 s was 2022011506 f31), never before it.
+IDX_AFTER_GRIB_MARGIN_S = 300.0
+
+
+def publication_floor(
+    run_start: datetime, grib_utc: datetime | None, idx_utc: datetime | None
+) -> tuple[datetime | None, tuple[str, ...]]:
+    """The earliest an hour can have been usable, from its own S3 stamps (PRD §8.3, §13.9).
+
+    Returns ``(floor, ignored)``. A stamp counts only within :data:`STAMP_TRUST_H` of the run
+    start; ``ignored`` names the ones that do not (``"grib"``, ``"idx"``). With both stamps
+    trusted the floor is the later one, which is what a live run uses as its availability;
+    with only the ``.idx`` stamp, that stamp (an inventory is written after its GRIB2); with
+    only the GRIB2 stamp, that stamp plus :data:`IDX_AFTER_GRIB_MARGIN_S`; with neither,
+    None.
+    """
+    start = as_run_start(run_start)
+    limit = start + timedelta(hours=STAMP_TRUST_H)
+    stamps = {"grib": grib_utc, "idx": idx_utc}
+    ignored = tuple(name for name, stamp in stamps.items() if stamp is not None and stamp > limit)
+    grib = grib_utc if grib_utc is not None and "grib" not in ignored else None
+    idx = idx_utc if idx_utc is not None and "idx" not in ignored else None
+    if grib is not None and idx is not None:
+        return max(grib, idx), ignored
+    if idx is not None:
+        return idx, ignored
+    if grib is not None:
+        return grib + timedelta(seconds=IDX_AFTER_GRIB_MARGIN_S), ignored
+    return None, ignored
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +114,12 @@ class HourFiles:
     def grib_url(self) -> str | None:
         """HTTPS URL of the GRIB2 file."""
         return object_url(self.grib.key) if self.grib is not None else None
+
+    def stamps_trusted(self, run_start: datetime) -> bool:
+        """True when both stamps exist and fall within :data:`STAMP_TRUST_H` of the run start."""
+        if self.grib is None or self.idx is None:
+            return False
+        return not publication_floor(run_start, self.grib.last_modified, self.idx.last_modified)[1]
 
 
 @dataclass(frozen=True)

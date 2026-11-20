@@ -12,6 +12,7 @@ from lookout_common.storage import LockTimeoutError
 from lookout_forecast import cli, discovery
 from lookout_forecast.bucket import HrrrBucket
 from lookout_forecast.extract import Extractor
+from lookout_forecast.hrrr import run_prefix
 from lookout_forecast.output import validate_document
 
 from .conftest import RAINIER
@@ -53,6 +54,9 @@ def test_latest_picks_the_newest_complete_run_and_is_idempotent(wired, data_root
         f"forecast/hrrr/{RAINIER}/2026111907z.json"
     ]
     assert event["transfer"]["requests"]["grib"] >= 1
+    # The search listed 09Z, 08Z and 07Z once each; the extraction re-used the 07Z listing.
+    assert "listing" not in event["transfer"]["requests"]
+    assert sum(r.url.path in {"", "/"} for r in wired.requests) == 3
     assert cli.main(["latest", "--max-fh", "0", *ARGS]) == 0
     assert "already written" in capsys.readouterr().out
 
@@ -253,3 +257,191 @@ def test_lag_survey_lists_only_and_writes_nothing(wired, data_root, capsys) -> N
     assert survey["transfer"]["requests"] == {"listing": 4}
     assert survey["per_fh"]["0"]["n"] == 3 and survey["later_than_fallback"] == 0
     assert not any(p.is_file() for p in data_root.rglob("*"))
+
+
+def test_lag_survey_log_writes_survey_events_once(wired, data_root, monkeypatch, capsys) -> None:
+    """D-027: --log logs each listed (run, hour) once, in the survey log only."""
+    from lookout_forecast import laglog
+
+    monkeypatch.setattr(laglog, "utcnow", lambda: NOW)
+    args = ["lag-survey", "--start", "2026111905", "--end", "2026111908", "--log"]
+    assert cli.main(args) == 0
+    survey = json.loads(capsys.readouterr().out)
+    assert survey["log"]["logged"] == 19 + 19 + 5 and survey["end_rule"] == "given"
+    assert survey["log"]["keys"] == ["forecast_log/lag_survey/2026-11-19.jsonl"]
+    assert survey["transfer"]["requests"] == {"listing": 4}  # listings only, no GRIB
+    cells = survey["lag_model_cells"]
+    assert cells["before"]["left_fallback"] == 0 and cells["after"]["cells"] == 576
+    files = sorted(p.relative_to(data_root).as_posix() for p in data_root.rglob("*") if p.is_file())
+    assert files == [
+        "forecast_log/lag_survey/2026-11-19.jsonl",
+        "state/locks/forecast-lag-survey.lock",
+    ]  # never the live log, forecast_log/<day>.jsonl
+    assert cli.main(args) == 0  # again: nothing new
+    again = json.loads(capsys.readouterr().out)["log"]
+    assert again["logged"] == 0 and again["already_logged"] == {"live": 0, "survey": 43}
+    assert again["agreement_with_logged"]["survey"]["equal"] == 43
+    assert cli.main(["status", "--offline", "--json"]) == 0
+    status = json.loads(capsys.readouterr().out)
+    assert status["lag_events"] == 43
+    assert status["lag_log"]["by_method"] == {"live": 0, "survey": 43}
+    assert status["lag_model_cells_live_only"]["left_fallback"] == 0
+
+
+def test_lag_survey_ends_at_the_newest_complete_run_by_default(wired, capsys) -> None:
+    assert cli.main(["lag-survey", "--start", "2026111905"]) == 0
+    survey = json.loads(capsys.readouterr().out)
+    assert survey["last_run"] == "2026111907" and survey["end_rule"] == "the newest complete run"
+    assert survey["lags"] == 19 + 19 and "log" not in survey
+    # Review finding: the run the search found was listed twice. The search lists 09Z, 08Z
+    # and 07Z; the survey lists 05Z and 06Z and re-uses the search's 07Z listing.
+    prefixes = [r.url.params.get("prefix") for r in wired.requests if r.url.path in {"", "/"}]
+    assert prefixes.count(run_prefix(R07)) == 1 and len(prefixes) == 5
+    assert survey["listings_reused"] == ["2026111907"]
+    assert survey["transfer"]["requests"] == {"listing": 2}
+    assert survey["transfer_with_end_search"]["requests"] == {"listing": 5}
+
+
+def test_status_counts_lags_by_method(wired, data_root, monkeypatch, capsys) -> None:
+    cli.main(["run", "2026111907", "--max-fh", "0", *ARGS])  # 19 live lags
+    from lookout_forecast import laglog
+
+    monkeypatch.setattr(laglog, "utcnow", lambda: NOW)
+    cli.main(["lag-survey", "--start", "2026111905", "--end", "2026111907", "--log"])
+    capsys.readouterr()
+    assert cli.main(["status", "--offline", "--json"]) == 0
+    status = json.loads(capsys.readouterr().out)
+    assert status["lag_log"]["by_method"] == {"live": 19, "survey": 19}
+    assert status["availability_model"]["f00"]["pooled_samples_by_method"] == {
+        "live": 1,
+        "survey": 1,
+    }
+    assert cli.main(["status", "--offline"]) == 0
+    text = capsys.readouterr().out
+    assert "lag events: 38 (live 19, survey 19" in text and "have left the 120 min" in text
+
+
+def test_lag_check_lists_runs_and_writes_nothing(wired, data_root, capsys) -> None:
+    assert cli.main(["lag-check", "2026111905", "2026111907"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert [run["run"] for run in out["runs"]] == ["2026111905", "2026111907"]
+    hour = out["runs"][0]["hours"][0]
+    # The fake publishes f00 at +3000 s and its .idx 4 s later.
+    assert hour["lag_min"] == round(3004 / 60, 2) and hour["model_lag_min"] == 120.0
+    assert hour["model_method"] == "conservative-fallback"
+    assert hour["live_only_model_method"] == "conservative-fallback"
+    assert out["runs"][0]["hours_later_than_model"] == 0
+    assert out["transfer"]["requests"] == {"listing": 2}
+    assert not any(p.is_file() for p in data_root.rglob("*"))
+
+
+def test_run_hours_extracts_exactly_those_hours(wired, data_root, monkeypatch, capsys) -> None:
+    monkeypatch.setenv("LOOKOUT_FORECAST_MAX_FH", "0")  # --hours wins over the environment
+    assert cli.main(["run", "2026111907", "--hours", "3", "1", "--json", *ARGS]) == 0
+    event = json.loads(capsys.readouterr().out)
+    assert event["hours"] == [1, 3]
+    doc = json.loads((data_root / "forecast/hrrr" / RAINIER / "2026111907z.json").read_text())
+    assert doc["forecast_hours"] == [1, 3]
+    grib = {r.url.path.rsplit(".", 1)[0][-2:] for r in wired.grib_requests()}
+    assert grib == {"01", "03"}
+    wired.requests.clear()
+    assert cli.main(["run", "2026111907", "--hours", "1", "3", *ARGS]) == 0
+    assert "nothing to write, nothing downloaded" in capsys.readouterr().out
+    assert wired.grib_requests() == []
+    assert cli.main(["run", "2026111907", "--hours", "1", "--max-fh", "2", *ARGS]) == 1
+    assert "not both" in capsys.readouterr().err
+    assert cli.main(["run", "2026111907", "--hours", "24", *ARGS]) == 1
+    assert "stops at f18" in capsys.readouterr().err
+
+
+def test_plan_hours(wired, capsys) -> None:
+    assert cli.main(["plan", "2026111907", "--hours", "5", "2", "--fields", "VIS", "--json"]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["hours"] == [2, 5] and plan["transfer"]["requests"] == {"listing": 1, "idx": 2}
+
+
+def test_tick_is_one_handler_call(monkeypatch, capsys) -> None:
+    """``tick`` runs the Lambda's code path: handler({}, None), nothing changed on the way."""
+    from lookout_forecast import lambda_handler
+
+    calls: list[tuple] = []
+    summary = {"now_utc": "2026-11-19T09:40:00Z", "extracted": 0, "runs": [], "transfer": {}}
+
+    def spy(event, context):
+        calls.append((event, context))
+        return summary
+
+    monkeypatch.setattr(lambda_handler, "handler", spy)
+    assert cli.main(["tick"]) == cli.EXIT_ERROR  # no LOOKOUT_FORECAST_MAX_MB: refused
+    assert "LOOKOUT_FORECAST_MAX_MB is not set" in capsys.readouterr().err and calls == []
+    monkeypatch.setenv("LOOKOUT_FORECAST_MAX_MB", "40")
+    assert cli.main(["tick", "--json"]) == 0
+    assert calls == [({}, None)] and json.loads(capsys.readouterr().out) == summary
+    monkeypatch.delenv("LOOKOUT_FORECAST_MAX_MB")
+    assert cli.main(["tick", "--uncapped"]) == 0 and len(calls) == 2
+    assert "extracted 0 run(s)" in capsys.readouterr().out
+
+
+def test_tick_exits_non_zero_when_a_run_fails(monkeypatch, capsys) -> None:
+    """Review finding: a loop calling ``tick --json`` could not see failures in the status."""
+    from lookout_forecast import lambda_handler
+
+    cap = "error: BandwidthCapError: run 2026111907: planned 0.0 MB exceeds the cap"
+    rows = {
+        "ok": [{"run": "2026111907", "status": "written"}],
+        "earlier failure": [{"run": "2026111907", "status": "backing off: cap refusal"}],
+        "cap": [{"run": "2026111907", "status": cap, "bytes": 0}],
+        "other": [
+            {"run": "2026111907", "status": cap, "bytes": 0},
+            {"run": "2026111906", "status": "error: DecodeError: bad message", "bytes": 9},
+        ],
+    }
+    want = {"ok": 0, "earlier failure": 0, "cap": cli.EXIT_CAP, "other": cli.EXIT_ERROR}
+    monkeypatch.setenv("LOOKOUT_FORECAST_MAX_MB", "40")
+    for name, runs in rows.items():
+        summary = {"now_utc": "2026-11-19T09:40:00Z", "extracted": 0, "runs": runs, "transfer": {}}
+        monkeypatch.setattr(lambda_handler, "handler", lambda event, context, s=summary: s)
+        assert cli.main(["tick", "--json"]) == want[name], name
+        assert json.loads(capsys.readouterr().out) == summary  # printed unchanged
+
+
+def test_tick_end_to_end_with_the_environment_profile(
+    fake, small_grid, data_root, manifests, monkeypatch, capsys
+) -> None:
+    from lookout_forecast import lambda_handler
+
+    fake.add_run(R07, fields=FIELDS, hours=range(19))
+    for name, value in {
+        "LOOKOUT_FORECAST_FIELDS": "VIS,TERRAIN",
+        "LOOKOUT_FORECAST_MAX_FH": "1",
+        "LOOKOUT_FORECAST_MAX_MB": "50",
+        "LOOKOUT_FORECAST_LOOKBACK_H": "3",
+        "LOOKOUT_FORECAST_MAX_RUNS": "1",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(
+        lambda_handler, "HrrrBucket", lambda: HrrrBucket(transport=fake.transport())
+    )
+    monkeypatch.setattr(lambda_handler, "load_manifests", lambda: {RAINIER: manifests[RAINIER]})
+    monkeypatch.setattr(
+        lambda_handler,
+        "process_pending",
+        functools.partial(lambda_handler.process_pending, grid=small_grid, now=NOW),
+    )
+    assert cli.main(["tick"]) == 0
+    out = capsys.readouterr().out
+    assert "extracted 1 run(s)" in out and "run 2026111907: extracted, 2 hour(s), 1 file(s)" in out
+    doc = json.loads((data_root / "forecast/hrrr" / RAINIER / "2026111907z.json").read_text())
+    assert doc["forecast_hours"] == [0, 1] and doc["field_names"] == ["VIS:surface", "HGT:surface"]
+    assert cli.main(["tick", "--json"]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert {r["run"]: r["status"] for r in summary["runs"]}["2026111907"] == "written"
+
+
+def test_save_listings_records_the_answers_as_received(wired, tmp_path, capsys) -> None:
+    folder = tmp_path / "listings"
+    assert cli.main(["lag-check", "2026111905", "--save-listings", str(folder)]) == 0
+    capsys.readouterr()
+    saved = folder / "hrrr.20261119_conus_hrrr.t05z.wrfsfcf.xml"
+    assert [p.name for p in folder.iterdir()] == [saved.name]
+    assert saved.read_bytes() == wired.listing_xml("hrrr.20261119/conus/hrrr.t05z.wrfsfcf")

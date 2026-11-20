@@ -18,8 +18,10 @@ from importlib import resources
 from typing import Any
 
 from jsonschema import Draft202012Validator
+from lookout_common.timeutil import parse_iso_utc
 
 __all__ = [
+    "ARCHIVED_SOURCES",
     "KIND",
     "SCHEMA_VERSION",
     "DocumentError",
@@ -28,8 +30,13 @@ __all__ = [
     "validate_document",
 ]
 
+#: Still 1 in 0.2.x, so readers that accept only 1 (eval's ``forecast_io``) keep reading the
+#: files. Live files written by 0.2.x are valid under the 0.1.0 schema; archived ones are
+#: not (``availability_model`` gained keys, ``availability_source`` a value). See README.
 SCHEMA_VERSION = 1
 KIND = "lookout.forecast-run"
+#: ``availability_source`` values of archived hours (``lookout_forecast.availability``).
+ARCHIVED_SOURCES: tuple[str, ...] = ("modeled", "archived-s3-lastmodified")
 
 
 class DocumentError(ValueError):
@@ -100,10 +107,20 @@ def validate_document(doc: Mapping[str, Any]) -> None:
         for item in ranges:
             if item["end"] - item["start"] + 1 != item["bytes"]:
                 problems.append(f"f{hour['fh']:02d}: {item['field']} range length mismatch")
-        if (hour["availability_source"] == "modeled") != (hour["availability_model"] is not None):
+        archived = hour["availability_source"] in ARCHIVED_SOURCES
+        if archived != (hour["availability_model"] is not None):
             problems.append(
-                f"f{hour['fh']:02d}: availability_model must be set exactly when modeled"
+                f"f{hour['fh']:02d}: availability_model must be set exactly when the "
+                f"availability is archived ({' or '.join(ARCHIVED_SOURCES)})"
             )
+        floor = (hour["availability_model"] or {}).get("s3_floor_utc")
+        if floor is not None and parse_iso_utc(hour["availability_utc"]) < parse_iso_utc(floor):
+            problems.append(
+                f"f{hour['fh']:02d}: availability_utc is before the hour's own S3 stamps "
+                f"(s3_floor_utc {floor})"
+            )
+        if hour["availability_source"] == "archived-s3-lastmodified" and floor is None:
+            problems.append(f"f{hour['fh']:02d}: archived-s3-lastmodified needs s3_floor_utc")
     if problems:
         raise DocumentError("; ".join(problems[:10]))
 

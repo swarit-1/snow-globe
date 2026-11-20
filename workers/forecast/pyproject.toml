@@ -1,6 +1,6 @@
 [project]
 name = "lookout-forecast"
-version = "0.1.0"
+version = "0.2.0"
 description = "Lookout forecast worker: HRRR byte-range extraction at each viewpoint's sample points, availability-lag log (PRD 8.3, 11.2)."
 readme = "README.md"
 license = "MIT"
