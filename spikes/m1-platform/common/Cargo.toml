@@ -1,0 +1,27 @@
+[package]
+name = "m1-spike-common"
+description = "M1 1a spike: JSONL run log, host clock, timing statistics, pixel tag, hotkey pairing, nettop parser and the offline report (PLAN.md M1 1a; PRD §10.4-10.6)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+name = "m1_spike_common"
+path = "src/lib.rs"
+
+[[bin]]
+name = "m1-report"
+path = "src/bin/m1-report.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+libc.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

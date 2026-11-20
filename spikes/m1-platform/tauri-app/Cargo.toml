@@ -1,0 +1,50 @@
+[package]
+name = "m1-spike-app"
+description = "M1 1a spike: throwaway Tauri 2 app for the hotkey, panel, focus, reveal, cpal and DictationTranscriber checks (PLAN.md M1 1a; PRD §5.4, §6, §7.1, §10.2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "m1-spike"
+path = "src/main.rs"
+
+[features]
+# No `custom-protocol` feature on purpose: in Tauri's dev mode the build embeds Info.plist
+# (NSMicrophoneUsageDescription, NSSpeechRecognitionUsageDescription) into the binary, and with no
+# devUrl the ui/ folder is still embedded and served over tauri://. `cargo run` works with no
+# Tauri CLI and no dev server.
+default = []
+# Links app/speech-macos's static library through its C ABI (lookout_speech.h). Off by default
+# because that library is built by another work package; see README.md, check 6.
+speech = []
+
+[dependencies]
+m1-spike-common.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+libc.workspace = true
+tauri = { version = "=2.12.7", features = ["macos-private-api"] }
+tauri-plugin-global-shortcut = "=2.4.1"
+tauri-nspanel = "=2.1.1"
+cpal = "=0.18.2"
+objc2 = "0.6.5"
+objc2-foundation = { version = "0.3.2", features = ["NSString", "NSThread"] }
+objc2-app-kit = { version = "0.3.2", features = [
+  "NSApplication",
+  "NSEvent",
+  "NSPanel",
+  "NSResponder",
+  "NSRunningApplication",
+  "NSWindow",
+  "NSWorkspace",
+] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGEventSource", "CGEventTypes", "CGRemoteOperation"] }
+
+[build-dependencies]
+tauri-build = { version = "=2.7.6", features = [] }
+
+[lints]
+workspace = true

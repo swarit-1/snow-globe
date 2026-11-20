@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lookout M1 spike panel</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body {
+      margin: 0; padding: 0; height: 100%; overflow: hidden;
+      background: #0b0d10; color: #d8dbe0;
+      font: 13px/1.45 ui-monospace, "SF Mono", Menlo, monospace;
+      -webkit-user-select: none; user-select: none; cursor: default;
+    }
+    /* The pixel tag (PRD §10.4): 25 cells x 8 pt at the content's top-left corner. Never moved,
+       scaled or faded, so the ScreenCaptureKit helper can read it from every frame. */
+    #tag { position: absolute; left: 0; top: 0; width: 200px; height: 8px; image-rendering: pixelated; }
+    main { position: absolute; left: 16px; right: 16px; top: 24px; bottom: 16px; }
+    h1 { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 8px; color: #8a9099; }
+    #check { color: #e8eaed; }
+    hr { border: 0; border-top: 1px solid #22262c; margin: 10px 0; }
+    #status { white-space: pre-wrap; }
+    #keys { color: #8a9099; }
+  </style>
+</head>
+<body>
+  <canvas id="tag" width="200" height="8"></canvas>
+  <main>
+    <h1>Lookout M1 spike · <span id="check">-</span></h1>
+    <div id="status">waiting for the hotkey</div>
+    <hr>
+    <div id="keys">keys seen: none</div>
+  </main>
+  <script src="spike.js"></script>
+</body>
+</html>

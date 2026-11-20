@@ -1,0 +1,23 @@
+[package]
+name = "m1-spike-sck"
+description = "M1 1a spike: ScreenCaptureKit window-only capture with the in-surface pixel tag, host-clock agreement and the Screen Recording re-consent probe (PLAN.md M1 1a; PRD §10.4)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "m1-sck"
+path = "src/main.rs"
+
+[dependencies]
+m1-spike-common.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+libc.workspace = true
+screencapturekit = { version = "=11.1.2", features = ["macos_15_0"] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGWindow"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,32 @@
+# Lookout M1 1a platform spike (PLAN.md M1 1a). Throwaway: never shipped, not part of app/Cargo.toml.
+# Build output goes to $CARGO_TARGET_DIR (CLAUDE.md: $HOME/lookout-data/cache/cargo-target), never into iCloud.
+[workspace]
+resolver = "3"
+members = ["common", "tauri-app", "sck", "inject"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+
+[workspace.dependencies]
+m1-spike-common = { path = "common" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+libc = "0.2.191"
+chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
+tempfile = "3.27.0"
+
+[workspace.lints.rust]
+missing_debug_implementations = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+undocumented_unsafe_blocks = "warn"
+
+[profile.release]
+# Symbols stay in, so a crash in a check run still gives a usable backtrace.
+debug = "line-tables-only"
