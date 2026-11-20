@@ -9,7 +9,9 @@ spike, run `m1-report show <run-id>`, and send the output and the run file to th
 going further. Do not tune anything and rerun until it passes; report the measured values.
 
 Everything was built and unit-tested on 19 Nov 2026 (macOS 26.5.1, Xcode 26.2, Rust 1.98.1).
-**No check has been run yet.** Running them needs you at the keyboard and, for some, a permission.
+`m1-spike` was rebuilt with `--features speech` against speech library 0.2.0 at 12:36 UTC on
+20 Nov (D-074; check 6). **No check has been run yet.** Running them needs you at the keyboard
+and, for some, a permission.
 
 ## What the spike records, and what it never records
 
@@ -173,11 +175,12 @@ syntax). Option-only and Option+Shift shortcuts are refused, because macOS 15+ r
   - Microphone;
   - Speech Recognition, if the library asks;
   - the en-US dictation asset installed (`lk_speech_status` = 1 means it is missing).
-- **Build first.** The library comes from `app/speech-macos` (another work package). It did not exist when this spike was built, so the check is behind a Cargo feature:
+- **Build first.** The library comes from `app/speech-macos` (another work package; 0.2.0 is committed in `8443bf3`, D-055). It did not exist when this spike was built, so the check is behind a Cargo feature. The lead built the spike this way at 12:36 UTC on 20 Nov, against `$LOOKOUT_DATA_DIR/cache/speech-macos/release/liblookout_speech.a` 0.2.0 (D-074):
   ```sh
   # after app/speech-macos is built (or set LOOKOUT_SPEECH_LIB_DIR / LOOKOUT_SPEECH_LIB_NAME):
-  cargo build --release -p m1-spike-app --features speech
+  cargo build --release --offline --locked -p m1-spike-app --features speech
   ```
+  - **The Build block above undoes it:** `cargo build --release --workspace` rebuilds `m1-spike` without the feature, and this check then records `skipped`. Before running it, `strings -a "$BIN/m1-spike" | grep 'lookout-speech 0.2.0'` must print the library's version line; if it prints nothing, rebuild with the command above. The owner runbook runs that command right after the Build block (step 2.1), and its step 3 has the rest of the sequence, starting with `lookout-transcribe status`.
   - `build.rs` looks for `liblookout_speech.a` in `app/speech-macos/.build/{release,arm64-apple-macosx/release,debug}`, `app/speech-macos/build`, then `$LOOKOUT_DATA_DIR/cache/speech-macos`.
   - It checks that `include/lookout_speech.h` declares every function.
   - It links the Swift runtime (rpath `/usr/lib/swift`) and the Foundation, AVFoundation, CoreMedia and Speech frameworks.

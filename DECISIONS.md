@@ -282,6 +282,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - **Either way,** the work up to 14 Dec is the same, because the freeze commit records the renderer.
 - **Not proposed: moving P1 off Rainier.** A deep-archive camera such as Grand Teton would allow design H. But it would reopen §1 row 3, which the owner accepted, and §13.4 already covers an underpowered P1.
 - **Relation to D-011:** this fills its "Design H or P" line. D-011 itself stays proposed until the pre-registration commit.
+- **Amended 20 Nov (D-070):** until the owner confirms D-038's local-day reading, the held-out season's "local dates" are read as the camera's local date or the UTC date. An archived frame is held out if either is on or after 1 Jun 2026, so 31 May's local evening is held out at every ARD camera.
 
 ## D-020 — Viewpoint IDs and the 8-camera capture set · decided · 2026-11-19
 - **IDs** take the form `<place>.<site>`, lower case with hyphens:
@@ -358,6 +359,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - **Capture code:** `workers/capture/.../heldout.py` refuses archived frames dated 1 Jun 2026 or later in backfill, the archive check and the CLI. Only `--held-out-override "<reason>"`, meant for scoring, releases them, and every release is logged.
   - **Eval code:** eval's leakage guard defaults to design P's window and does not yet apply this archive guard. Adding it is integration work (W2).
   - **Data:** the 22 frames, their sidecars, the 7 contact sheets and the check's summary JSON were moved, not deleted, to `$LOOKOUT_DATA_DIR/quarantine/held-out-breach-2026-11-19/`. Its README gives the undo steps. `archive/` keeps 85 frames, the latest dated 15 Jan 2026.
+- **Amended 20 Nov (D-070):** until the owner confirms D-038's local-day reading, both guards also read the UTC date, so an archived frame is held out if its local or its UTC date is on or after 1 Jun 2026; capture's guard has also read `ImageCreateDateTime` as local standard time since D-047. The lead removed the six queue entries dated 31 May.
 
 ## D-023 — Two NPS fetchers ran at once, and Rainier got 5 downloads in an hour · decided (fixed in code; stopgap retired) · 2026-11-19 · closes D-021
 - **What happened:**
@@ -380,6 +382,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
 - **Still true:**
   - Until AWS is live (D-014), capture runs only while the laptop is awake and this session's background task lives.
   - Archive backfill can't run while the loop holds the lock. It needs the loop paused, or one process that does both, to be built in W2.
+- **Amended 20 Nov (D-065):** the lead's rule counts the 5-minute limit and the cap of 4 images an hour from the previous answer, not from the previous send as D-048 did after polls came up to 0.94 s early on 19 Nov. So both hold at nps.gov whatever the network does (capture 0.2.1, uncommitted and not running).
 
 ## D-024 — Evaluation design per viewpoint, from the archive check · decided (lead; the owner may change it before the 14 Dec freeze) · 2026-11-19 · closes D-019's open part
 - **Evidence:** `docs/research/nps-archive-check.md`, which uses only frames from before the guard plus metadata (D-022).
@@ -498,6 +501,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - Repo edits reach the jobs only when the lead re-snapshots, so state, log and file formats stay backward compatible.
   - The light profile leaves out `PRES:cloud base` (D-026).
 - **Ends** when the AWS jobs are live.
+- **Amended 20 Nov (D-076):** both jobs are children of the lead's session, and the lead's supervisor is written but not started. Since 02:39 UTC on 20 Nov they have run from snapshot `034c46b` with their own venvs (D-049), the forecast with 8 fields (D-050); the Mac was on battery again from 03:29 to 06:27 UTC (D-051).
 
 ## D-031 — Working around iCloud on this Mac · decided (lead) · 2026-11-19
 - **Problem:** the repo is in iCloud-synced `~/Documents` (D-017). iCloud sets the macOS `hidden` flag on files in the venvs, and Python 3.13 skips hidden `.pth` files, so `import lookout_common` fails outside pytest.
@@ -585,6 +589,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - the three rules added in review: the standard-time reading, the three archive signs, and the quarantine refused in any case and by identity.
 - **Evidence:** at the held-out fix, eval 262 passed, 1 skipped (318 passed, 2 skipped on the working tree at 01:46 UTC on 20 Nov); 47 of 48 mutants caught (the survivor is equivalent). On the real catalogue (metadata only), nothing on disk is held out: 85 archive records and 105 live frames. Capture's guard does not yet use the standard-time reading; a 12,000-case fuzz shows eval is never looser.
 - **Still to do:** fits inside one camera epoch (D-024's usable spans) need split version 2 (TODO(M2)).
+- **Amended 20 Nov (D-070):** capture's guard has read `ImageCreateDateTime` as local standard time since D-047 (`df1838a`), so the line above that it doesn't no longer holds. Both guards now also read the UTC date (capture 0.2.1 and eval, uncommitted): until the owner confirms the local-day reading, a frame is held out if its local or its UTC date is on or after 1 Jun 2026. The lead removed the six queue entries dated 31 May, whose evening frames carry 1 Jun UTC stamps. The split file's own text still describes the older rule (D-070).
 
 ## D-039 — Parser rule readings where PRD §7.4 is silent · proposed (for the owner) · 2026-11-19
 - **In the code now** (lookout-core; each pinned by table cases):
@@ -657,6 +662,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - PRD §13.2's order (split committed before any held-out frame is touched) is met only for split v1's held-out set, as D-022 redrew it. Split v1 leaves 15 Jul 2026 out of scoring at the seven ARD cameras, because frames of that day were downloaded and viewed on 19 Nov, before any split existed (D-022). For summer 2026 as D-019 first drew it, the order was not met.
   - The M0.5 pair's evidence file is committed in `d9aa416`.
 - **Still uncommitted** (10:45 UTC on 20 Nov): this workflow's packages, which D-047 to D-063 describe. Only the lead commits.
+- **Amended 20 Nov (D-064):** the third workflow's packages were committed the same way, one commit per package, at 12:35–12:36 UTC, then its planning docs at 12:45 (`08a996c` to `8459e7e`). The "still uncommitted" line above is out of date from there.
 
 ## D-047 — Capture's held-out guard also reads ImageCreateDateTime as local standard time · decided (lead, in df1838a) · 2026-11-20 · amends D-022
 - **Change:** `heldout.asset_local_dates` adds a fourth reading, the civil date of `ImageCreateDateTime` read as local standard time. An archived asset's date is the latest of the four; an asset with no readable date is refused. Eval's guard already read it so (D-038).
@@ -666,6 +672,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - Capture and eval agree on all 2.36 M random cases (`workers/capture/README.md`, the 20 Nov review).
   - The backfill plan's end-to-end run of 31 May with no Sun limit: Point Reyes and Acadia refused their 23:00–23:45 standard-time frames without a request, and Grand Canyon (Arizona keeps standard time) stored all 96 ([docs/research/archive-backfill-plan.md](docs/research/archive-backfill-plan.md), section 9).
 - D-038's line "capture's guard does not yet use the standard-time reading" no longer holds.
+- **Amended 20 Nov (D-070):** both guards now also read the UTC date (capture 0.2.1 and eval, uncommitted). Until the owner confirms D-038's local-day reading, an archived frame is held out if its local or its UTC date is on or after 1 Jun 2026.
 
 ## D-048 — Polls came up to 0.94 s early on 19 Nov; polls are now spaced send to send · decided (lead in df1838a; capture 0.2.1 in the working tree) · 2026-11-20 · amends D-023
 - **Breach:** CLAUDE.md allows a poll at most every 5 minutes. On 19 Nov, 8 of 504 per-camera poll gaps were 299.06–299.7 s, measured on send times (log time − `elapsed_ms`): Grand Teton, Point Reyes, Rainier ×2, the Smokies ×2 and Yosemite ×2, at 12:29 and 23:05–23:16 UTC (the second workflow's critic). The 4-an-hour cap held: at most 4 image GETs in any rolling hour at every camera.
@@ -678,6 +685,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - **After:** 24 h: 0 skips, gaps 300.001–300.539 s, passes 18.5 s on average (max 20.0 s). 10 days with a 20 ms storage delay: 0 skips, longest gap 300.726 s. `loop` for 72 h with 0 s and 30 s jitter: no gap under 300 s, no skip.
   - **Cost:** capture's billed waiting on Lambda falls from 35.7 s to 14.6 s a pass (D-060).
 - **Open, for the lead before committing 0.2.1:** the server sees a request after connection set-up and transit. The first request of a pass took a median 102.6 ms against 65.9 ms for the others (`workers/capture/README.md`). So a gap seen at nps.gov can be tens of ms shorter than ours, which a 1 s margin absorbs and a 2 ms margin does not.
+- **Amended 20 Nov (D-065):** the open question is settled by the lead's answer-time rule. A poll is due only at the previous poll's answer + 300 s + 2 ms, and the image cap counts GETs answered in the last 3,600 s, so the gaps hold at nps.gov whatever the network does. Fix 2's send-to-send margin is replaced; capture 0.2.1 implements the new rule (uncommitted, not running). Fix 1, 0.2.0's 1 s margin, still runs.
 
 ## D-049 — Re-snapshot at 034c46b with the runtime's own venvs; capture 0.2.0 is live · decided (lead; running) · 2026-11-20 · amends D-030
 - **The snapshot:** committed code at `~/lookout-data/cache/runtime/034c46b`, with its own venvs. It is outside iCloud, so its jobs need no `PYTHONPATH`. The running jobs no longer use the repo's venvs, so `make test` and `uv sync` in the repo are safe. That closes the critic's risk that a sync would swap packages under the running loop.
@@ -696,6 +704,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   
   D-028's and D-029's "State" lines are out of date from here.
 - **The switch kept one far frame for one hour** (`workers/capture/README.md`). For hour 03:00 UTC, Acadia, Grand Canyon, Grand Teton and Yosemite kept 0.1.0's 02:30:00 frame, 1,800 s from the hour, as the hour's only full-size frame. Their 02:45, 03:00 and 03:15 frames survive only as thumbnails. A frame whose sidecar has no `hourly_selection` comes from the every-frame code, and eval should not read it as the frame nearest its hour.
+- **Amended 20 Nov (D-076):** the jobs this entry restarted are children of the lead's Claude Code session (parent pid 72719, through zsh), so ending that session can stop them. The lead's supervisor, written but not started, would restart them in their own session once they exit.
 
 ## D-050 — The forecast stand-in keeps PRES:cloud base: 8 fields, f00–f02 · decided (lead; running) · 2026-11-20 · amends D-030
 - **Profile from 02:39:49 UTC on 20 Nov:** VIS, cloud ceiling, cloud base, `PRES:cloud base`, LCDC, MCDC, HCDC and terrain, at f00–f02, at most 40 MB a run. D-026 asked for `PRES:cloud base`; the default field set already keeps it.
@@ -754,6 +763,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - ask eval to register the Big Bend and Grand Canyon check frames;
   - queue T1b while T1a runs, then T3pr's six clear days once T1a has landed.
 - **Archived HRRR for these dates is the forecast package's job:** 361 development dates through T2 (424 with T1c), about 96 GB of transfer at the 24 h lead through T2 (113 GB with T1c), deleted after extraction.
+- **Amended 20 Nov (D-070 to D-072):** the lead removed the six 31 May entries and resumed Big Bend's failed entry, so the queue holds 441 entries. The plan was regenerated from the live queue: T3pr goes ahead of T1b, and the dates before D-024's spans form TQ for the owner instead of extending the spans. Against this entry's finish days, at 1.0 % errors, T3pr moves 4 days earlier (25 Nov), T1b (30 Nov) and T2 (11 Dec) a day later, and T1c stays on 15 Dec (16 Dec at 3.7 %), assuming the lead resumes failed entries every day.
 
 ## D-053 — Forecast 0.2.0: survey lags in the model, `tick`, explicit hours · decided (forecast package; uncommitted, not running) · 2026-11-20 · amends D-027
 - **Survey lags** (`lookout-forecast lag-survey --log`) are written only by that command, as `"method": "survey"` events in `forecast_log/lag_survey/<day>.jsonl`, under the lock `state/locks/forecast-lag-survey.lock`. A survey never logs an hour already logged, live or survey. Where both exist the live lag wins; both enter the p95.
@@ -794,6 +804,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - eval's `pair_forecast.choose_run` should pass `listed_availability`, or choose among stored files with `select_stored_run`;
   - PRD §8.3's "modelled as run start plus the live-measured p95 lag" may want the floor added. That is a spec change, not a fact, so v0.4.1 leaves it.
 - **Risks:** a real publication delay of over 24 h would be read as a rewrite (none seen; the largest is 131.2 min). The 300 s margin is empirical (largest gap seen 188 s).
+- **Amended 20 Nov (D-073):** eval's `choose_run` now passes `listed_availability`, so the backtest pair's run choice applies the floor; the M0.5 pair's choice is unchanged.
 
 ## D-055 — Speech library 0.2.0: the C ABI, a stable-text event, and symbol checks · decided (speech package; never run on the recognizer) · 2026-11-20 · amends D-015
 - **What:** `app/speech-macos/`, a Swift static library with a C ABI (`include/lookout_speech.h`). It runs engine A1, SpeechAnalyzer with `DictationTranscriber`, on device only. `lookout-transcribe` replays a WAV through the ABI; its timings are diagnostics, never the D-004 or PRD §10.6 measure.
@@ -828,11 +839,13 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - which identity AssetInventory reservations and TCC key on (TODO(M1));
   - whether a session runs with Speech Recognition "not determined" and no prompt. Apple's documentation says SpeechAnalyzer's transcribers don't need that permission (TODO(M1)).
 - **Not in it:** the Foundation Models parser fallback (TODO(M2)).
+- **Amended 20 Nov (D-074):** the lead rebuilt the spike against this library at 12:36 UTC, so checks 6 and 7 run on 0.2.0. The silence pad's default is decided in D-067: 0 ms, set and logged by the shell and the harness.
 
 ## D-056 — The silence pad defaults to 0 ms until the bake-off measures it · proposed (for the lead) · 2026-11-20
 - **Why it needs a decision:** PRD §7.1's finalization lever 1 (a burst silence pad at key-up) is to be "measured, not assumed". The library's default is 0 ms, so a caller that never sets it runs with lever 1 off. The spike never calls `lk_speech_set_silence_pad_ms`, so its check-6 trials run without a pad.
 - **Proposal** (the speech package): keep 0 ms as the library's default. The M1 shell and harness set the pad explicitly and log it with each trial. The bake-off measures the pad, model retention and a launch-time warm-up.
 - **Needed from the lead:** confirm, or choose another default before the bake-off.
+- **Amended 20 Nov (D-067):** decided by the lead as proposed. The library's default stays 0 ms; the M1 shell and the harness set the pad explicitly and log it with every trial; the bake-off measures it. The spike's check-6 trials run with the pad off, which is fine for a platform check.
 
 ## D-057 — The M1 replay script: 130 utterances, with owner-pending rows reported apart · decided (bench package; nothing recorded) · 2026-11-20
 - **The script:** `bench/utterances/scripted.tsv`, 130 rows (30 dev, 100 test). Every one of the 77 aliases is said, and the script hash, over id, split and text, is `3b4256f1cf51`. There are 6 reference clocks.
@@ -862,6 +875,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
 - **Open, for the lead before the first overnight run:**
   - whether idle passes keep the display awake (`caffeinate -di`, or the Lock Screen setting) or let it sleep and report those trials apart. This Mac turns its display off after 10 min on AC, and every idle trial follows 30 min without a query;
   - whether follow-up trials may be idle. PRD §7.4 sets no expiry for the last place asked about.
+- **Amended 20 Nov (D-068):** both open items are decided by the lead. Idle trials keep the system awake (`caffeinate -i`, never `-d`) and let the display sleep as the Mac's settings do; each trial logs the display state, and display-asleep trials are reported apart as well as inside the totals. Follow-up rows may be idle trials, reported as idle follow-ups.
 
 ## D-058 — More parser readings for the owner · proposed (for the owner) · 2026-11-20 · amends D-039
 - **From the replay script** (D-057). The parser and the reading agree on each; the owner confirms or changes them with D-039, by 14 Dec:
@@ -917,6 +931,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - capture takes a lock and writes its state at every poll: 5,360 PUTs a day, $0.80 a month;
   - forecast re-checks its 12 h lookback with a HEAD per viewpoint: $0.33 a month;
   - old state versions are kept 30 days: about $0.04 a month.
+- **Amended 20 Nov (D-066):** with capture 0.2.1's answer-time rule (D-065), the estimate with the free tiers is $2.43–4.40 in month 1 ($2.43–3.35 with a 20 s Lambda window), and the bottom of the range passes $3 in month 4 instead of month 6. The 0.2.1 line above (14.6 s of waiting, $2.07–2.81) came from a zero-latency simulation of the earlier 0.2.1 and no longer holds.
 
 ## D-061 — The M0.5 data report, and how the 72 h clock is counted · decided (eval's counting rules; the clock rule is proposed for the lead) · 2026-11-20
 - **Tool:** `lookout-eval data-report [--since] [--until] [--json]` (`eval/src/lookout_eval/data_report/`). It reads logs, state and the disk, and writes nothing. It builds the gate's table: runs and frames per viewpoint, outages and exclusions (PRD §16, M0.5). The second workflow's critic found no tool that did.
@@ -938,6 +953,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - 40 data-report tests;
   - 14 of 14 mutants killed (the eval fixer's `mutate.py`; re-run on a scratch copy of the working tree at 11:43 UTC on 20 Nov: baseline 53 passed, 14 of 14 killed);
   - an independent standard-library script matched all three clocks to the millisecond (06:33:54 UTC cut).
+- **Amended 20 Nov (D-069):** the lead chose the rule: the union of both jobs' outages plus each capture restart's excess. The report's headline is now that rule (JSON `schema_version` 2), with PLAN.md's capture-only figure beside it. To 15:46:36 UTC on 20 Nov: 10.48 h lost, so the earliest close is 22:53:14.871 UTC on Sun 22 Nov (PLAN.md's figure: 22:36:51.258).
 
 ## D-062 — oculus-core provenance: records now name the build that ran · decided (eval; uncommitted) · 2026-11-20 · amends D-025
 - **Change:** eval's `OculusBackend.version` reads the commit from the installed `oculus-core-py`'s PEP 610 `direct_url.json`, giving `0.1.0+1b5410b`. When only the pin is known it adds `.pinned`.
@@ -965,6 +981,278 @@ Every model, vendor, data-source and architecture decision, with the evidence be
 - **Evidence:**
   - `make test` passed all 10 suites, 10:30:57–10:34:41 UTC on 20 Nov (224 s): common 258, capture 191, forecast 177, eval 367 (1 skipped), renderer 183, rust 108, speech 103, infra 113, docs 85 and bench 40;
   - with dependencies cached, all 10 suites also passed under a sandbox that denied every outbound connection and DNS (223 s; the Makefile's header).
+- **Amended 20 Nov (D-075):** `make test` runs capture's slow tests on purpose (4 of them since capture 0.2.1); `make test-speech` also runs `scripts/build.sh --no-test`; a separate `make bench-script` checks the script against the real parser. CI still runs every suite but `speech`.
+
+## D-064 — The third workflow's packages committed one per package, then the planning docs · decided (lead) · 2026-11-20 · amends D-046
+- **Committed by the lead** on branch `m0-prd`, in the third workflow's critic's order (git's times, UTC on 20 Nov):
+  - `08a996c` forecast 0.2.0: survey lags, `tick` and the archived stamp floor (D-053, D-054), 12:35:35;
+  - `1a39820` eval: the 72 h data report, oculus-core provenance and the backfill planner, with the lead's `sent_at` reader (D-061, D-062), 12:35:45;
+  - `e59247a` infra: capture's IAM grants, the offline provider install and the cost estimate (D-059, D-060), 12:35:51;
+  - `8443bf3` speech-macos 0.2.0 and `lookout-transcribe` (D-055), 12:35:57;
+  - `dc28c2a` bench, the M1 owner runbook and the README skeleton (D-057), 12:36:06;
+  - `6b94942` docs: the archive backfill plan, the archive check's correction and the NPS email's figures (D-042, D-052), 12:36:06;
+  - `951b704` build: `make test` and CI for speech, bench, infra cost and the docs checks (D-063), 12:36:19;
+  - `8459e7e` docs: D-046 to D-063, PLAN.md, PRD_PROGRESS.md, the PRD and the notices, 12:45:03. Before committing, the lead corrected the "linked only against a stub" wording in PLAN.md (M1 1a), PRD_PROGRESS.md (M1-01) and the spike README (check 6): the spike's 03:39 UTC build linked the real library 0.1.0 (D-074). `make test-docs` then passed its 85 tests.
+- **Held back:** capture 0.2.1, until D-048's margin question was settled. D-065 settles it.
+- **Uncommitted at about 16:00 UTC:** capture 0.2.1 (D-065, D-066); eval's data report, held-out guard and pair choice (D-069, D-070, D-073); the backfill planner (D-072); the Makefile, the CI comments and CLAUDE.md's layout line (D-075); these docs. Nothing has been pushed.
+- **What this changes in earlier entries:** D-053 to D-055, D-057 and D-059 to D-063 now describe committed code. The jobs still run snapshot `034c46b` (D-049), so forecast 0.2.0 doesn't run yet.
+- **Amended 20 Nov (D-078):** the fourth workflow's packages were committed the same way: `b9520e2`, `7f76411`, `3f48e75` and `670138b`, then its planning docs.
+
+## D-065 — Polls and image GETs are spaced from the previous answer, not the previous send · decided (lead; capture 0.2.1 implements it, uncommitted and not running) · 2026-11-20 · amends D-023, D-048
+- **Rule** (the lead, settling D-048's open question):
+  - A camera's next poll is due only when the clock has reached the previous poll's answer time + 300 s + 2 ms (`POLL_MARGIN_S`, for the millisecond stamp).
+  - The answer time is one clock reading, taken when the response has arrived or the request failed.
+  - The image cap counts the same way: a GET may be sent only while fewer than 4 of the camera's GETs were answered in the last 3,600 s.
+- **Why:** nps.gov receives a request no later than it answers it, and receives the next no earlier than we send it. So answer + 300 s guarantees at least 300 s at nps.gov whatever the network does. A send-to-send margin can't, because a request reaches the server after connection set-up and transit (D-048).
+- **The running 0.2.0, measured by the lead** (1 s send-to-send margin; `request` records of runner `cli-loop` in `capture_log/2026-11-20.jsonl`, 02:39:39–12:36 UTC):
+  - 712 consecutive poll pairs over 8 cameras, all at least 301.053 s apart send to send;
+  - on the provable basis (the next send minus the previous record's `t`, which is written after the answer), 1 pair of 712 is not provably 300 s apart at nps.gov: Acadia, 299.590 s. Send to send it was 301.066 s, so nps.gov saw between 299.590 and 301.275 s (eval's review). The other seven cameras' bounds were 300.869–300.979 s;
+  - image GETs: in every window of 5 consecutive GETs, the 5th's send minus the 1st's answer was at least 3,720.2 s;
+  - under the 2 ms send-to-send margin of D-048's fix 2, nearly every pair would be unprovable: 300.002 s less the previous request's elapsed time.
+  - **Re-measured** by the docs agent with eval's data report (D-069), whose bounds widen each stamp for its millisecond rounding, to 15:46:36 UTC: since 02:39:39, 1 of 1,008 poll pairs is not provably 300 s apart (Acadia, least possible gap 299.588 s), and none of 316 five-GET windows (least span 3,720.229 s). Since 12:24:23 on 19 Nov: 10 of 1,560 pairs, the other 9 from 0.1.0 before the restart (D-048).
+- **As built in capture 0.2.1** (`workers/capture/README.md`):
+  - answer stamps (`answered_at`, `last_answer_at`) are rounded up to the millisecond and send stamps truncated, so each pair proves itself from the log: a poll's `sent_at` minus the previous `answered_at` is at least 300.002 s;
+  - each poll is reserved and saved before its send, as each GET already was;
+  - a live request not on its way 30 s after its reservation is abandoned unsent, so a request with no saved answer counts as answered 60 s after its reservation (the deadline plus the 30 s write timeout). httpx's timeouts each cover one operation, and DNS none, so they give no such bound;
+  - a 0.2.0 state counts as answered at the later of its send + 60 s and the moment 0.2.1 first reads it, and its GET records from their `t` + 62 s. This is tested on a real 0.2.0 state copied from the running loop;
+  - within a process, answers are also read on a monotonic clock, so a forward wall-clock step can't bring a poll early. Across a restart the exposure equals the step, which a test measures;
+  - a pass waits for slots only inside its own window, counted from its start (Lambda 45 s, `loop` 60 s). Counted from each camera's visit instead, passes reached 78.1 s (p99 74.0 s) over 10 days;
+  - `request` records gain `sent_at` and `answered_at`, and `archive_request` records gain `runner`. `STATE_SCHEMA` stays 1, because every new field is optional.
+- **Measured on a fake clock** (the real capture code against a fake nps.gov that logs each receipt, with request times drawn from 1,024 real 0.2.0 answers; the capture package's scratch scripts):
+  - **the 2 ms send-to-send rule** on the exact Lambda schedule: 1,027 of 2,296 poll pairs under 300 s at the server in 24 h, down to 296.659 s, and 11,050 of 23,032 in 10 days;
+  - **this code:** 0 pairs under 300 s at the server in every run (24 h and 10 days; with a storage delay, 0–2 s of invocation jitter, or 1 % request spikes of 2–8 s). The smallest gap provable from the log is 300.002 s, and every 5 consecutive GETs span at least 3,601.0 s;
+  - **`loop` for 72 h** with its default 0–30 s jitter: 0 of 6,592 pairs under 300 s (207 with the old code), and no skip.
+- **The cost on Lambda's exact `rate(5 minutes)`:** each poll lands its elapsed time later than the last, so a camera sometimes falls outside a pass's window and skips that invocation, which leaves one gap of about 555–622 s.
+  - 1.12 skips per camera per day over 24 h, and 1.43 over 10 days, with the measured request times; 94–95 of 96 images per camera per day.
+  - The review's other models gave 1.95–2.98 (6.53 with 0.45 s median requests), 3.9 with 0–30 s of invocation jitter and 36.6 with 0–60 s. EventBridge's real jitter is measured after deployment.
+  - Passes: p99 about 46–52 s. The longest reached 83.5 s when the latency pool included the log's 10 s TLS and 30 s read timeouts, inside Lambda's 95 s reserve.
+  - Billed waiting: about 36 s a pass (D-066).
+  - The window is one constant, `lambda_handler._WAIT_FOR_DUE_S`, 45 s until the lead chooses. 20 s gives 3.33 skips per camera per day and 17.7 s of waiting over 10 days, still with 0 pairs under 300 s.
+  - **Open, for the lead before the sealed window (15 Dec):** whether design P counts an outage per pass or per camera. A skip is one camera's gap, skips cluster (in one review run, 25 of 109 passes with a skip skipped 2–6 cameras), and the data report's 540 s threshold today applies only between passes.
+- **Tests:** 19 new server-side, schedule and crash tests fail on the pre-change code and pass on this code. D-066 has the final suite counts.
+- **Not running:** the loop runs 0.2.0 from snapshot `034c46b`. Restarted within seconds of a pass's end, the switch costs each camera about 60–70 s more than a normal gap (the review's upgrade simulation: 359.9–370.1 s at the server), and up to about 300 s if restarted just before the next pass. D-069 counts it as restart excess.
+- This supersedes D-048's fix 2, the 2 ms send-to-send margin.
+
+## D-066 — Capture 0.2.1's guards for requests that fail, redirect or stall, and what 0.2.1 costs on AWS · decided (capture package; uncommitted); the estimate is proposed for the owner with D-035 · 2026-11-20 · amends D-060
+- **Found by this workflow's two capture reviews,** each reproduced with the real capture code on a fake clock or over loopback (127.0.0.1); nothing reached nps.gov. Fixed in capture 0.2.1 (the version is unchanged):
+  - **A failure that may still reach nps.gov:** a request that failed after it may have left the machine, with no response head back (a read timeout, a reset, an interrupt), counts as answered 300 s after the failure (`FAILED_AFTER_SEND_BOUND_S`), because a queue on the server side can hand it on after we gave up. A failure that proves nothing was sent (connect, TLS, pool, the send deadline), or one after a response head, is not bounded.
+    - The reviewers' loopback runs put the next allowed poll 296.0–299.5 s after the server read the failed one; now 597.0–599.5 s.
+    - `capture_log` holds 3 such failures in 2,065 live requests (12:24 UTC on 19 Nov to 15:17 on 20 Nov).
+    - 300 s is an assumption about queues on the server side, not a proof.
+  - **No redirect is followed** by the live, archive or queue clients. A 3xx is an error, logged with its `Location`, and the archive does not retry it. Before, a same-host 301 made nps.gov see 48 polls a camera against 24 logged in 2 h. Nothing suggests that nps.gov redirects these URLs today.
+  - **Total deadlines:** a poll's body must arrive within 30 s of the request's start and an image's within 60 s. So a body that trickles in can no longer hold a visit past the S3 lock's 300 s lifetime (reproduced with moto: a second runner took the lock over, and the first runner's save then lost the second's poll).
+  - **A rollback to 0.2.0 stays polite:** while a poll is reserved, `last_poll_at` holds the reservation + 60 s. Restarted right after a crash between send and save, the real 0.2.0 code (`034c46b`) waits 360.7 s, not 1 s.
+  - **The send deadline counts system sleep:** it is checked on the wall clock and on a monotonic clock that counts sleep (`CLOCK_MONOTONIC_RAW` on macOS). On this Mac, `time.monotonic()` was 2,159,174 s behind that clock. Before, an hour's sleep between the reservation and the send let the poll go out an hour late.
+  - **Also:**
+    - on Lambda each request record names its execution environment (`lambda_log_stream`), because the 2 ms margin assumes that Lambda hosts' clocks agree to within 2 ms, which is unmeasured;
+    - `answer_bound` records are dated when they are written;
+    - `cadence` measures poll spacing send to send, and `status` says what the next poll counts from (`next_poll_basis`);
+    - inside the loop, the archive queue starts at least 1 s after the last live request (the 20 Nov log has a live-to-archive gap of 0.005 s).
+- **Tests:** 16 new cases. 14 fail on the pre-fix code, and mutants catch the other 2. Capture: 249 passed (4 slow deselected), and the slow set 4 passed; ruff, format and `uv lock --check` clean. eval: 403 passed, 1 skipped.
+- **Left open:**
+  - a conditional (`If-Match`) state write on S3, in `lookout_common.storage` (its owner), so that a holder whose lock was taken over can't overwrite the next holder's state;
+  - resetting a failed socket so the kernel drops an unsent head (`SO_LINGER`), which needs httpcore's internals;
+  - the Lambda hosts' clock offset, measurable only after deployment.
+- **Cost against D-060** (`infra/cost/sim_capture_s3.py` on scratch exports of the code, 24 h against a mock bucket, then `infra/cost/estimate.py`; computed, and nothing ran on AWS):
+  - S3 calls a day: 11,048 PUT and 10,176 GET, against 8,944 and 7,902 for the committed 0.2.0 that D-060 priced (+2,104 PUT, +2,274 GET). State and lock PUTs: 7,624, against 5,360.
+  - Billed waiting with real request times is about 36 s a pass. D-048's 14.6 s came from a zero-latency simulation; with real request times its 2 ms code also crept, to 37.2 s.
+  - **With the free tiers: $2.43–4.40 in month 1** at 36 s of waiting ($2.43–3.35 with a 20 s Lambda window), against D-060's $2.07–4.03. The bottom of the range passes the $3 cap in month 4 instead of month 6. At the top, the hard stop would come on about day 25.7 of month 1, not 26.7.
+  - D-035's recommendation stands: keep the email alerts, and switch the hard stop off for the sealed window.
+  - **A lever for the owners:** on S3, treat the takeover of an expired camera lock as the crash signal and drop the poll-reservation PUT, about $0.34 a month. It needs `lookout_common`'s S3 lock to report a takeover.
+
+## D-067 — The silence pad: 0 ms in the library, set and logged by the shell and the harness · decided (lead) · 2026-11-20 · closes D-056
+- **Decision** (the lead, as D-056 proposed):
+  - the library's default stays 0 ms (`lk_speech_set_silence_pad_ms`, D-055);
+  - the M1 shell and the replay harness set the pad explicitly and log it with every trial;
+  - the bake-off measures it, with model retention and a launch-time warm-up (PRD §7.1's finalization levers, "measured, not assumed").
+- **The spike's check-6 trials run with the pad off.** That is fine for a platform check, which asks whether the library returns partials and exactly one FINAL. Its release → FINAL numbers are reported as lever 1 off.
+- `app/speech-macos/README.md` still asks the lead to record this default; its owner can close that item.
+
+## D-068 — Idle trials keep the system awake and let the display sleep; follow-ups may be idle · decided (lead) · 2026-11-20 · amends D-057
+- **(a) Display sleep:** idle trials keep the system awake with `caffeinate -i`, never `-d`, and let the display sleep as the Mac's own settings do, as in real use (on AC this Mac turns its display off after 10 minutes, D-057).
+  - Each trial logs the display state; the harness trace gets that field (TODO(M1), M1-09).
+  - Display-asleep trials are reported apart, and also inside the totals.
+- **(b) Follow-ups:** follow-up rows may be idle trials, because PRD §7.4 sets no expiry for the last place asked about. They are reported as idle follow-ups.
+- **What it changes:** the first night's dry-run question, whether paint capture still works once the display sleeps, now applies to every night ([docs/m1/owner-runbook.md](docs/m1/owner-runbook.md), step 6).
+- This closes D-057's two open items. The rest of D-057 stands.
+
+## D-069 — The 72 h clock counts both jobs' outages and each capture restart's excess · decided (lead; eval's data report implements it, uncommitted) · 2026-11-20 · amends D-061
+- **Rule** (the lead; the stricter reading of PRD §16's "worker and capture logs"): lost time is the union of both jobs' outages, plus each capture restart's excess. A restart's excess is the longest any camera went from its last poll before the restart to its first poll after it, less one 300 s interval, if positive. PLAN.md's capture-only figure stays beside it for comparison.
+- **As built** (`lookout-eval data-report`, whose JSON is now `schema_version` 2):
+  - `clock.lost_h`, `covered_h` and `earliest_close_utc` are the gate rule. PLAN.md's figure moved to `clock.plan_md_capture_only`, and `clock.by_job` gives each job alone;
+  - the excess is the interval from that camera's last poll + 300 s to its next poll, unioned with the outages, so a restart that is also an outage counts once;
+  - a restart splits each camera's polls at the old loop's last record (its `loop_stopped` record, else its last record under the old version and runner). A restart just before `--since` counts the part of its excess inside the window.
+- **Measured** (read-only, on the live data):
+  - **to 13:15:00 UTC on 20 Nov,** by the eval package, and by an independent standard-library script to the millisecond: the gate rule's 10.48 h lost, so the **earliest close is 2026-11-22T22:53:14.871Z (Sun 22 Nov)**. PLAN.md's figure: 10.21 h, 22:36:51.258Z. Capture alone: 22:39:56.728Z. Forecast alone: 18:26:42.991Z;
+  - **the 02:39 restart** (D-049): 185.471 s of excess, set by Acadia (last poll sent at 02:36:58.471Z, the next at 02:45:03.942Z). Across the eight cameras it was 183.080–185.471 s, inside D-061's 183–186 s. It overlaps no other outage, so the gate close is D-061's both-jobs close (22:50:09.401Z) plus the excess, 185.4708 s unrounded: 22:53:14.8718Z, which the report prints cut to the millisecond as 22:53:14.871Z (the eval review's independent script, in microseconds);
+  - **re-run by the docs agent to 15:46:36 UTC:** the same four closes; 16.89 h covered of 27.37 h elapsed; no outage since 06:29:29.
+- **Polite collection at nps.gov is in the report now** (PRD §15.3). Per viewpoint it gives:
+  - the least gap nps.gov can have seen between consecutive polls: the next poll's earliest receipt minus the previous one's latest;
+  - the least span of every 5 consecutive image GETs;
+  - how many pairs or windows are unproven: not provably 300 s (3,600 s) apart, which is not the same as shown closer.
+  
+  An answer read from `t` is widened by 1 ms, and a send from `t − elapsed_ms` by 0.05 ms, for the stamps' rounding. A request with no usable send time proves nothing. The figures are in D-065.
+- **Evidence:** eval 403 passed, 1 skipped; 58 data-report tests; 59 of 60 mutants killed. The survivor is a `loop_stopped` record at exactly a pass boundary, which capture never writes.
+- **Open, for the lead:** a camera not polled again after a restart is measured to the window's end, so a camera dropped at a restart would keep the clock from ever closing (the review's test: 9.5 h lost of a 10 h window). Today's restart is unaffected: all 8 cameras were polled again. The review suggests measuring only the cameras the new loop polls, and listing the others apart.
+- **The re-snapshot to capture 0.2.1 is a restart:** about 60–70 s of excess if it is made within seconds of a pass's end (D-065).
+- TODO(M1) in eval: split at a pass's wall-clock start once capture logs one; neither 0.2.0 nor 0.2.1 does.
+- **Amended 20 Nov (D-078):** a camera with no poll after a restart is flagged in the per-viewpoint table and left out of that restart's excess, so one dropped camera cannot keep the clock from closing (`TODO(M1)` in eval; no figure changes).
+
+## D-070 — The held-out archive edge read on the local or the UTC date until the owner confirms D-038; six 31 May queue entries removed · decided (lead, pending the owner) · 2026-11-20 · amends D-019, D-022, D-038, D-047, D-052
+- **Reading** (the lead): until the owner confirms D-038's local-day reading, CLAUDE.md's "dated 1 Jun 2026 or later" means either the camera's local date or the UTC date. An archived frame is held out if any reading of its date, local or UTC, is on or after 1 Jun 2026.
+  - That holds out 31 May's local evening at every ARD camera, from 00:00 UTC on 1 Jun: 16:00 in local standard time at Point Reyes and Yosemite, 17:00 at Grand Canyon and Grand Teton, 18:00 at Big Bend and 19:00 at Acadia and the Smokies. NPS stamps summer frames in local standard time (D-047).
+- **The queue:** at about 12:40 UTC the lead removed the six entries dated 2026-05-31 (Point Reyes, Grand Canyon, Yosemite, Acadia, the Smokies and Big Bend; `hires`, hourly, Sun ≥ 2°), whose evening frames carry 1 Jun UTC stamps. Nothing of theirs had been requested. A copy of the queue before the edits is in the lead's scratchpad.
+- **In code** (capture 0.2.1 and eval, uncommitted): capture's `heldout.asset_utc_dates` and eval's `nps_utc_dates` read
+  - the instant's UTC date, under both conventions;
+  - each local clock in the camera's zone: both sides of a DST fold, and D-047's standard-time reading;
+  - for a date with no readable clock, every UTC date its local day touches (fail-closed).
+  
+  Day-level refusals stay at 1 Jun. Evidence:
+  - both suites hold the same per-zone edge table, and the queue test refuses the 31 May asset stamped 10:45 PM (11:45 PM PDT);
+  - eval's parity fuzz loads capture's file and checks that the two guards agree: 6,000 cases (the builder), 0 disagreements;
+  - the capture review's own fuzz (`fuzz_heldout.py`, 130,000 cases over two seeds, each built from a true instant and then mutated) found 0 disagreements and allowed no asset whose true UTC or civil date is on or after 1 Jun. It refused 10,384 of the 58,238 truly allowed cases (8,004 of 44,744 in its 100,000-case run), every one with a mutated stamp: fail-closed. None of the 13,139 truly allowed cases with both stamps as NPS writes them was refused (re-run by the docs fixer on the working tree);
+  - the backfill planner applies the same edge by instant: 30 May 2026 is the last plannable date at all six cameras (D-072);
+  - two eval tests now encode this reading. They pass with the new `heldout.py` and fail with HEAD's, so they are committed with it.
+- **Capture's guard has read the standard-time reading since D-047** (`df1838a`), so D-038's "capture's guard does not yet use the standard-time reading" no longer held from 20 Nov.
+- **Open:**
+  - **The running loop lacks the UTC reading:** 0.2.0 allows 31 May evening assets (reproduced in the review). Nothing is exposed, because the queue ends on 30 May. Until the loop runs 0.2.1 and the owner has confirmed D-038, no 31 May entry is added.
+  - **The split's text:** `eval/src/lookout_eval/heldout_periods.json`'s `archive_guard.date_rule` still calls the standard-time reading "eval only" and doesn't mention UTC dates. The code is right. Editing the text changes the split's SHA-256 (`c437544e…`), which every record carries, so a split version bump is the lead's call.
+  - **The owner** may re-allow the six entries, about 92 requests at today's shares (D-072), by confirming D-038's local-day reading (PRD_PROGRESS.md, owner action 9).
+
+## D-071 — Big Bend's failed backfill entry resumed; the queue after the lead's edits · decided (lead; operation) · 2026-11-20 · amends D-052
+- `big-bend.panther-junction/2025-06-14` failed after three search ReadTimeouts at 11:30:05 UTC. At about 12:40 UTC the lead resumed it (`archive queue resume`, offline). It retries in the next UTC day's budget.
+- **The queue after both edits** (this one and D-070): 441 entries; 180 done, 260 pending and 1 active (`point-reyes.beach/2025-07-19`, part done); the last date is 2026-05-30.
+  - Listed again offline at 15:47 UTC (`lookout-capture archive queue list --json`, the working tree's code): the same counts, and 1,000 of the day's 1,000 requests spent, so the next request waits for 00:00 UTC on 21 Nov.
+- **It will happen again:** in the planner's runs on the real queue runner, a day search failed three times running about once every 9–13 simulated days at 20 Nov's error pattern. The plan's finish days assume a daily resume (D-072).
+
+## D-072 — The backfill plan regenerated from the live queue: T3pr ahead of T1b, TQ for the owner, a daily resume · decided (backfill planner; uncommitted; queuing is the lead's) · 2026-11-20 · amends D-052
+- **Inputs:** a read-only copy of the queue at 12:47:40 UTC (441 entries; 180 done, 260 pending, 1 active), with each entry costed from its progress, and inputs re-measured on the queue's first 1,000 requests ([docs/research/archive-backfill-plan.md](docs/research/archive-backfill-plan.md), revised; `eval/tools/backfill_plan/`).
+- **Requests still to send:** T1a 3,864, as queued; T1b 367 entries, 4,812; T3pr 10 entries, 271 (318 with T3pr first); T2 738 entries, 10,975; T1c 409 entries, 4,715.
+  - Through T1c: 24,637 requests over 1,785 entries and about 1.22 GB of frames (0.49–1.91 GB), so about 1.26 GB in all against the 5 GB cap.
+  - Frames through T1c: the 822 stored on 20 Nov plus 22,881 to come, about 23,700 (about 1.4 GB with the day searches). That is the NPS email's figure (the plan, section 7); TQ would add about 3,000.
+- **Spans and TQ:**
+  - The regular tranches keep D-024's starts, read as the archive check's first 16:9 sample: 15 Jul 2023 at Point Reyes; 15 Jul 2024 at Grand Canyon and the Smokies; 15 Jan 2024 at Yosemite and Acadia. So T1b, T2 and T1c hold exactly the morning plan's dates.
+  - The dates between T0's first 16:9 frame (D-052) and those starts form **TQ**: 232 entries and 3,253 requests at five cameras, queued only if the owner agrees. TQ replaces D-052's next step, "extend the spans".
+  - Big Bend keeps its Jan 2025 start for its view check. Grand Canyon's 3:2 epoch stays out, and its winter 2024/25 stays held.
+- **The UTC edge** (D-070): a date is plannable only if its local date is before 1 Jun 2026, the latest instant any of its frames can carry is before 2026-06-01T00:00Z, and that frame's wall-clock date is before 1 Jun. At all six cameras the last plannable date is 30 May 2026. The planner refuses to plan behind an open queue entry that fails either reading.
+- **Finish days** at 1,000 requests a UTC day from 21 Nov, at 1.0 % (3.7 %) errors, with T3pr ahead of T1b as recommended: T1a 24 (25) Nov, T3pr 25 Nov, T1b 30 Nov, T2 11 Dec and T1c 15 (16) Dec. TQ, after T1c, would land on 19 Dec.
+  - **Against PLAN.md's targets** (T1a by Tue 24 Nov; T0–T1b and T3pr by Sun 29 Nov; T2 by Thu 10 Dec; T1c by Tue 15 Dec): at 1.0 % errors T1b (30 Nov) and T2 (11 Dec) miss by a day, while T1a (24 Nov), T3pr (25 Nov, 4 days early) and T1c (15 Dec) meet theirs. At 3.7 % errors T1a (25 Nov) and T1c (16 Dec) also miss by a day. The nine UTC days through 29 Nov hold 8,910 useful requests at 1.0 % errors (8,665 at 3.7 %), and T1a, T1b and T3pr need 8,947 in either order, so no order meets both 29 Nov targets. With T3pr first, T1b is 37 requests short on 29 Nov and T2 122 short on 10 Dec.
+  - **The bottleneck:** the budget of 1,000 requests a day, plus 4–5 % more requests from the re-measured share of a complete day.
+  - **Why T3pr first:** behind T1b it lands on 30 Nov at both error rates, after its 29 Nov due date (Point Reyes's M2 plate inputs). Ahead of T1b it lands on 25 Nov, and T1b moves from 29 to 30 Nov.
+- **A daily resume:** without one, 7 of 16 multi-day runs on the real queue runner ended with 1–2 failed entries (10 in all), and their tranches never finished. With a daily `archive queue resume`, every run of all 4 seeds matched the schedule to the day. So the finish days assume the lead resumes failed entries every day (D-071).
+- **Time model:** replaying 20 Nov's own outcomes gives 1.835 h of loop time per 1,000 requests (1.816–1.852 h), against 1.849 h for the real loop. That is a consistency check on its own day; 21 Nov's log gives the first check out of sample. The loop needs at least 2.2 h a UTC day (2.3 h covers every seed at 3.7 % errors).
+- **Inputs re-measured:** 689 hourly `hires` frames, all 999×562, at 51,734 B on average (31,316 B at Point Reyes to 79,973 B at Yosemite); a complete day's share 0.938–0.996 by camera, 0.961 pooled; 1.0 % of the queue's first 1,000 requests failed.
+- **Spacing, recounted exactly:** of the queue's 999 end-to-start pairs on 20 Nov, 991 were at least 5.0009 s, 7 were 5.0004–5.0008 s, and 1 was 4.9944 s (09:56:47.412 → 09:56:52.672 UTC); the median was 5.0109 s. On 19 Nov the least of 216 was 5.0005 s.
+  - On the log's stamps, that one pair missed CLAUDE.md's "at least 5 s apart" by 5.6 ms. It is recorded on its own, with its proposed fix, in D-077.
+  - Spacing archive requests at 5.05 s would cost nothing measurable in the time model (51 requests a window either way).
+- **Draft scripts** (never run; they are regenerated from a fresh copy of the queue before use): each refuses a `Q` that is not an existing queue file given by an absolute path. `draft-T3pr.sh` takes as `EVENINGS` only the plan's 182 Point Reyes T1 days, and nothing after 30 May. `draft-TQ.sh` queues only the cameras named in `TQ_CAMERAS`.
+- **Evidence:** 44 of 44 planner tests (the original 14 unchanged) and 33 of 33 mutants caught; ruff clean. The review reproduced every id, cost and finish day with an independent standard-library script.
+- **For the owner:** which reading of the spans:
+  - D-024's sample date (the plan's);
+  - D-024's whole named month, which moves 42 entries and 621 requests into T2;
+  - or D-052's own, spans from T0's first 16:9 date, which puts TQ into the regular tranches.
+  
+  If Point Reyes's TQ block (857 requests) is approved, it goes before T2 and lands on 30 Nov (1 Dec at 3.7 %), before the 14 Dec freeze. T2 then lands on 11 Dec (12 Dec at 3.7 %) and T1c on 16 Dec (17 Dec), so T1c misses its 15 Dec target at both error rates, by one day at 1.0 % and two at 3.7 % (the plan's `schedule_t3pr_first_tq_point_reyes_before_t2`).
+- **For the lead:**
+  - queue T3pr, then T1b (`EVENINGS=… sh draft-T3pr.sh && sh draft-T1b.sh`), once T3pr's clear days are chosen from Point Reyes's T1a frames, by 23 Nov;
+  - resume failed entries every day;
+  - ask eval to register T0's Big Bend 2024 and Grand Canyon winter 2024/25 frames (D-042).
+- **Archived HRRR needed:** T1a–T2, 360 dates and 5,812 valid hours, 95.9 GB at the 24 h lead; with T1c, 423 dates and 112.5 GB; with TQ too, 495 dates and 130.9 GB.
+- **Amended 20 Nov (D-078):** the lead queued T1b behind T1a at 18:12 UTC (way (b) of section 8), from drafts regenerated on a fresh copy of the live queue; T3pr follows when its six evenings are chosen, and T1b then moves behind it.
+
+## D-073 — The backtest pair's run choice applies the archived stamp floor · decided (eval; uncommitted) · 2026-11-20 · amends D-054
+- **Change:** `pair_forecast.choose_run` passes `listed_availability(bucket)` to `select_run_for_issue`, on the client the extraction uses. So a candidate run is available at the later of the lag model and its trusted S3 stamps, as in the extractor, and a run whose stamps are later than the issue time is skipped for an older one.
+  - It refuses a lookout-forecast without `listed_availability` (0.1.0), and records the choice's own listing requests as `choice_transfer`.
+  - When the file and the choice disagree, the refusal names each side's source, lag and stamp floor. It suggests re-extracting only for a reused archived file, the one case where that helps.
+- **Evidence:**
+  - The M0.5 pair's choice is unchanged under its day's lag model: 2024011412 f31/f32 (weight 0.75) at 14:00:00Z, with 2024011418 skipped. This used the recorded listings and the real lookout-forecast 0.2.0; the review rebuilt that day's model from the 474 log lines before the pair's run.
+  - Under today's model (653 live and 4,082 survey lags) the choice would be 2024011418 f25/f26 at 19:31:36Z, because of the survey lags, not the floor. The recorded pair stays the measured output of its day; a re-run would be a different pair.
+  - 25 pair-forecast tests (13 before).
+- **It needs** lookout-forecast 0.2.0 (`08a996c`), which the running snapshot `034c46b` lacks. Each choice lists the candidate runs on NOAA's bucket: for the M0.5 pair, 2 more anonymous listings of 24,393 bytes each.
+
+## D-074 — The spike rebuilt against speech 0.2.0 for checks 6 and 7 · decided (lead; operation) · 2026-11-20 · amends D-055
+- At 12:36 UTC the lead ran `cargo build --release --offline --locked -p m1-spike-app --features speech`, with `CARGO_TARGET_DIR=~/lookout-data/cache/cargo-target`, in 13.6 s.
+- The binary, `~/lookout-data/cache/cargo-target/release/m1-spike`, is 12,991,256 bytes. It embeds "lookout-speech 0.2.0 (SpeechAnalyzer + DictationTranscriber, on device only; macOS SDK 260200)", holds 1,013 `LookoutSpeech` symbols and links Speech.framework. The docs agent read it again at 15:41 UTC with `strings`, `nm` and `otool -L`.
+- It is still signed ad hoc with the linker's identifier, `m1_spike-e8e55116026759cb`, and no Info.plist is bound (TODO(M1), as before: which identity AssetInventory reservations and TCC key on).
+- The earlier build, at 03:39:58 UTC, linked the real library 0.1.0, not a stub (the third workflow's critic, re-checked by the lead: 989 symbols, Speech.framework, "lookout-speech 0.1.0").
+- `lookout-transcribe` 0.2.0, for the owner's `status` and `install-assets` steps, is `~/lookout-data/cache/speech-macos/release/lookout-transcribe`: built at 12:11 UTC, and signed as `dev.lookout.transcribe` with its Info.plist bound (`codesign -dv`). The next `make test` runs `scripts/build.sh` again (D-075), which may relink the library and re-sign the tool at the same paths: the docs fixer's scratch run of it at 17:22 UTC made a 916,200-byte archive and a 559,952-byte tool, against the live 907,616 and 558,304 bytes.
+- **A caution for the owner:** the spike README's Build block (`cargo build --release --workspace`) rebuilds `m1-spike` without the speech feature, and the runbook has the owner run that block first. Checks 6 and 7 then record `skipped` until it is rebuilt with `--features speech`. So the runbook's step 2.1 rebuilds it with the lead's command right after the Build block, and step 3.4 checks the binary before check 6. Checks 6 and 7 run on that 0.2.0 speech build, not on the lead's binary of 12:36.
+- `app/speech-macos/README.md` still says that 0.2.0 was not relinked into the spike; its owner updates it.
+
+## D-075 — make test: capture's slow tests on purpose, the speech build checks, and a bench-script target · decided (lead; the integration agent; uncommitted) · 2026-11-20 · amends D-063
+- **Capture's slow tests run in `make test` on purpose** (the lead): they guard the schedule behaviour behind the polite rule (D-065).
+  - The Makefile's `PYTEST_ARGS` (`-q -m "not network"`) replaces capture's own `addopts` (`-m 'not network and not slow'`), so `make test-capture` and CI run them. The marker stays as it is, and the Makefile now says why.
+  - Since capture 0.2.1 there are 4 such tests, 3 days each of the four schedules: 81 s on a quiet machine and 241 s under other agents' load, against D-063's one test.
+- **`make test-speech` also runs `scripts/build.sh --no-test`,** after `swift test`. That is the release build, the signing check of `lookout-transcribe`, the symbol deny list and reviewed baseline (400 imports, 39 selectors), the checker's mutation self-test (20 crafted archives) and the C-host link check.
+  - Both steps run, and either failing fails the suite.
+  - It writes the release build under `${LOOKOUT_DATA_DIR:-~/lookout-data}/cache/speech-macos`, build.sh's own path, and deletes its temporary folders under `$TMPDIR`. The third workflow's critic measured 9.4 s for it on an existing build.
+- **`make bench-script`,** new: it builds `lookout-parse` (`cargo build --release --offline --locked -p lookout-core --bin lookout-parse` in `app/`, with `CARGO_TARGET_DIR` outside iCloud), then runs `bench/utterances/check.py --bin` on that binary, on workers/common's Python 3.13. check.py needs Python 3.11 or later, and `/usr/bin/python3` is 3.9.
+  - It exits 1 on drift or a stale stored verdict, and 2 on a missing or stale binary.
+  - It is not in `make test` or CI: CI's bench job sets up no Rust toolchain (the rust job is separate), and `--offline` needs the crates cached.
+- **CI is unchanged:** it runs every `make test` suite except `speech` (the docs checks' `ci-suites`). The workflow's comments now describe the speech suite's two steps and capture's slow tests.
+- **Measured by the docs agent,** with scratch target and data folders, because nothing may be written under `~/lookout-data` in this run:
+  - `make bench-script` with a fresh scratch `CARGO_TARGET_DIR`: 40 crates built in 9.81 s; check.py exits 0 with 121 rows agreeing, 4 soft and 5 not (test split 94, 3 and 3). The binary is bit for bit the existing one (SHA-256 `ed5c1815…`); 10.6 s in all;
+  - `make test-speech` with a scratch `LOOKOUT_DATA_DIR`: `swift test` 103 passed, 0 failed (36.0 s of tests, plus a cold debug build), then `build.sh --no-test`: release build 6.1 s, signed `dev.lookout.transcribe` with its Info.plist bound, check-symbols passed (400 imports, 39 selectors), the self-test passed (20 mutants, plus the no-ABI and harmless-import cases) and the link check passed. About 14 s for build.sh from a cold release build, and 63.7 s for the suite;
+  - the docs checks: 16 checks, 85 tests, all passing; `make test-bench`: 40 tests passed.
+- **Re-run by the docs fixer** at 17:20–17:23 UTC, after the docs review's corrections, with the same scratch folders: the docs checks 16 of 16 and 91 tests (6 new for the back-pointer rule); `make test-bench` 40 passed; `make bench-script` exit 0 in 10.8 s, 40 crates, the same 121, 4 and 5 rows and the same binary (`ed5c1815…`); `make test-speech` exit 0 in 62.0 s, `swift test` 103 passed, then build.sh's checks all passed. actionlint finds nothing in the workflow.
+
+## D-076 — The running jobs depend on the lead's session; a supervisor is written but not started; the 8 h keep-awake has ended · decided (lead; record; starting the supervisor is the owner's call) · 2026-11-20 · amends D-030, D-049
+- **Found at 12:30 UTC:** the capture loop (pid 36437) and the forecast stand-in (pid 36474) are children of the lead's Claude Code session (parent pid 72719, through zsh). Ending that session can stop them, and the 72 h clock with them.
+- **The supervisor,** `~/lookout-data/cache/runtime/bin/supervise.sh`, written by the lead:
+  - it adopts the running loops by pid, and starts replacements from `current` only after they exit, so two fetchers never run;
+  - it restarts a loop that exits: 10 s after a graceful exit 0, 60 s after exit 3 (the lock is busy) and 330 s after anything else, so a poll sent but not recorded by a killed process can never be followed within 5 minutes. The delay doubles for quick deaths, up to 3,600 s;
+  - it never starts a forecast stand-in while an earlier handler still runs;
+  - on SIGTERM it stops the loops it started itself. Loops it adopted keep running;
+  - keep-awake is opt-in (`LOOKOUT_AWAKE_UNTIL_UTC`);
+  - tested against fake loops in the lead's scratchpad: adoption, exits 0, 3 and 1, the quick-death back-off and the shutdown, all as designed.
+  
+  It meets the capture package's advice for a supervisor: at least 1 s before a restart, a growing delay on repeated exits, and no immediate restart after exit 3 (its builder's report and `workers/capture/README.md`).
+- **What adoption does not do** (this workflow's docs review, reproduced by the docs fixer against a copy of the lead's tested script and two fake loops):
+  - **It doesn't detach the running loops.** They stay children of the lead's session until they exit. If the session ends and takes the capture loop with it, the supervisor starts a new one 330 s later (exit unknown), and the 72 h clock counts the gap as lost time (D-069).
+  - **It doesn't stop them.** SIGTERM to the supervisor stops only the loops it started; its log reads "SIGTERM to capture none and forecast none", and both adopted fakes kept running. To stop everything, the owner also sends SIGTERM to the adopted pids. The capture loop then finishes its current camera and saves its state, as 0.2.0's loop does on SIGTERM.
+- **The header's start command doesn't detach either, when typed at a Terminal prompt.** An interactive zsh makes the first process of a background job, here perl, the leader of its own process group, so `POSIX::setsid()` fails with EPERM. Perl returns −1 for that, which is true, so `or die` never fires, and the supervisor stays in the Terminal's session on its tty. The review showed it; the docs fixer reproduced it with zsh on a pty: TTY `ttys000` and STAT `SN`, where a session leader has `s`. Run in a subshell, the same command detaches: PPID 1, TTY `??` and STAT `SNs`, because perl is then not a group leader.
+  - Owner action 1 now gives the subshell form, with `!= -1`, `mkdir -p ../logs` and a `ps` check.
+  - The header in `supervise.sh` needs the same change; that file is the lead's.
+- **Not started:** the permission system refused the lead's detached launch, so starting it is the owner's decision (PRD_PROGRESS.md, owner action 1). Until it runs, the session-dependence risk stands, and after it runs the adopted loops still depend on the session until they exit.
+- **Keep-awake:** the owner-approved `caffeinate -dims -t 28800` (from 06:27:54 UTC) ended at 14:27:54 UTC, and the lead did not extend it. Only the capture loop's `caffeinate -s` now holds the Mac awake, and only on AC power.
+  - At 15:46 UTC (`ps`, `pmset -g batt`, `pmset -g assertions`): both jobs running, capture since 02:39:39 and the forecast stand-in since 02:39:48 (13 h 07 min); on AC power, 100 %, charged; the only sleep assertion is that `caffeinate -s`.
+- **The machine:** 19 GiB free of 460 GiB at 15:46 UTC (96 % used, `df -g`). Eight orphaned `terraform-provider-aws` processes (parent pid 1), left by scratch mutation runs of 19 and 20 Nov and outside `cache/runtime/`, held 949,040 KiB of resident memory at 15:46 UTC, about 0.9 GiB. That varies: readings between 15:46 and 17:08 UTC ran from 0.5 to 1.2 GiB (`ps -o rss`). The lead may stop them.
+- **Amended 20 Nov (D-078):** the supervisor now finds the running loops itself (the NPS fetcher lock and the forecast script's path), so the owner's start command names no pid; its header gives the verified start form (a subshell, `setsid() != -1`). Still not started.
+
+## D-077 — One archive request pair on 20 Nov was 4.9944 s apart on the log's stamps · open (a breach record; the fix is proposed for workers/common) · 2026-11-20
+- **What the log shows** (the backfill planner's recount, D-072; recounted by the docs fixer from a copy of `capture_log/2026-11-20.jsonl` taken at 17:03 UTC). A request's end is its record's `t`, and its start is `t − elapsed_ms`.
+  - The queue's 1,000 `archive_request` records on 20 Nov make 999 end-to-start pairs: 991 at least 5.0009 s apart, 7 at 5.0004–5.0008 s, and 1 at 4.9944 s. The median is 5.0109 s.
+  - That one pair: a request ended at 09:56:47.412 UTC, and the next, a `hires` GET, started at 09:56:52.406 (`t` 09:56:52.672, `elapsed_ms` 265.6, `waited_s` 4.987).
+  - On 19 Nov the least of 216 pairs was 5.0005 s.
+- **Against the rule:** CLAUDE.md asks for archive requests "one request at a time, at least 5 s apart". On the log's stamps that pair missed it by 5.6 ms. The load on nps.gov didn't change: one request at a time, 1,000 a day. But the rule is the owner's, so the miss is recorded like the earlier ones (D-023, D-048).
+- **The stamps don't explain it.** `t` is cut to the millisecond and `elapsed_ms` is rounded to 0.1 ms, which moves a gap by about 1 ms, not 5.6. Capture writes a request's record before the limiter stamps that request's end, and it reads the next start back from the next record. So with a steady wall clock, the limiter's own end-to-start spacing was no longer than the log's 4.9944 s.
+- **Cause: unknown.** The log can't tell an early start from a wall-clock adjustment between the two stamps.
+  - The limiter is `MinIntervalLimiter.hold()` in `workers/common/src/lookout_common/http.py`. It sleeps for the rest of the spacing. Then, if no other process changed its state meanwhile, it lets the request start whatever the clock now reads, which is how it caps the wait at one interval when the clock has stepped back. So a sleep that ends early on the wall clock is not caught.
+- **Proposed fix, for `workers/common`'s owner, with a test:** read the clock again after the sleep and wait out any remainder, or space archive requests at 5.05 s (D-072: no measurable cost).
+- **Status:** the running loop (capture 0.2.0, snapshot `034c46b`) is unchanged, and capture 0.2.1 doesn't touch the limiter. The same margin applies from 00:00 UTC on 21 Nov, when the next day's budget opens, until a fixed `workers/common` is committed and the runtime is re-snapshotted.
+
+
+## D-078 — The fourth workflow committed per package; the supervisor finds the running loops itself; T1b queued; a camera not polled after a restart is flagged, not counted · decided (lead) · 2026-11-20 · amends D-064, D-069, D-072, D-076
+- **Commits** (UTC, 20 Nov), in the fourth critic's order: `b9520e2` capture 0.2.1 with eval's held-out parity files (D-065, D-066, D-070); `7f76411` eval's gate-rule clock, nps.gov bounds and pair choice (D-069, D-073); `3f48e75` the backfill planner and plan (D-072); `670138b` build integration (D-075); then this planning-docs commit. D-065 to D-075 were written while their code was uncommitted; these commits hold it. Nothing has been pushed.
+- **The supervisor finds the loops itself** (amends D-076). Rewritten by the lead at about 18:10 UTC, still not started:
+  - by default it adopts the capture loop named in `state/locks/nps-fetcher.lock` (if that pid is alive and is a capture loop) and the oldest running `forecast_loop.sh` of the runtime folder; `--adopt-capture` and `--adopt-forecast` take `PID`, `auto` or `none`;
+  - so the owner's start command (PRD_PROGRESS owner action 1) names no pid and stays right after the lead's restarts;
+  - its header now gives the start form the docs fixer verified: a subshell, and `setsid() != -1`;
+  - stopping it never signals a loop it adopted.
+  - **Tested** against fake loops in the session scratchpad: it adopted the capture loop through a fake lock and the forecast loop by its script path, started no second stand-in, started each replacement only after the adopted loop exited (forecast after 10 s; capture after the crash delay, its exit being unknown), and stopped its own loops on SIGTERM.
+- **T1b queued now, behind T1a** (amends D-072; way (b) of the plan's section 8).
+  - **Why now:** T3pr's six clear evenings are chosen from Point Reyes's T1a frames, which land on 21–22 Nov, so T3pr cannot be queued tonight. T1a runs out on about 24 Nov, and queuing T1b now means the loop keeps working after that even if no session is open. When T3pr is ready, it is queued and T1b moved behind it; the planner measured that move as costing nothing.
+  - **What ran:** the lead regenerated the drafts with `plan.py` from a fresh copy of the live queue (SHA-256 `c8664e37…`, unchanged since the lead's 12:37 UTC edits) and ran `draft-T1b.sh` at 18:12:44–18:12:50 UTC (exit 0). All 54 `add` commands added their entries and none was already queued.
+  - **The queue after it:** 808 entries (180 done, 627 pending, 1 active), dates 2023-01-30 to 2026-05-30, no duplicate id, and all 367 T1b ids present. The regenerated plan gives T1a 261 open entries and 3,864 requests (done on 24 Nov), and T1b 4,812 requests (done on 29 Nov at 20 Nov's error rate).
+- **A camera not polled after a restart** (eval's finding 5; amends D-069). Under D-069's rule as written, a camera with no poll after a restart is measured to the window's end, so one camera dropped from the loop would keep the gate's clock from ever closing. The lead's ruling:
+  - such a camera is flagged in the per-viewpoint table as not polled since the restart, and its own gap is still reported;
+  - it is left out of that restart's excess.
+  - `TODO(M1)` in eval's data report. Every restart so far polled all 8 cameras afterwards, so no figure changes.
+- **The daily resume** (D-072): while a session is open, the lead runs `archive queue resume` for any failed entry each UTC day; otherwise it is an owner step. `TODO(M1)` for capture: resume an entry whose day search failed, automatically, once a UTC day.
+- **Also:**
+  - CLAUDE.md's archived-frames rule carries D-070's interim reading (local or UTC date);
+  - the NPS email draft's frame figure is the regenerated plan's: about 23,700 frames (about 1.4 GB) by mid-December;
+  - the plan's line on the supervisor says what adoption does not remove.
 
 ---
 
@@ -974,3 +1262,4 @@ Every model, vendor, data-source and architecture decision, with the evidence be
 |---|---|---|---|---|
 | 2026-11-18/19 | — | M0 research and spot checks used only free, keyless public endpoints | $0.00 | $0.00 |
 | 2026-11-19 | — | M0.5 day 1: feed scouting, archive API discovery, the stopgap Rainier capture and local builds, using only free, keyless public endpoints. Deepgram and fal are approved (D-012) but have no accounts or keys, so no calls were made. | $0.00 | $0.00 |
+| 2026-11-20 | — | M0.5 day 2: the capture loop, the archive backfill and the forecast stand-in, on nps.gov's and NOAA's free, keyless endpoints (the forecast package's S3 listings too), and local builds, tests and simulations. Nothing deployed to AWS; Deepgram and fal still have no accounts or keys, so no paid call was made. | $0.00 | $0.00 |

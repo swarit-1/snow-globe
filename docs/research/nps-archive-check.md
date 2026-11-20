@@ -228,7 +228,7 @@ These are judgements on upscaled 100×56 thumbnails, made on 19 Nov. Only the pa
 
 ## Recommendation per viewpoint
 
-"Usable HRRRv4 span" runs from the first 16:9 sample onward. The exact switch date is still to be found (TODO below), so the start may move up to six months earlier. Held-out at every camera is summer 2026 (D-019), pending the lead's decision on the breach.
+"Usable HRRRv4 span" runs from the first 16:9 sample onward. The exact switch date was still to be found when this was written, so the start could move up to six months earlier. The backfill's T0 has since dated six of the switches, each earlier than the first 16:9 sample ("Limits and to-dos" below, D-052); the backfill plan keeps these spans and holds the dates in between for the owner (TQ, D-072). Held-out at every camera is summer 2026 (D-019), pending the lead's decision on the breach.
 
 | Viewpoint | Design H? | Usable HRRRv4-era span (archive at 999×562) | Notes |
 |---|---|---|---|
@@ -268,7 +268,7 @@ These are judgements on upscaled 100×56 thumbnails, made on 19 Nov. Only the pa
 
 ## Limits and to-dos
 
-- **TODO(M0.5):** date each 3:2 → 16:9 switch exactly. A binary search on daily midday thumbnails takes about 2 requests a step and about 8 steps for a six-month window. Then date the Grand Teton re-aims the same way. Every switch window lies before 1 Jun 2026, so the guard allows this. The search must stay before the guard, which the code now enforces.
+- **Dating each 3:2 → 16:9 switch: done for six cameras, closed on 20 Nov.** The archive backfill's T0 tranche dated them from the `hires` sidecars' frame heights, with no image opened (D-052): to within 14 days at Point Reyes, Acadia, Yosemite, Big Bend and the Smokies, and 26 days at Grand Canyon, whose archive has no frames between 24 Apr and 20 May 2024. Each camera switched once. Grand Teton was not queued, because it has no design H (D-024), so its switch (between Jul 2024 and Jan 2025) and its re-aims stay undated; they need dating only if Grand Teton is ever reconsidered for design H.
 - **TODO(M2):** confirm "same view" inside each chosen development span by registering full frames. This covers Grand Canyon 2025-01-15 and Big Bend 2024-01-15.
 - **The sample is thin:** 2 dates a year cannot see a temporary re-aim of weeks. The registration gate catches those at scoring time.
 - **Sun-angle check, residual and scope:**

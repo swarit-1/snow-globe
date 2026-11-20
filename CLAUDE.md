@@ -70,7 +70,7 @@ Only the lead session commits. Subagents never commit.
 ### Held-out data (D-019, D-022)
 Metadata may be read for any date.
 - **Archived frames:**
-  - Never download, open, view or use an archived frame (full size or thumbnail) dated **1 Jun 2026 or later**.
+  - Never download, open, view or use an archived frame (full size or thumbnail) dated **1 Jun 2026 or later**: by the camera's local date or the UTC date, until the owner confirms D-038 (D-070).
   - Summer 2026 is design H's held-out season.
 - **The sealed window:**
   - Never use any frame from **15 Dec 2026 – 14 Jan 2027**, live or archived, for development.
@@ -150,6 +150,7 @@ capture_log/<YYYY-MM-DD>.jsonl                                                  
 state/                                                                                     persisted rate-limit and dedupe state; state/archive/queue.json (backfill queue), state/capture/hosts/www.nps.gov.json (shared 429/503 hold)
 forecast/hrrr/<viewpoint_id>/<YYYYMMDDHH>z.json                                            one file per viewpoint per HRRR run
 forecast_log/<YYYY-MM-DD>.jsonl                                                            availability lag and fetch events (written only by the forecast stand-in)
+forecast_log/lag_survey/<YYYY-MM-DD>.jsonl                                                 S3 lag-survey events, "method": "survey" (written only by lookout-forecast lag-survey --log, D-053)
 scores/pairs/, renders/pairs/                                                              backtest pair records and renders
 spikes/m1/<run-id>.jsonl                                                                   M1 1a spike results (run by the owner)
 cache/                                                                                     deletable caches (GRIB subsets, cache/staging/ capture staging, cache/runtime/ snapshots, etc.)

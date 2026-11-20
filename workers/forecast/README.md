@@ -289,8 +289,11 @@ its `pyproject.toml` changes.
   the camera pose); M0.5 stores the whole ray.
 - `TODO(M1.5)`: mask phantom cloud bases (HGT against `PRES:cloud base`) in the renderer and the
   extractor inputs.
-- `TODO(M0.5)`: the laptop profile (which fields and hours `make forecast-latest` asks for) is the
-  lead's call; until then the 150 MB default cap refuses a whole-run download.
+- The laptop profile is set (closed 20 Nov): the Makefile's light profile (`LOOKOUT_FORECAST_FIELDS`,
+  `LOOKOUT_FORECAST_MAX_FH`, `LOOKOUT_FORECAST_MAX_MB`: 8 fields, f00-f02, at most 40 MB a run) is
+  the local stand-in's since 02:39 UTC on 20 Nov (D-050), so `make forecast-latest` and
+  `make forecast-tick` ask for exactly what the stand-in fetches. Run without those variables, the
+  CLI's 150 MB default cap still refuses a whole-run download (exit 4).
 - `TODO(M1)`: no cell has the 20 lags rule 1 needs yet (8-9 each after the 20 Nov survey); a
   survey of about 12 more days gets there. Run `lag-survey --log --start <the last surveyed run, or
   earlier>` now and then: overlap costs only listings (about 8-33 KB a run) and logs nothing twice,

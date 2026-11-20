@@ -9,7 +9,10 @@ native libraries bundled in the wheels. Revised again on 20 Nov (about 11:00
 UTC) for the working tree on top of commit 8246a8b: lookout-capture 0.2.1,
 lookout-forecast 0.2.0, eval's development copy of ecCodes, the Swift speech
 library (section 6) and the Lambda image built from 8246a8b (section 7). No
-third-party package version changed in any lock file. It implements PRD.md
+third-party package version changed in any lock file. Checked again on 20 Nov
+(about 16:00 UTC) on top of commit 8459e7e: still no third-party version
+change; lookout-capture 0.2.1 is the only uncommitted package version, and
+lookout-forecast 0.2.0 is committed (08a996c). It implements PRD.md
 §12 and the licence ledger of §15.4. At M5 a version generated from the
 licence ledger replaces it (PLAN.md, M5). docs/checks' `notices` check keeps
 it in step with every uv.lock, Cargo.lock and package.json git sees: each
@@ -207,8 +210,8 @@ Planned, not in the code yet
     pillow           13.0.0   MIT-CMU
     Development only: pytest, ruff, moto, boto3 (as above).
 
-4c. workers/forecast: lookout-forecast 0.2.0 (declares MIT; 0.2.0 is the
-    working tree, and 0.1.0, committed in 09e2ec8, is what runs)
+4c. workers/forecast: lookout-forecast 0.2.0 (declares MIT; 0.2.0 is
+    committed in 08a996c, and 0.1.0, committed in 09e2ec8, is what runs)
     lookout-common   0.1.0       this repository, with the "s3" extra
     httpx            0.28.1      BSD-3-Clause
     jsonschema       4.26.0      MIT

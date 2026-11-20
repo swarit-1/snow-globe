@@ -1,6 +1,6 @@
 # M1 owner runbook: what you do in M1, in order
 
-**Updated:** 2026-11-20 (UTC).
+**Updated:** 2026-11-20, about 17:30 UTC.
 
 This is everything M1 (Voice to first pixel, Mon 23 Nov → Mon 7 Dec 2026) needs from you, the
 owner, in the order it is needed. Each step says what to run and what to send back. Details live
@@ -8,9 +8,16 @@ in the documents it links to; this page only sequences them.
 
 **State on 20 Nov:**
 - The 1a spike app is built and unit-tested, and none of its checks has run (D-033).
-- The Swift speech library (`app/speech-macos/`, ticket M1-05) is being written; nothing of it is
-  committed yet. The replay harness and the recording tool (M1-09) are not started.
-- So steps 3 to 6 below wait for code; each says what it waits for.
+- The Swift speech library 0.2.0 (`app/speech-macos/`, ticket M1-05) is built, unit-tested and
+  committed (`8443bf3`, D-055). It has never run against the real recognizer: step 3 is its first
+  real run. Its command-line tool, `lookout-transcribe`, is built at
+  `~/lookout-data/cache/speech-macos/release/lookout-transcribe`.
+- The lead rebuilt the spike against library 0.2.0 at 12:36 UTC on 20 Nov (D-074). The spike
+  README's Build block, which you run first, replaces that build with one without speech, so
+  step 2.1 rebuilds `m1-spike` with the speech feature right after it. Spike checks 6 and 7 then
+  run on Mon 23 Nov with the others.
+- The replay harness and the recording tool (M1-09) are not started, so steps 4 and 6 wait for
+  code; each says what it waits for.
 - If M0.5 or M1 runs late, the plan puts the freeze-critical work first (PLAN.md, Calendar).
   The speech and harness steps may then wait; the lead will tell you.
 
@@ -26,11 +33,13 @@ in the documents it links to; this page only sequences them.
 ## 0. Before Mon 23 Nov
 
 1. **Keep the Mac on AC power** (PRD_PROGRESS.md, owner action 1). Capture and the forecast job
-   still run on this laptop (D-030), and every M1 measurement assumes AC power.
+   still run on this laptop (D-030), and every M1 measurement assumes AC power. The same owner
+   action asks you to start the lead's supervisor, so that a job that stops is restarted outside
+   the lead's session (D-076). The two running jobs stay the session's children until they exit.
 2. **Don't upgrade macOS.** It stays on 26.5.x through M4 (PRD §1 row 1); an update mid-milestone
    breaks the latency comparisons.
-3. **Free some disk** if you can (owner action 11). `df` showed 21 to 23 GiB available between
-   04:03 and 06:11 UTC on 20 Nov, and the figure moves as builds and capture run. Apple
+3. **Free some disk** if you can (owner action 11). `df` showed 27 GiB available at 17:26 UTC on
+   20 Nov (19 to 23 GiB earlier that day), and the figure moves as builds and capture run. Apple
    Intelligence's on-device models take several GB (step 1). The recordings are small: 130 takes
    of about 3 s each, at 48 kHz in 32-bit float, come to about 75 MB per input channel. The rate
    and channel count are assumptions until spike check 5 reports them.
@@ -45,7 +54,7 @@ Settings** (the Apple menu > System Settings…).
 | Permission | Exact path | For | When |
 |---|---|---|---|
 | Microphone | System Settings > Privacy & Security > Microphone | spike check 5; the app; the recording tool; the harness | step 2, when macOS first asks |
-| Speech Recognition | System Settings > Privacy & Security > Speech Recognition | spike check 6 (if the speech library asks); the app | step 3 |
+| Speech Recognition | System Settings > Privacy & Security > Speech Recognition | probably not needed by the on-device transcriber: the library only reads this setting and never asks (D-055); the app | step 3, only if `lookout-transcribe status` reports code 2 |
 | Screen Recording | System Settings > Privacy & Security > Screen & System Audio Recording | spike checks 8, 10 and 11; the harness only | step 2 |
 | Input Monitoring | System Settings > Privacy & Security > Input Monitoring | spike check 9 with `--tap` and check 1 with `--key-state`; the harness only | step 2, only if you run those options |
 | Accessibility | System Settings > Privacy & Security > Accessibility | spike check 9 (`CGEventPost`); the harness's key injection | step 2 |
@@ -80,7 +89,15 @@ commands, the exact command per check, what to do with your hands, and the pass 
 fixed before any run (D-033). In order:
 
 1. **Build and unit-test** (no permission, no window): the README's "Build" block, with
-   `CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target`.
+   `CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target`. Its release build replaces the
+   lead's speech build of `m1-spike` with one without speech, so straight after it, in the same
+   terminal (still in `spikes/m1-platform`, with the same `CARGO_TARGET_DIR`), rebuild `m1-spike`
+   with the speech feature, as the lead did (D-074):
+   ```sh
+   cargo build --release --offline --locked -p m1-spike-app --features speech
+   ```
+   It links library 0.2.0 from `~/lookout-data/cache/speech-macos`. Step 3.4 checks the binary
+   before checks 6 and 7.
 2. **Checks 1–4, no permission:**
    - 1, hotkey press and release, modifier-first included;
    - 2, a panel over another app that keeps focus;
@@ -97,11 +114,12 @@ fixed before any run (D-033). In order:
    - then the bundled helper (`scripts/bundle-sck-helper.sh`), the identity the overnight
      harness would use.
    - A prompt on a repeat run is the PRD §18.1 risk: stop and report.
-7. **Checks 6 and 7, Swift partials and network silence, wait** for the speech library
-   (`TODO(M1)`, M1-05; not committed yet).
-   - Then: build with `--features speech`, run `m1-spike speech`.
-   - If network silence comes out inconclusive, run it again with Wi-Fi off. The README explains
-     both.
+7. **Checks 6 and 7, Swift partials and network silence:** step 3, after check 5. It starts with
+   the speech library's model check, and runs on the 0.2.0 speech build of the spike from
+   step 2.1.
+   - **Don't run the Build block again after that rebuild.** Its `cargo build --release
+     --workspace` rebuilds `m1-spike` without the speech feature, and checks 6 and 7 then record
+     `skipped`. Step 3.4 checks the binary, and says how to rebuild it if needed.
 
 **Stop at the first `FAIL`.** PLAN.md M1 1a: run `m1-report show <run-id>` and send it with the
 run file before going on.
@@ -118,15 +136,74 @@ run file before going on.
 The lead copies the numbers into DECISIONS.md (gate evidence: "Spike notes and numbers in
 DECISIONS.md").
 
-## 3. After the speech library lands
+## 3. The speech library's first real run, then spike checks 6 and 7 (Mon 23 Nov)
 
-When the lead says `app/speech-macos/` builds:
-1. Run spike checks 6 and 7 as in step 2.7. Grant Speech Recognition if asked. Check 6 also
-   reports whether the en-US dictation asset is installed.
-2. If the asset is missing, its download is Apple's, over the network. It must finish before
-   the network-silence run counts; say so in your report if it happened.
+The library is ready (0.2.0, D-055), and step 2.1 rebuilt the spike against it, as the lead did
+at 12:36 UTC on 20 Nov (D-074). Run this in the spike terminal of step 1, after check 5, so
+Microphone is already granted. The details are in [app/speech-macos/README.md](../../app/speech-macos/README.md), "What
+needs the owner", and in the spike README, checks 6 and 7.
 
-**Report back:** as in step 2, plus whether the asset had to be downloaded.
+1. **Check the on-device model.** No permission is needed, and nothing is downloaded or recorded:
+   ```sh
+   T=~/lookout-data/cache/speech-macos/release/lookout-transcribe
+   $T status --locale en-US
+   ```
+   - It prints the library's status code (0 ready, 1 model not installed, 2 Speech Recognition
+     denied or restricted, 3 locale unsupported) and a `reservations` line: the model
+     reservations held for this tool's identity, and the most allowed. It never prompts and never
+     downloads.
+   - Keep both lines for your report.
+2. **Only if `status` reported code 1, install the model:**
+   ```sh
+   $T install-assets --locale en-US --yes
+   ```
+   - This downloads Apple's dictation model from Apple's servers. It is the only step here that
+     makes the system fetch anything, and it does nothing without `--yes`.
+   - It prints a `reservations` line before the download and another after. Keep both, with the
+     `status` lines from before, and run `$T status --locale en-US` again afterwards.
+   - Let the download finish before check 6. A download while check 7 watches the network makes
+     its run inconclusive.
+3. **"Not determined" must show no prompt.** The library reads the Speech Recognition setting and
+   never asks for it (D-055), because Apple's documentation says that permission applies only to
+   `SFSpeechRecognizer`. If System Settings > Privacy & Security > Speech Recognition doesn't
+   list your spike terminal, the setting is "not determined" for it. Note whether any prompt
+   appears during `status`, `install-assets` or check 6.
+   - If `status` reports code 2, the setting is denied or restricted, and the library honours
+     that. Switch it on for the terminal in that pane, and say so in your report.
+4. **Check that the spike is a 0.2.0 speech build.** `m1-spike` in the spike README's `$BIN`
+   (`~/lookout-data/cache/cargo-target/release`) should be step 2.1's build with
+   `--features speech` against library 0.2.0 (the lead's own build of 12:36 UTC was
+   12,991,256 bytes, D-074). This needs no permission:
+   ```sh
+   strings -a ~/lookout-data/cache/cargo-target/release/m1-spike | grep 'lookout-speech 0.2.0'
+   ```
+   - It should print one line: `lookout-speech 0.2.0 (SpeechAnalyzer + DictationTranscriber, on
+     device only; macOS SDK 260200)`.
+   - If it prints nothing, the spike was rebuilt without the speech feature, for example by the
+     Build block after step 2.1. Rebuild it as in step 2.1, then check again:
+     ```sh
+     cd spikes/m1-platform
+     CARGO_TARGET_DIR="$HOME/lookout-data/cache/cargo-target" \
+       cargo build --release --offline --locked -p m1-spike-app --features speech
+     ```
+5. **Run check 6, which runs check 7 beside it:** `$BIN/m1-spike speech`, 5 trials. Wait 3 s for
+   the network monitor, then hold the hotkey, say a place and a time ("Mount Rainier at sunset
+   tomorrow") and let go (spike README, check 6).
+   - The spike sets no silence pad, so these trials run with the library's default of 0 ms
+     (D-067). That is expected.
+6. **If network silence comes out inconclusive,** turn Wi-Fi off and run check 6 again, as the
+   spike README's check 7 says. Send both runs.
+7. **Afterwards,** run `$T status --locale en-US` once more and keep its `reservations` line: the
+   lead compares the lines from before and after the first run to learn which identity model
+   reservations follow (D-055). Then switch Microphone off, and Speech Recognition if you switched
+   it on, until the recording tool or the app asks.
+
+**Report back:**
+- every `status` line and every `reservations` line: before, after `install-assets` if you ran
+  it, and after check 6;
+- whether the model had to be downloaded, and whether the download had finished before check 7;
+- whether any prompt appeared while Speech Recognition was "not determined";
+- as in step 2: `m1-report show <run-id>` for each run, and the run files.
 
 ## 4. The recordings
 
@@ -195,20 +272,17 @@ What PRD §10.6 asks for (ticket M1-12):
   unattended running: roughly 8 nights of 10 hours.
 - The lead plans the nights with you, because M1 has 14 days.
 
-**Before night 1, the lead decides one thing and records it in DECISIONS.md:** whether idle
-passes keep the display awake.
-- Every idle trial comes after ≥ 30 minutes with no query. On AC power this Mac turns its
-  display off after 10 minutes and would sleep after 1 (`pmset -g custom`, 20 Nov), and
-  `caffeinate -i` prevents only the sleep. So, unless something keeps it on, the display is
-  off at the start of every idle trial.
-- The time from key-up to the composited pixel (PRD §10.4) would then include waking the
-  display, if paint capture works at all with it off. That mixes the idle headline with a
-  wake state.
-- The choices: keep the display on for idle passes (`caffeinate -di`, or System Settings > Lock
-  Screen > "Turn display off on power adapter when inactive" set to Never), or let it sleep and
-  report those trials as their own stratum.
-- Either way, each trial's trace records whether the display was on (`TODO(M1)`), and trials
-  with the display off are reported apart.
+**The lead has decided how idle trials treat the display (D-068):**
+- Idle trials keep the system awake with `caffeinate -i`, **never `-d`**, and let the display
+  sleep as the Mac's own settings do, as in real use. Every idle trial comes after ≥ 30 minutes
+  with no query, and on AC power this Mac turns its display off after 10 minutes
+  (`pmset -g custom`, 20 Nov), so the display is usually off when an idle trial starts.
+- Don't change the display or Lock Screen settings to keep it on.
+- Each trial's trace records whether the display was on (`TODO(M1)`). Trials with the display
+  asleep are reported apart, as well as inside the totals: the time from key-up to the composited
+  pixel (PRD §10.4) then includes waking the display.
+- Follow-up rows may be idle trials too, since PRD §7.4 sets no expiry for the last place asked
+  about. They are reported as idle follow-ups.
 
 **Each evening:**
 1. **AC power, lid open.**
@@ -226,13 +300,13 @@ passes keep the display awake.
      prints the AC Power line only, and it should end in 0. It did on 20 Nov.
 4. **Leave the capture loop and the forecast job running.** They are never stopped (PLAN.md cut
    order: "never cut"). The report notes them as background load.
-5. **Start the harness** under `caffeinate -i` (with `-d` too if the lead chose to keep the
-   display on), as the lead gives you the exact command; then leave the Mac alone until morning.
+5. **Start the harness** under `caffeinate -i` (never `-d`, D-068), as the lead gives you the
+   exact command; then leave the Mac alone until morning.
 
 **The first night is also a dry run** for two open questions, so don't change your security
 settings to get around either. If a setting has to change, the lead will name it.
-- **Does paint capture still work once the display sleeps or the screen locks?** This matters
-  only if the lead chose to let the display sleep.
+- **Does paint capture still work once the display sleeps or the screen locks?** The display
+  sleeps every night (D-068), so this matters for every trial that starts with it off.
 - **Does any Screen Recording prompt appear?** That is check 11's next-day scenario, live.
 
 **Each morning, report back:**
@@ -270,8 +344,8 @@ Send no audio; the traces hold timings only (PRD §10.5).
 |---|---|---|
 | now | AC power; no macOS upgrade; some free disk | — |
 | Mon 23 Nov | Spike checks 1–5 and 8–11 (one day; check 11 runs over several days), and their permissions | nothing |
-| when the speech library lands | Spike checks 6 and 7 | M1-05 |
+| Mon 23 Nov, after check 5 | The speech library's first real run (`lookout-transcribe status`, and `install-assets` only if it reports code 1), then spike checks 6 and 7 (step 3) | nothing: library 0.2.0 is ready, and step 2.1 rebuilds the spike with it (D-074) |
 | when the recording tool lands | The 130 scripted recordings (about 20 min) and the consent answers; then ≥ 30 real-use ones | M1-09 |
 | when you're ready | The Deepgram account and key; then a yes or no to the first call | your decision |
-| after the recordings | About 8 nights of idle runs under `caffeinate -i`, from a frozen build (M1-12) | M1-09, M1-10, the lead's display decision |
+| after the recordings | About 8 nights of idle runs under `caffeinate -i` (never `-d`, D-068), from a frozen build (M1-12) | M1-09, M1-10 |
 | during M1 | The decisions in step 7 | the lead |

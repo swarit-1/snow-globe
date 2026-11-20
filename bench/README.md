@@ -36,6 +36,8 @@ ruff check bench && ruff format --check bench           # any ruff; the repo's i
 ```
 
 `check.py` needs the parser binary: `cd app && CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target cargo build --release --offline -p lookout-core --bin lookout-parse`.
+`make bench-script` does both: it builds the binary (offline and `--locked`), then runs
+`check.py` on it (D-075). `make test` runs only `check.py --no-parser`.
 - Without it, the parser tests are skipped, never faked.
 - A binary older than anything it is built from (app/core's sources, the Cargo files, or the
   manifests it embeds) is refused the same way, so a rebuild must come first. Exit status 2.
@@ -171,6 +173,14 @@ results on the test rows were known. None was made to change an agreement:
 These changes were frozen before the parser ran on the changed rows: `scripted.tsv` SHA-256
 `a40867e5…` at 05:37:07 UTC, with columns 1–14 unchanged since. The test split's text-level
 score is the same before and after them: 94 of 100.
+- **A caveat, as for the first freeze:** `prd_reading.py` changed after this second freeze too
+  (its file time is 06:03:48 UTC). The freeze's record, `freeze2.sha256` in the workflow's
+  scratch space, gives its SHA-256 as `19377fb8…`; the file committed in `dc28c2a` is
+  `fb2c1430…`, and no copy of the frozen version was kept.
+- Only the generated columns can be compared, and those are unchanged. Regenerated from the
+  committed `prd_reading.py` in a scratch copy of the repo (20 Nov, about 15:45 UTC), columns 1–14
+  of `scripted.tsv` match the second freeze's copy (`a40867e5…`) and the committed file
+  (`8c1d7481…`) row for row, and `clocks.tsv` is byte for byte the committed one (`039c25c8…`).
 
 **Result: 121 rows agree, 4 differ softly and 5 disagree.** On the test split alone: 94 agree,
 3 soft and 3 disagree; leaving out its 3 `owner-pending` rows, 94 agree, 2 soft and 1
