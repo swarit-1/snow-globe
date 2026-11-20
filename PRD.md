@@ -2,6 +2,7 @@
 
 > **Changelog:** v0.4.1, 19–20 Nov 2026 (UTC).
 > - **Factual corrections:** the status, name and companion-docs lines; §0's "Nothing else has been measured"; the §1 calls marked accepted; the oculus-core pin (§2.4, §8.4); Herbie (§8.3, §11.3); the HRRR lag range and Rainier's measured cadence (§8.1); the National Mall (§8.2); G+25 (§16); pointers from the cost lines of §11.3 and §17 to the newer estimate (D-035); Appendix B.
+> - **Factual corrections, 20 Nov (second pass):** the cost pointers of §11.3 and §17 now name the infra estimate of 20 Nov (D-060), which replaces the one D-035 quoted.
 > - **Two spec updates that record decisions:** §8.7 storage (D-028), and Appendix A, redrawn to the shape of the committed manifest schema (D-044; to be confirmed, or reverted to v0.4's sketch).
 > - No latency, accuracy or cost target changed, and the $3 hosting cap stands.
 >
@@ -885,7 +886,7 @@ One small API on Lambda, five scheduled jobs and an on-demand backfill. Keys for
   - Lambda, with a container image for ecCodes (Herbie is not used, D-026).
   - EventBridge Scheduler (its free tier covers 14 M invocations a month).
   - S3 and CloudFront.
-  - Estimated ≈ $0–1 a month in v0.4. The infra code's estimate from AWS list prices is $1.60–2.81 a month with the free tiers, under the $3 cap (D-035). The Lambda free-tier figures are checked on AWS's page before deploying.
+  - Estimated ≈ $0–1 a month in v0.4. The infra code's estimate of 20 Nov, from AWS list prices and a simulation of the committed capture code, is $2.07–4.03 in month 1 with the free tiers, rising by about $0.22 a month as storage grows, so its top is above the $3 cap from month 1 (D-060, which replaces D-035's $1.60–2.81). The Lambda free-tier figures are checked on AWS's page before deploying.
 - **The Tier 2 proxy** must add ≤ 100 ms p95 over a direct call when idle. Lambda (with SnapStart or a compiled runtime) and a Cloudflare Worker are both measured, and the result goes in DECISIONS.md.
 - **GitHub Actions** runs CI only. Its schedules jitter, and a public repo's schedules are disabled after 60 days without activity. The sealed window spans the holidays.
 - **A server-side daily cap** on Tier 2 calls. At the cap, `/v1/refine` answers "keep Tier 1".
@@ -1218,7 +1219,7 @@ Development is capped at $25.
 | Tier 2 during development and the evaluation sample | Interactive use; a sample in evaluation; result cache | ≈ $3–5 | $5 |
 | Ungrounded-generation baseline | ~50 images | ≈ $0.25–1 | $1 |
 | Haiku (only if Foundation Models fails) | < 10 % of asks, cached | ≈ $0.05–0.50 | $1 |
-| Hosting and storage (AWS serverless) | Lambda, Scheduler, S3 (~12 GB in v0.4; ~24 GB under §8.7 as decided), CloudFront | ≈ $0–1 a month (v0.4); $1.60–2.81 in the infra estimate (D-035) | $3 |
+| Hosting and storage (AWS serverless) | Lambda, Scheduler, S3 (~12 GB in v0.4; ~24 GB under §8.7 as decided), CloudFront | ≈ $0–1 a month (v0.4); $2.07–4.03 in month 1 in the infra estimate of 20 Nov (D-060) | $3 |
 | Tier 1, backtests, scoring | Headless shader renders and CPU metrics | $0 | — |
 | **Total** | | **≈ $10–19** | **$24** |
 

@@ -641,6 +641,331 @@ Every model, vendor, data-source and architecture decision, with the evidence be
 - **Record:** no log of these 9 requests exists under `~/lookout-data`; the builder's report is the only record. D-023 lists the other two overlaps.
 - **Since then:** the host-wide lock (D-023) refuses any second `lookout-capture` fetcher. Page loads by other tools are outside that lock, so in this run no agent makes nps.gov requests at all (the lead's instruction).
 
+## D-046 — The second workflow's work committed per package; forecast's survey-lag change held back · decided (lead) · 2026-11-20
+- **Verified by the lead and committed,** 02:37:06–02:42:36 UTC on 20 Nov, one commit per package:
+  - `4be0eca` common: review fixes for the shared scaffold;
+  - `df1838a` capture 0.2.0 (D-028, D-029), with the lead's two fixes (D-047, D-048);
+  - `d9aa416` eval: the held-out guard (D-038) and the M0.5 backtest pair v−1;
+  - `c9ba843` build: Makefile, CI and docs checks;
+  - `b73c53b` the M1 1a spike (D-032, D-033);
+  - `6c385f5` infra: the Lambda image smoke test;
+  - `034c46b` docs: D-025 to D-045, PLAN.md, PRD_PROGRESS.md, PRD v0.4.1 and the notices;
+  - `8246a8b` CLAUDE.md: runtime snapshots with their own venvs, offline capture commands, data layout.
+- **Held back:** forecast's unfinished survey-lag change. It failed `make test` (one test and a ruff E501) and had no review (the second workflow's critic). This workflow finished it (D-053, D-054).
+- **What the commits settle:**
+  - The held-out split is in git: `eval/src/lookout_eval/heldout_periods.json`, version 1, SHA-256 `c437544e…` unchanged, first committed in `d9aa416` (02:37:23 UTC on 20 Nov). D-038's "not in git yet" no longer holds.
+  - PRD §13.2's order (split committed before any held-out frame is touched) is met only for split v1's held-out set, as D-022 redrew it. Split v1 leaves 15 Jul 2026 out of scoring at the seven ARD cameras, because frames of that day were downloaded and viewed on 19 Nov, before any split existed (D-022). For summer 2026 as D-019 first drew it, the order was not met.
+  - The M0.5 pair's evidence file is committed in `d9aa416`.
+- **Still uncommitted** (10:45 UTC on 20 Nov): this workflow's packages, which D-047 to D-063 describe. Only the lead commits.
+
+## D-047 — Capture's held-out guard also reads ImageCreateDateTime as local standard time · decided (lead, in df1838a) · 2026-11-20 · amends D-022
+- **Change:** `heldout.asset_local_dates` adds a fourth reading, the civil date of `ImageCreateDateTime` read as local standard time. An archived asset's date is the latest of the four; an asset with no readable date is refused. Eval's guard already read it so (D-038).
+- **Why:** the second workflow's critic found capture's guard looser than eval's at the summer edge. A stamp of "05/31/2026 11:30 PM" with no readable `LocalTimeString` was dated 31 May and allowed, though it is 00:30 PDT on 1 Jun. The archive queue refuses only days on or after 1 Jun, so a 31 May entry reaches that edge.
+- **No frame was affected.** No archive request was sent between the archive check's last one (10:40:52 UTC on 19 Nov) and this fix. The next was the queue's first, at 09:52:25 UTC on 20 Nov, from the fixed code (`capture_log/`).
+- **Evidence:**
+  - Capture and eval agree on all 2.36 M random cases (`workers/capture/README.md`, the 20 Nov review).
+  - The backfill plan's end-to-end run of 31 May with no Sun limit: Point Reyes and Acadia refused their 23:00–23:45 standard-time frames without a request, and Grand Canyon (Arizona keeps standard time) stored all 96 ([docs/research/archive-backfill-plan.md](docs/research/archive-backfill-plan.md), section 9).
+- D-038's line "capture's guard does not yet use the standard-time reading" no longer holds.
+
+## D-048 — Polls came up to 0.94 s early on 19 Nov; polls are now spaced send to send · decided (lead in df1838a; capture 0.2.1 in the working tree) · 2026-11-20 · amends D-023
+- **Breach:** CLAUDE.md allows a poll at most every 5 minutes. On 19 Nov, 8 of 504 per-camera poll gaps were 299.06–299.7 s, measured on send times (log time − `elapsed_ms`): Grand Teton, Point Reyes, Rainier ×2, the Smokies ×2 and Yosemite ×2, at 12:29 and 23:05–23:16 UTC (the second workflow's critic). The 4-an-hour cap held: at most 4 image GETs in any rolling hour at every camera.
+- **Cause:** `last_poll_at` was stamped before the request waited about 1.1 s on the host's request spacing, so the 300 s check ran on stamps, not on sends.
+- **Fix 1, running** (the lead, `df1838a`; live since 02:39:39 UTC on 20 Nov): a poll is stamped at the send, after the spacing wait, and the next is due 300 s plus a 1 s margin later. A new test reproduces the 293 s gap on the old code.
+  - **Live check:** from 02:39:39 UTC on 20 Nov to the pass that ended at 10:45:05, 70 polls per camera; the shortest gap between sends was 301.053–301.064 s, none under 300 s (`request` records in `capture_log/2026-11-20.jsonl`).
+- **Fix 2, in the working tree** (capture 0.2.1, this workflow's capture review; not committed, not running):
+  - **Problem:** on a schedule that fires exactly every 300 s (the Lambda's `rate(5 minutes)`, or `loop --jitter 0`), the 1 s margin makes each poll about 1.05 s later than the last, until the camera skips an invocation. Fake clock, Lambda schedule, 8 cameras, 24 h: 48 skipped invocations (6 per camera), longest gap 555.9 s, passes up to 63.1 s long (mean 37.9 s).
+  - **Change:** a 2 ms margin (`POLL_MARGIN_S`, for the millisecond stamp). A pass waits for a camera whose slot is near, inside its lock and right before its poll (Lambda 45 s, `loop` 60 s). Each image GET's record moves to its send time for the rolling-hour cap (`reserved_at` keeps the reservation).
+  - **After:** 24 h: 0 skips, gaps 300.001–300.539 s, passes 18.5 s on average (max 20.0 s). 10 days with a 20 ms storage delay: 0 skips, longest gap 300.726 s. `loop` for 72 h with 0 s and 30 s jitter: no gap under 300 s, no skip.
+  - **Cost:** capture's billed waiting on Lambda falls from 35.7 s to 14.6 s a pass (D-060).
+- **Open, for the lead before committing 0.2.1:** the server sees a request after connection set-up and transit. The first request of a pass took a median 102.6 ms against 65.9 ms for the others (`workers/capture/README.md`). So a gap seen at nps.gov can be tens of ms shorter than ours, which a 1 s margin absorbs and a 2 ms margin does not.
+
+## D-049 — Re-snapshot at 034c46b with the runtime's own venvs; capture 0.2.0 is live · decided (lead; running) · 2026-11-20 · amends D-030
+- **The snapshot:** committed code at `~/lookout-data/cache/runtime/034c46b`, with its own venvs. It is outside iCloud, so its jobs need no `PYTHONPATH`. The running jobs no longer use the repo's venvs, so `make test` and `uv sync` in the repo are safe. That closes the critic's risk that a sync would swap packages under the running loop.
+- **Capture loop:**
+  - stopped by SIGTERM at 02:39:33 UTC on 20 Nov, after its last pass at 02:37:12;
+  - restarted at 02:39:39 UTC on capture 0.2.0 (`df1838a`) as `lookout-capture loop --interval 300 --archive-queue ~/lookout-data/state/archive/queue.json`, under `caffeinate -s`;
+  - the queue file was empty; the defaults hold: a budget of 1,000 archive requests per UTC day and a 5 GB total cap.
+- **The restart's gap:** the new loop's first pass, at 02:39:39, found all 8 cameras not yet due (persisted state). The next polls came at 02:45:04–02:45:15. Each camera's gap between polls was 483–486 s, about 3 min beyond one interval.
+  - The lead counts this as a short outage for the 72 h clock: 183–186 s beyond one 300 s interval.
+  - The data report (D-061) counts an outage only for a gap over 540 s between passes, and the passes were 147.5 s apart (02:37:12 → 02:39:39), so its clock figures include none for the restart. D-061 asks the lead to settle which counts.
+- **Forecast stand-in:** restarted on the snapshot, still lookout-forecast 0.1.0, with the profile of D-050. Its loop started at 02:39:48 UTC (`ps`), and its first fetch at 02:39:49.5 (`forecast_log/`). No log records when the old loop stopped. No run fell due in the gap: 2026112001 had been written at 01:57:09, and 2026112002 was due at 02:55:14 and written at 02:55:30.
+- **What is live now** (capture 0.2.0):
+  - D-028's storage: every frame at Rainier and Point Reyes, the frame nearest each UTC hour at the other six, and a 640 px thumbnail of every download;
+  - the shared www.nps.gov hold and the store-failure back-off;
+  - the archive queue inside the loop (D-029; first tranche in D-052).
+  
+  D-028's and D-029's "State" lines are out of date from here.
+- **The switch kept one far frame for one hour** (`workers/capture/README.md`). For hour 03:00 UTC, Acadia, Grand Canyon, Grand Teton and Yosemite kept 0.1.0's 02:30:00 frame, 1,800 s from the hour, as the hour's only full-size frame. Their 02:45, 03:00 and 03:15 frames survive only as thumbnails. A frame whose sidecar has no `hourly_selection` comes from the every-frame code, and eval should not read it as the frame nearest its hour.
+
+## D-050 — The forecast stand-in keeps PRES:cloud base: 8 fields, f00–f02 · decided (lead; running) · 2026-11-20 · amends D-030
+- **Profile from 02:39:49 UTC on 20 Nov:** VIS, cloud ceiling, cloud base, `PRES:cloud base`, LCDC, MCDC, HCDC and terrain, at f00–f02, at most 40 MB a run. D-026 asked for `PRES:cloud base`; the default field set already keeps it.
+- **One re-extraction:** because the field set changed, the 12 h lookback was extracted again from NOAA's open bucket at 02:39:51–02:50:26 UTC.
+  - 12 runs, 2026111914 to 2026112001 (the lead's note said about 13), at 23.9–25.0 MB of GRIB each, 293.5 MB in all.
+  - Their `run` and `lag` events were logged a second time. The lag model keeps the first event per (run, fh). The data report sets aside the 12 re-extractions and 160 duplicate lags.
+- **Since then:** 8 new runs, 2026112002 to 2026112009, each with 8 fields and 23.8–25.1 MB of GRIB, all under the 40 MB cap (`forecast_log/2026-11-20.jsonl`, read at 10:39 UTC).
+- D-026's and D-030's notes that the stand-in leaves `PRES:cloud base` out no longer hold.
+
+## D-051 — The Mac was on battery again from 03:29 to 06:27 UTC on 20 Nov; on AC since · decided (record; the owner keeps it on AC) · 2026-11-20 · amends D-030
+- **The lead's note** says the Mac has been on AC power since 22:48 UTC on 19 Nov. The power log (`pmset -g log`, read at 10:40 UTC) shows otherwise:
+  - on AC from 22:48:22 UTC on 19 Nov;
+  - **on battery from 03:29:09 to 06:27:36 UTC on 20 Nov** (100 % falling to 85 %). The lid closed at 03:52:37 UTC (clamshell sleep, 95 %), and the Mac idle-slept from 04:08:22 UTC, with dark wakes;
+  - on AC from 06:27:36 UTC; at 10:38 UTC on AC, 100 %, charged.
+- **Cost:** 4 capture outages, 04:10:03–06:29:29 UTC, 1.99 h lost (D-061). The forecast stand-in wrote run 2026112004 1,387 s late.
+- `caffeinate -s` holds the Mac awake only on AC power (D-023, D-030). Since 06:27:54 UTC a `caffeinate -dims -t 28800` also holds the display and the system awake, until 14:27:54 UTC (`pmset -g assertions`, 10:45 UTC).
+
+## D-052 — Design-H archive backfill: the plan, its budget, and the first tranche queued · decided (lead; running) · 2026-11-20 · amends D-029
+- **The plan:** [docs/research/archive-backfill-plan.md](docs/research/archive-backfill-plan.md), 20 Nov, revised the same day after its review. It reads metadata on disk only; nothing was fetched for it.
+  - **Frames:** full-size `hires` (999 px wide; the extractor works at 960 px), the frame nearest each local hour with NPS Sun ≥ 2°, in whole ISO weeks.
+  - **Order:** T0 (date the 3:2 → 16:9 switches, and D-024's Big Bend and Grand Canyon view checks), T1a (a week in each summer month), T1b (shoulder months), T3pr (Point Reyes's plate inputs for M2), T2 (every remaining summer day, Point Reyes first), T1c (winter weeks).
+  - **Size:** 1,971 day entries, about 24,600 requests, 22,700 frames and 1.23 GB (0.24–2.30 GB).
+  - **Not queued:** Rainier (no archive), Grand Teton (no design H, D-024), Grand Canyon's 3:2 epoch (D-024, D-042), and anything on or after 1 Jun 2026. Four layers refuse that: `make_entry`, the queue runner, a four-date check on every asset (D-047), and eval's frame store.
+- **Budget and caps:** keep 1,000 requests per UTC day, 5 GB in total and the default 1.0 GB per viewpoint.
+  - The NPS email has not been sent and the API is undocumented, so raise the budget only once NPS says yes to bulk collection.
+  - At 1,000 a day: the stratified sample (T0–T1b) and T3pr finish on 29 Nov, T2 on 10 Dec and T1c on 15 Dec, provided the loop runs at least 2.2 h every UTC day.
+  - That time model ran on the real queue runner with a fake clock: 1.76 h of loop time per 1,000 requests without errors, 2.10–2.11 h at 19 Nov's error rate (3.7 %).
+- **Queued by the lead** at 09:50:30–09:50:37 UTC on 20 Nov: the first tranche as written, T0 and T1a.
+  - 447 entries: 134 midday entries (T0) and 313 hourly ones (T1a), dated 2023-01-30 to 2026-05-31.
+  - The first archive request went out at 09:52:25 UTC.
+- **Progress at 10:39 UTC** (`lookout-capture archive queue list --json`, offline):
+  - **T0 done:** 134 of 134 entries, 256 requests, 134 frames, 8.6 MB of frames. The plan expected 256 requests and 7 MB.
+  - **T1a:** 12 entries done and 1 active; 198 requests, 184 frames.
+  - **In all:** 454 of the day's 1,000 requests, with 16.0 MB of frames and 6.7 MB of search answers. One archive error, a TLS connect timeout at 10:37:10 UTC.
+- **The day's budget, spent at 11:43:23 UTC** (`capture_log/2026-11-20.jsonl`; the queue listed offline at 11:47):
+  - 1,000 requests in 1.85 h from the first, with no loop outage between: 990 answered 200, and 10 failed in transit (6 `hires` connect timeouts and 4 searches), each followed by a wait of 30 s or more. 52.7 MB in all, 44.2 MB of them frames.
+  - The plan's time model gives 1.76 h without errors and 2.10–2.11 h at 3.7 % errors; 1.0 % of these requests failed.
+  - After three failed searches, `big-bend.panther-junction/2025-06-14` was marked failed at 11:30:05 UTC. Whether to resume it is the lead's call.
+  - The queue then held 180 entries done, 1 active, 1 failed and 265 pending, waiting for the next UTC day's budget.
+- **T0's answer** (sidecar frame heights only; no image opened). The last 3:2 frame (666 px tall) and the first 16:9 frame (562 px), by local date:
+
+| Camera | Last 3:2 | First 16:9 |
+|---|---|---|
+| `point-reyes.beach` | 27 Mar 2023 | 10 Apr 2023 |
+| `acadia.mcfarland` | 12 Aug 2023 | 26 Aug 2023 |
+| `yosemite.turtleback` | 22 Aug 2023 | 5 Sep 2023 |
+| `big-bend.panther-junction` | 2 Dec 2023 | 16 Dec 2023 |
+| `smokies.look-rock` | 11 Mar 2024 | 25 Mar 2024 |
+| `grand-canyon.yavapai` | 24 Apr 2024 | 20 May 2024 (the archive has no frames between) |
+
+  - Every switch falls inside the archive check's bracket, and each is earlier than the start of the plan's bulk span at that camera. Big Bend's span starts in Jan 2025 for another reason: D-024's check of its "framed lower" 2024-01-15 frame.
+  - A frame's height shows only the switch of aspect ratio, not a re-aim (D-042). Big Bend's and Grand Canyon's view checks still need eval's registration.
+- **Point Reyes 2023, a reading of D-024.** The tranche includes Point Reyes's weeks of 17–23 Jul and 14–20 Aug 2023. They lie inside D-024's "Jul 2023 →" span, though D-024's note names summers 2024 and 2025 for development. The lead queued them as written. T0 now dates Point Reyes's 16:9 epoch from between 27 Mar and 10 Apr 2023. The owner may change this before the 14 Dec freeze.
+- **Next, from the plan:**
+  - extend the spans where T0 shows an earlier switch, and generate T1b, T3pr, T2 and T1c again;
+  - ask eval to register the Big Bend and Grand Canyon check frames;
+  - queue T1b while T1a runs, then T3pr's six clear days once T1a has landed.
+- **Archived HRRR for these dates is the forecast package's job:** 361 development dates through T2 (424 with T1c), about 96 GB of transfer at the 24 h lead through T2 (113 GB with T1c), deleted after extraction.
+
+## D-053 — Forecast 0.2.0: survey lags in the model, `tick`, explicit hours · decided (forecast package; uncommitted, not running) · 2026-11-20 · amends D-027
+- **Survey lags** (`lookout-forecast lag-survey --log`) are written only by that command, as `"method": "survey"` events in `forecast_log/lag_survey/<day>.jsonl`, under the lock `state/locks/forecast-lag-survey.lock`. A survey never logs an hour already logged, live or survey. Where both exist the live lag wins; both enter the p95.
+- **The real survey,** 03:11:48–03:12:41 UTC on 20 Nov:
+  - 194 runs (2026111200 to 2026112001), 0 incomplete, 4,676 listed hour-lags;
+  - 4,082 survey events logged; the 594 hours already logged live all had equal lags (0.0 s apart);
+  - 194 listings, 3,160,172 bytes, by the survey's own ledger, no GRIB. Its saved pages (`--save-listings`) number 197, 3,181,611 bytes: it first listed 2026112003, 2026112002 and 2026112001 to find the newest complete run, then listed 2026112001 again at the end, and the ledger leaves those three out. 0.2.0 re-uses the end search's listing, and reports `transfer_with_end_search` beside `transfer`.
+- **Lags** (median / p95 / max): f00 51.36 / 60.52 / 63.28 min; f06 62.77 / 74.45 / 115.92; f12 73.91 / 86.22 / 131.17; f18 85.24 / 98.15 / 115.68; f48 107.57 / 116.65 / 117.48 (n = 33). 3 lags above 120 min; 1,847 later than the forecast.md curve.
+- **The model:** 576 of 576 cells are now off the fallback, all by rule 2 (436 on live lags alone). No cell has the 20 lags rule 1 needs (8–9 each). TODO(M1): survey again now and then, from the last surveyed run or earlier.
+- **Lag records are checked strictly:** the run is a `YYYYMMDDHH` string, the hour an integer of 0 or more, and the lag a number from 0 to 24 h. Anything else is counted as invalid and not used. The real log has 0 invalid records.
+- **`tick`:** one call of the Lambda handler, the code path the scheduled Lambda runs. It exits 0, or 1 if a run failed in the call, or 4 if every failure was a cap refusal; the JSON is unchanged.
+- **Also:**
+  - an explicit hour list (`ExtractOptions.hours`, `run --hours`);
+  - one listing per extracted run;
+  - a field-set change that is not a superset now leaves stored runs `kept` at no cost. On 0.1.0 it re-fetches 3 runs every tick and writes nothing: 18 range requests and 138,159 bytes a tick, reproduced on HEAD;
+  - `lag-survey` lists the end run once.
+- **Versions:** the package is 0.2.0, and `schema_version` stays 1, because eval's reader accepts only 1. Live files written by 0.2.0 validate under the 0.1.0 schema; archived files do not (2 errors, 4 when the stamps win, D-054).
+- **Evidence:** 177 passed, 1 network test deselected; eval's pair contract 13 of 13; an offline replay of the survey with the final code gave identical events.
+- **Not running:** the stand-in runs 0.1.0 from `034c46b` until the lead re-snapshots.
+
+## D-054 — An archived HRRR hour is never available before its own S3 stamps · decided in code (forecast package; uncommitted); the PRD §8.3 change is proposed for the lead · 2026-11-20 · amends D-027
+- **Finding** (this workflow's forecast review): with survey lags, every fallback cell moved to rule 2, which rests on November 2026 lags. For archived runs of other seasons the model could then be earlier than the run's own S3 stamps, so a run could be chosen for an issue time before it was published (PRD §13.9 leakage).
+  - **Reproduced:** run 2025071500 f46 was modelled available at 01:49:36Z, but its stamps read 01:54:30Z (GRIB2) and 01:54:34Z (`.idx`). `select_stored_run` chose it at an issue time of 01:52Z.
+  - **Scale:** 18 archived runs were listed (2015-07 to 2026-03; 442,353 bytes of listings, no GRIB). In the 14 runs that keep both stamps, 49 of 686 hours were published after the model's time, by up to 6.37 min (2021031512 f32).
+- **Decision:** an archived hour's availability is the later of the model and the floor its trusted S3 stamps set.
+  - The floor is the later of the hour's GRIB2 and `.idx` `LastModified`, as for a live run.
+  - A stamp counts only within 24 h of the run start (`STAMP_TRUST_H`). With only the GRIB2 stamp trusted, the floor is that stamp + 300 s; with neither, the model alone.
+  - Where the stamps win, the source is `archived-s3-lastmodified`, and `availability_model` records `s3_floor_utc` and `s3_stamps_ignored`. `validate_document` refuses an archived time before its floor.
+  - `listed_availability(bucket)` applies the floor to a run not stored yet.
+- **Evidence:**
+  - With the floor, 0 of the 686 hours are early, and 91 hours take their stamp.
+  - Rewritten stamps exist: every `.idx` of 2020120312 and 2021011500 is stamped 17 Feb 2021, and both objects of the 2015 and 2018 runs carry 2020–2021 stamps. Published stamps fall 46.6–131.2 min after the run start (4,688 hours of 195 November runs).
+  - The `.idx` came 3–188 s after its GRIB2 (median 4 s) in 5,374 hours, and never before it.
+  - The M0.5 pair's run choice is unchanged by the floor.
+  - **Re-checked** from the listings the forecast package saved (scratch folders of this workflow; 197 November pages and 18 archived runs, 442,353 bytes): 4,688 hours of 195 November runs at 46.6–131.2 min, 686 hours of 14 archived runs at 49.9–116.5 min, and the `.idx` 3–188 s after its GRIB2 over all 5,374. The fixer's reproduction script, run on the final code at 11:46 UTC, gives 2025071500 f46 its `.idx` stamp, 01:54:34Z, and `select_stored_run` at 01:52Z chooses nothing. `select_run_for_issue` with no listing still gives the model's 01:49:36Z, which is why eval should pass `listed_availability` (below).
+- **The same 24 h rule for the lag log:** the survey never logs an hour with a stamp more than 24 h after the run start, and readers count such a lag as invalid. One rewritten stamp would otherwise push its cell to 33–75 days.
+- **For the lead:**
+  - eval's `pair_forecast.choose_run` should pass `listed_availability`, or choose among stored files with `select_stored_run`;
+  - PRD §8.3's "modelled as run start plus the live-measured p95 lag" may want the floor added. That is a spec change, not a fact, so v0.4.1 leaves it.
+- **Risks:** a real publication delay of over 24 h would be read as a rewrite (none seen; the largest is 131.2 min). The 300 s margin is empirical (largest gap seen 188 s).
+
+## D-055 — Speech library 0.2.0: the C ABI, a stable-text event, and symbol checks · decided (speech package; never run on the recognizer) · 2026-11-20 · amends D-015
+- **What:** `app/speech-macos/`, a Swift static library with a C ABI (`include/lookout_speech.h`). It runs engine A1, SpeechAnalyzer with `DictationTranscriber`, on device only. `lookout-transcribe` replays a WAV through the ABI; its timings are diagnostics, never the D-004 or PRD §10.6 measure.
+- **ABI beyond the spike's seven prototypes** (all additive):
+  - `lk_speech_set_contextual_strings`: the viewpoint aliases of PRD §7.1, passed to `AnalysisContext.contextualStrings`;
+  - `lk_speech_set_silence_pad_ms`: lever 1, default 0 ms (D-056);
+  - `lk_speech_set_model_retention`;
+  - named `LK_SPEECH_*` codes;
+  - **`LK_EV_STABLE = 4`:** the finalized part of the hypothesis, with its audio range. It comes right after the PARTIAL of the same result, or alone when a tentative result is finalized unchanged, and its text is always a UTF-8 byte prefix of the current PARTIAL.
+  
+  Consumers ignore kinds they don't know. The spike maps 4 to `Unknown` and is unaffected.
+- **Why a separate event:** PRD §7.1's `Partial` carries `stability`, and lever 2 and §10.1 act on a stable partial. A byte count in `error_code` would collide with the status codes and show non-zero codes on partials in check 6's logs.
+- **Bounds in code:**
+  - `lk_speech_cancel` waits for at most one chunk of 4,096 samples, during the silence pad too;
+  - the converter's input copy is zeroed once consumed;
+  - a refused push sets an overflow flag that is never cleared;
+  - `lk_speech_free` must not overlap any other call on the session.
+- **Static checks:**
+  - One deny list (`scripts/forbidden-symbols.txt`) covers undefined symbols and Objective-C selectors.
+  - An exact, reviewed allow list (`scripts/archive-imports.txt`: 400 imports and 39 selectors) fails on any change until it is reviewed.
+  - A self-test must reject 20 crafted archives.
+  - These catch accidents, not deliberate evasion; spike check 7's network monitor stays the run-time evidence.
+- **Tests:** a C initializer puts a trap engine behind the recognizer for the whole test process, so no test reaches the Speech framework or a prompt. `lookout-transcribe` is signed ad hoc as `dev.lookout.transcribe`, with its Info.plist bound.
+- **Evidence** (`scripts/build.sh`, 20 Nov):
+  - 103 tests pass, also in `make test` at 10:31 UTC;
+  - push p99 2.71–5.12 µs over six runs, 0 of 30,000 pushes over 1 ms; start p50 0.74–0.96 ms;
+  - 0 callbacks after cancel in 1,800 sessions, and 0 audio fed after cancel in 1,200;
+  - cancel waits 1.26–1.73 ms during a backlog, and 5.2–13.5 ms during a pad at 10 ms per buffer;
+  - `liblookout_speech.a` is 907,616 bytes, and its 10 exported `_lk_speech_*` symbols are identical to 0.1.0's.
+- **Not known until the owner runs it:**
+  - whether `progressiveShortDictation` finalizes while the key is held; if not, STABLE arrives just before FINAL and lever 2 gains nothing;
+  - which identity AssetInventory reservations and TCC key on (TODO(M1));
+  - whether a session runs with Speech Recognition "not determined" and no prompt. Apple's documentation says SpeechAnalyzer's transcribers don't need that permission (TODO(M1)).
+- **Not in it:** the Foundation Models parser fallback (TODO(M2)).
+
+## D-056 — The silence pad defaults to 0 ms until the bake-off measures it · proposed (for the lead) · 2026-11-20
+- **Why it needs a decision:** PRD §7.1's finalization lever 1 (a burst silence pad at key-up) is to be "measured, not assumed". The library's default is 0 ms, so a caller that never sets it runs with lever 1 off. The spike never calls `lk_speech_set_silence_pad_ms`, so its check-6 trials run without a pad.
+- **Proposal** (the speech package): keep 0 ms as the library's default. The M1 shell and harness set the pad explicitly and log it with each trial. The bake-off measures the pad, model retention and a launch-time warm-up.
+- **Needed from the lead:** confirm, or choose another default before the bake-off.
+
+## D-057 — The M1 replay script: 130 utterances, with owner-pending rows reported apart · decided (bench package; nothing recorded) · 2026-11-20
+- **The script:** `bench/utterances/scripted.tsv`, 130 rows (30 dev, 100 test). Every one of the 77 aliases is said, and the script hash, over id, split and text, is `3b4256f1cf51`. There are 6 reference clocks.
+  - The expected results come from PRD §7.4–§7.5 and D-039, generated by `prd_reading.py`.
+  - `check.py` reruns `lookout-parse`. It exits 1 on drift or a stale stored verdict, and 2 on a missing or stale binary.
+- **Split discipline:** test rows are looked at only in measured runs. The three already seen are named (t036, t074, t075). The text-level number before any parser change is recorded: 94 of 100 exact.
+- **Owner-pending rows** (d01, d02, d29, t035, t036, t075) keep the reading's guess and are reported apart until the owner rules on three rule questions:
+  - a name close to an alias that only fuzzy matching finds;
+  - a place name plus a leftover word;
+  - a lone generic word.
+  
+  The builder's row-level parser asks ("tacoma" as an alias or a refusal; a "yosemite valley" alias) are withdrawn, because they would tune the test set.
+- **Follow-ups:**
+  - each comes straight after a row that resolves to its context place, which `check.py` enforces;
+  - the scorer re-parses at the context the app actually used (an id in the trace), never at the context column;
+  - t100 is played first after a launch.
+- **Proposed for the lead's scorer:**
+  - "exact place and time" without the owner-pending rows, with the denominator named;
+  - normalised WER applies the same spoken number forms (`check.py --reading-list`) to both sides.
+- **Consent:** the scripted set is opted in once per version of the script, and real-use recordings one at a time.
+- **Format:** a recording keeps the device's own channel count and rate, recorded in its sidecar. The harness refuses a fixture that differs from the open stream (TODO(M1)).
+- **Evidence:**
+  - 40 bench tests;
+  - against the reading, the parser gets 94 of 100 test rows exact, 97 counting soft differences (94 of 97 and 96 of 97 without the three pending test rows);
+  - solar times within 1 s of an independent Meeus Sun on 28 rows;
+  - clock-based times identical on 86 of 86 rows.
+- **Open, for the lead before the first overnight run:**
+  - whether idle passes keep the display awake (`caffeinate -di`, or the Lock Screen setting) or let it sleep and report those trials apart. This Mac turns its display off after 10 min on AC, and every idle trial follows 30 min without a query;
+  - whether follow-up trials may be idle. PRD §7.4 sets no expiry for the last place asked about.
+
+## D-058 — More parser readings for the owner · proposed (for the owner) · 2026-11-20 · amends D-039
+- **From the replay script** (D-057). The parser and the reading agree on each; the owner confirms or changes them with D-039, by 14 Dec:
+  - dawn and dusk are civil twilight, Sun at −6° (PRD §7.4 has no rule for them);
+  - "tonight" asked after it has passed means the next whole hour;
+  - an hour said with "tonight" that has passed goes to tomorrow, as §7.4 row 2 says literally: "Rainier tonight at 9" asked at 21:30 is tomorrow at 21:00 (t030);
+  - a part of the day, or noon, that has passed today means tomorrow's, though §7.4 states that roll only for an hour said with AM, PM, "tonight" or "this morning";
+  - "live" means now;
+  - "tomorrow" is the place's tomorrow (§7.4, "local to the place"). Asked at 23:30 in Chicago, "Acadia tomorrow at 9" is Saturday (d20);
+  - the 48 h and 7-day horizons count from now. Counted from the newest usable model run (PRD §8.3), t012 would get the GFS caption, and t022 and t083 would be out of range or at the limit.
+- **Undefined:** what "the last place asked about" is after a miss. The script no longer depends on it.
+- The three rule questions of D-057 go to the owner as well.
+
+## D-059 — AWS: capture's S3 grants for D-028, a 35-day cache expiry and an offline provider install · decided (infra package; not applied) · 2026-11-20 · amends D-034
+- **Grants:**
+  - capture reads and writes `frames/`, `thumbs/`, `cache/staging/`, `capture_log/`, `state/capture/` and its locks;
+  - capture deletes only `cache/staging/` and its own locks;
+  - forecast loses its `cache/` grant, because its GRIB subsets stay on the function's `/tmp`.
+  
+  Without the change, capture 0.2.0 on Lambda would have lost the six hourly cameras' frames: a medium finding of this workflow's capture review.
+- **Pinned by tests:** `lambda.tftest.hcl` checks the grants against the keys the worker code builds. It pins each role's whole policy, exactly four statements, so an added statement cannot widen a grant.
+- **`cache/` expires after 35 days, not 7.** It is a backstop for staged copies capture never deleted. It outlasts the longest hard stop (one budget month), because a stopped capture job decides its last hours only when it runs again.
+- **Offline provider install:**
+  - `infra/tf_providers.sh` installs hashicorp/aws 6.73.0 from the plugin cache (`init -plugin-dir`), with no network, when the cached package's `h1:` hash is in the lock file;
+  - otherwise the default mode falls back to the registry; `--offline` never contacts it;
+  - Terraform runs with `CHECKPOINT_DISABLE=1`;
+  - CI on linux_amd64 always falls back, because the lock files hold the darwin_arm64 hash only.
+- **Evidence:**
+  - `infra/test.sh` passes every check: static 6, root `terraform test` 50, bootstrap 4, the offline provider path 22, scripts 26, cost 5, and the build-context check (22.5 s);
+  - it also passed under a sandbox that denied outbound connections;
+  - 41 targeted mutations were caught: 24 in the policies, and 17 in the cost estimate, the no-email check and the tflint step.
+  
+  Nothing is planned against an account or applied.
+- **Lambda smoke, run 3** (06:59 UTC on 20 Nov, image `lookout-lambda:8246a8bd570b` built from `8246a8b`, 293.8 MB compressed):
+  - init 232 ms;
+  - first call 2,696 ms, extracting 2 runs (7,254,750 bytes from NOAA);
+  - second call 38 ms;
+  - peak memory 144.8 MiB.
+  
+  These are laptop numbers under the Runtime Interface Emulator, not AWS.
+
+## D-060 — Hosting estimate redone on 8246a8b: $2.07–4.03 in month 1 with the free tiers · proposed (for the owner, with D-035) · 2026-11-20 · amends D-035
+- **New estimate** (`infra/README.md`, "Monthly cost estimate"). `cost/estimate.py` runs on a simulation of the committed capture code: 24 h against a mock S3 bucket. Nothing is deployed, so nothing is observed on AWS.
+  - **With the free tiers:** $2.07–4.03 in month 1, $2.32–4.29 in month 2, $2.53–4.52 in month 3, then about $0.22 more each month as storage grows. The bottom of the range passes $3 in month 6; the top is above it from month 1.
+  - **Without them:** $5.63–9.83 in month 1.
+  - D-035's $1.60–2.81 is superseded.
+- **The largest lines:**
+  - S3 requests, $1.87–1.92;
+  - Lambda compute up to $1.81 at the top of the range. Two inputs drive it: capture's billed waiting, 35.7 s a pass on average under 0.2.0's 1 s poll margin, and forecast run times, assumed to be 30–150 s.
+- **With capture 0.2.1** (D-048): the waiting falls to 14.6 s a pass, and the total with the free tiers to $2.07–2.81 in month 1 and $2.31–3.07 in month 2.
+- **What it means for D-035:** at the top of the range the free 400,000 GB-s run out on day 22, and the $3 hard stop would halt both schedules around day 27 of month 1. D-035's recommendation stands: keep the alerts and turn the hard stop off for the sealed window. PRD §17's "≈ $0–1" is out of date; PRD v0.4.1's pointers now name this estimate.
+- **Levers** (the workers' owners):
+  - capture takes a lock and writes its state at every poll: 5,360 PUTs a day, $0.80 a month;
+  - forecast re-checks its 12 h lookback with a HEAD per viewpoint: $0.33 a month;
+  - old state versions are kept 30 days: about $0.04 a month.
+
+## D-061 — The M0.5 data report, and how the 72 h clock is counted · decided (eval's counting rules; the clock rule is proposed for the lead) · 2026-11-20
+- **Tool:** `lookout-eval data-report [--since] [--until] [--json]` (`eval/src/lookout_eval/data_report/`). It reads logs, state and the disk, and writes nothing. It builds the gate's table: runs and frames per viewpoint, outages and exclusions (PRD §16, M0.5). The second workflow's critic found no tool that did.
+- **Counting rules:**
+  - **Capture:** a gap of more than 540 s between passes is an outage. The lost time is the gap less one 300 s interval.
+  - **Forecast runs:** a run counts at a viewpoint where that viewpoint's first live write of it falls inside the window. A later write is a re-extraction. Catch-ups (runs due before the window) are counted and listed apart.
+  - **Forecast lateness** is judged on `fetch_finished_utc` (D-027). A run is due when its last extracted hour is on S3. It is late, and the span is an outage, when no live run finished within 900 s of the due time (`forecast_gap_s`). The outage runs from the due time to the finish of the next live run written; time is lost from due + 300 s, so lost = length − 300 s.
+  - **Cycles never written** are dated by the window's median lag, else the median over every complete run in the logs, else 120 min. With no live run in the logs, the whole window is lost.
+  - **Read at run time:** state files are read as they are when the report runs. Archive work, the backtest pair's archived run, survey lags and duplicate lags are listed as exclusions. Every path is written with `~` for the home directory.
+- **The clock:**
+  - The headline is PLAN.md's rule: the capture loop's outages extend the clock.
+  - The union of both jobs' outages is shown beside it, labelled "proposed, not a recorded rule".
+  - At 10:30 UTC on 20 Nov: capture 10.21 h lost, so the earliest close is 22:36:51 UTC on Sun 22 Nov. Both jobs: 10.43 h, 22:50:09 UTC. Both close later if anything more is lost. A re-run to 11:42 UTC gave the same figures.
+  - **The 540 s threshold is the report's,** not PLAN.md's. Under it the 02:39 restart (D-049) loses nothing: its passes were 147.5 s apart, though each camera went 483–486 s between polls. Counted as the lead counts it, a short outage of 183–186 s beyond one interval, the capture close moves to about 22:40 UTC (22:39:54–22:39:57), and the both-jobs close to about 22:53.
+- **Needed from the lead:** choose the rule and record it here, in two parts:
+  - which outages count: the capture loop's (PLAN.md) or both jobs';
+  - whether a restart counts: the report counts only gaps over 540 s between passes, so the 02:39 restart adds nothing; counted from each camera's last poll to its next, less one 300 s interval, it adds 183–186 s.
+- **Evidence:**
+  - 40 data-report tests;
+  - 14 of 14 mutants killed (the eval fixer's `mutate.py`; re-run on a scratch copy of the working tree at 11:43 UTC on 20 Nov: baseline 53 passed, 14 of 14 killed);
+  - an independent standard-library script matched all three clocks to the millisecond (06:33:54 UTC cut).
+
+## D-062 — oculus-core provenance: records now name the build that ran · decided (eval; uncommitted) · 2026-11-20 · amends D-025
+- **Change:** eval's `OculusBackend.version` reads the commit from the installed `oculus-core-py`'s PEP 610 `direct_url.json`, giving `0.1.0+1b5410b`. When only the pin is known it adds `.pinned`.
+  - `OCULUS_PINNED_REV` is `1b5410b…`, and a test keeps it equal to `pyproject.toml` and `uv.lock`.
+  - `app/core/src/solar.rs`'s comment names `1b5410b`.
+  - That resolves D-025's "Left over".
+- **The four M0.5 pair records** keep `oculus-core 0.1.0+06809e6`, as written, because they are measured outputs. The evidence file's §9 says the build that ran was `1b5410b`:
+  - its `direct_url.json` names that commit;
+  - it was built at 12:31:59 UTC on 19 Nov and has been in `eval/.venv` since 22:08 UTC at the latest, both before run 1 (23:25 UTC).
+  
+  No number changes, because `ephem.rs` is identical in both commits.
+- **Also in eval:** its dev group adds `eccodes` 2.50.1 and `eccodeslib` 2.50.0.34, the forecast worker's locked versions. So the pair's real-extractor test now runs in `make test` instead of skipping, and an import failure fails it.
+
+## D-063 — `make test` runs ten suites; CI runs all but the laptop-only speech suite · decided (integration package; uncommitted) · 2026-11-20
+- **Suites:** common, capture, forecast, eval, renderer, rust, speech, infra, docs and bench (`TEST_SUITES`).
+  - Every Python suite runs `ruff check`, `ruff format --check` and pytest behind a dead proxy.
+  - `speech` (app/speech-macos, `swift test`) is in `LAPTOP_ONLY_SUITES`: it needs macOS 26 and Xcode 26.2, and CI has no macOS job.
+  - Adding a macOS runner is the owner's call, because it bills at a higher rate on a private repository.
+- **The docs checks gain three:**
+  - `notices`: THIRD_PARTY_NOTICES names every third-party package that a `uv.lock`, `Cargo.lock` or `package.json` pins, at its version. It reads neither the two Terraform lock files nor Lookout's own package versions, which are kept by hand;
+  - `appendix-a`: PRD Appendix A has the manifest schema's shape (D-044);
+  - `ci-suites`: CI runs exactly `make test`'s suites, less the laptop-only ones.
+  
+  That makes 16 checks and 85 tests.
+- **Evidence:**
+  - `make test` passed all 10 suites, 10:30:57–10:34:41 UTC on 20 Nov (224 s): common 258, capture 191, forecast 177, eval 367 (1 skipped), renderer 183, rust 108, speech 103, infra 113, docs 85 and bench 40;
+  - with dependencies cached, all 10 suites also passed under a sandbox that denied every outbound connection and DNS (223 s; the Makefile's header).
+
 ---
 
 ## Spend ledger

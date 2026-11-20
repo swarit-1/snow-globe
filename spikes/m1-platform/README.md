@@ -321,7 +321,7 @@ syntax). Option-only and Option+Shift shortcuts are refused, because macOS 15+ r
 
 ## Known limits
 
-- **Check 6 has not linked the real library.** The `--features speech` build was compiled, linted with clippy and linked only against a throwaway C stub with the same ABI, which was never run. `TODO(M1)`: build again once `app/speech-macos` exists. The header test in `tauri-app/src/speech.rs` then compares it with this ABI.
+- **Check 6 links the real library, which has not run yet.** The `--features speech` build links `app/speech-macos`'s static library (0.1.0 at 03:39 UTC on 20 Nov; 0.2.0 since the lead rebuilt it at 12:36 UTC: 1,013 `LookoutSpeech` symbols, Speech.framework). The header test in `tauri-app/src/speech.rs` compares the library's header with this ABI. `TODO(M1)`: the binary is still signed with the linker's identifier and no bound Info.plist.
 - **Checks 2 and 3 confirm "typing reached the other app" automatically only with the terminal as the other app**, because the spike reads its own stdin. With any other app, your `y`/`n` is the evidence, and it is logged as a `note`.
 - **The tag is opaque.** The PRD §10.4 paint rule (first frame at ≥ 50 % opacity during a 120 ms cross-fade) belongs to the M1 harness. Here the join reports request → first frame carrying the tag.
 - **CRC-5 is not perfect.** It catches every single- and double-cell error. Measured exhaustively in the unit tests (every cut of every pair): a redraw torn between consecutive tags never decodes as a third tag (0 of 29,930 strips in `tags` mode, 0 of 28,392 in `reveal` mode), but between tags 2 to 16 generations apart, 890 of 612,776 torn strips (0.15 %) do. So the join also fails on any tag the app never drew.

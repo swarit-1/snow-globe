@@ -5,9 +5,18 @@ Lookout (repository: snow-globe)
 First version, 20 Nov 2026, written by hand from the lock files and manifests
 in the repository (commit 3ac98b3 plus the uncommitted working tree of that
 day); revised the same night to add the Python runtime closures and the
-native libraries bundled in the wheels. It implements PRD.md §12 and the
-licence ledger of §15.4. At M5 a version generated from the licence ledger
-replaces it (PLAN.md, M5).
+native libraries bundled in the wheels. Revised again on 20 Nov (about 11:00
+UTC) for the working tree on top of commit 8246a8b: lookout-capture 0.2.1,
+lookout-forecast 0.2.0, eval's development copy of ecCodes, the Swift speech
+library (section 6) and the Lambda image built from 8246a8b (section 7). No
+third-party package version changed in any lock file. It implements PRD.md
+§12 and the licence ledger of §15.4. At M5 a version generated from the
+licence ledger replaces it (PLAN.md, M5). docs/checks' `notices` check keeps
+it in step with every uv.lock, Cargo.lock and package.json git sees: each
+third-party package they pin must be named here at its version. It does not
+read the Terraform lock files (infra/terraform/.terraform.lock.hcl and
+infra/terraform/bootstrap/.terraform.lock.hcl), and Lookout's own package
+versions are kept here by hand.
 
 Scope
 - Data sources, and code or algorithms used in Lookout's own source.
@@ -191,13 +200,15 @@ Planned, not in the code yet
     Development only: pytest 9.2.0 (MIT), ruff 0.17.5 (MIT),
     moto 5.2.5 (Apache-2.0).
 
-4b. workers/capture: lookout-capture 0.2.0 (declares MIT)
+4b. workers/capture: lookout-capture 0.2.1 (declares MIT; 0.2.1 is the
+    working tree, and 0.2.0, committed in df1838a, is what runs)
     lookout-common   0.1.0    this repository, with the "s3" extra
     httpx            0.28.1   BSD-3-Clause
     pillow           13.0.0   MIT-CMU
     Development only: pytest, ruff, moto, boto3 (as above).
 
-4c. workers/forecast: lookout-forecast 0.1.0 (declares MIT)
+4c. workers/forecast: lookout-forecast 0.2.0 (declares MIT; 0.2.0 is the
+    working tree, and 0.1.0, committed in 09e2ec8, is what runs)
     lookout-common   0.1.0       this repository, with the "s3" extra
     httpx            0.28.1      BSD-3-Clause
     jsonschema       4.26.0      MIT
@@ -221,8 +232,11 @@ Planned, not in the code yet
     jsonschema       4.26.0     MIT
     scipy            1.18.1     BSD-3-Clause
     oculus-core-py   0.1.0      MIT (optional "oculus" group; git rev 1b5410b)
-    lookout-forecast 0.1.0      this repository (optional "forecast" group)
-    Development only: pytest, ruff (as above), hypothesis 6.170.15 (MPL-2.0).
+    lookout-forecast 0.2.0      this repository (optional "forecast" group)
+    Development only: pytest, ruff (as above), hypothesis 6.170.15 (MPL-2.0),
+    and, so that the backtest pair's real-extractor test runs (D-062),
+    eccodes 2.50.1 and eccodeslib 2.50.0.34 (Apache-2.0, ECMWF), the forecast
+    worker's locked versions.
 
 4e. Runtime closures: every third-party package each project installs to
     run, development groups left out, at its uv.lock version. Licences as
@@ -330,12 +344,17 @@ Planned, not in the code yet
     third-party licences), which renders through SwiftShader (Apache-2.0).
 
 
-6. SWIFT (app/speech-macos)
+6. SWIFT (app/speech-macos: Swift package LookoutSpeech, library 0.2.0)
 -------------------------------------------------------------------------------
 
-    Not written yet; no third-party packages. When it is, it uses Apple's
-    system frameworks (Speech / SpeechAnalyzer, Foundation Models) under the
-    Apple SDK terms.
+    No third-party packages: Package.swift declares no package dependencies,
+    so there is no Package.resolved. The library links only Apple's system
+    frameworks from the macOS 26.2 SDK, under Apple's SDK terms: Foundation,
+    AVFoundation, CoreMedia and Speech (SpeechAnalyzer with
+    DictationTranscriber, and AssetInventory for the on-device model), plus
+    the Swift runtime that ships with macOS. Foundation Models is not used yet
+    (TODO(M2), the parser fallback). Build and check tools, not shipped:
+    Xcode 26.2 with Swift 6.2.3, and ShellCheck 0.11.0 for its scripts.
 
 
 7. INFRASTRUCTURE (deployed to the owner's AWS account; not shipped to users)
@@ -343,14 +362,22 @@ Planned, not in the code yet
 
     hashicorp/aws Terraform provider 6.73.0 (MPL-2.0), pinned in
     infra/terraform/.terraform.lock.hcl and the bootstrap's lock file.
-    The Lambda image starts from public.ecr.aws/lambda/python:3.13 (AWS). It
-    installs, with uv 0.11.6 (MIT OR Apache-2.0), the locked runtime closures
-    of capture and forecast: the 28 third-party packages of the capture and
-    forecast rows in 4e, plus this repository's lookout-common,
-    lookout-capture and lookout-forecast. The package list of the first local
-    image build (20 Nov) matches them. They are the Linux wheels, whose
-    bundled native libraries differ from the macOS ones in 4f (numpy's
-    licence file names OpenBLAS and the GCC runtime for such builds) and are
-    not listed yet: TODO(M5).
+    The Lambda image starts from public.ecr.aws/lambda/python:3.13 (AWS),
+    pinned by digest in infra/lambda/Dockerfile. It installs, with uv 0.11.6
+    (MIT OR Apache-2.0; its image is pinned by digest too), the locked runtime
+    closures of capture and forecast: the 28 third-party packages of the
+    capture and forecast rows in 4e, plus this repository's lookout-common,
+    lookout-capture and lookout-forecast. The package lists of the first local
+    build and of the build from commit 8246a8b (20 Nov; lookout-capture 0.2.0,
+    lookout-forecast 0.1.0, 31 distributions in /var/task) match them. They
+    are the Linux wheels, whose bundled native libraries differ from the
+    macOS ones in 4f (numpy's licence file names OpenBLAS and the GCC runtime
+    for such builds) and are not listed yet: TODO(M5).
+    The base image also carries AWS's own Python packages behind /var/task on
+    the runtime's path: awslambdaric 4.2.2, boto3 and botocore 1.43.127,
+    jmespath 1.1.0, pip 26.2.2, python-dateutil 2.9.0.post0, s3transfer
+    0.19.3, simplejson 4.3.0, six 1.17.0, snapshot-restore-py 1.0.0 and
+    urllib3 2.8.0 (infra/README.md). They come with the base image under AWS's
+    terms; their licences were not read here: TODO(M5).
     Terraform, Docker and uv themselves are build tools and are not
     redistributed.
