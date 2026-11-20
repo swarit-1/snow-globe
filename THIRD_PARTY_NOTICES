@@ -1,0 +1,356 @@
+THIRD_PARTY_NOTICES
+Lookout (repository: snow-globe)
+===============================================================================
+
+First version, 20 Nov 2026, written by hand from the lock files and manifests
+in the repository (commit 3ac98b3 plus the uncommitted working tree of that
+day); revised the same night to add the Python runtime closures and the
+native libraries bundled in the wheels. It implements PRD.md §12 and the
+licence ledger of §15.4. At M5 a version generated from the licence ledger
+replaces it (PLAN.md, M5).
+
+Scope
+- Data sources, and code or algorithms used in Lookout's own source.
+- Rust: each crate's direct dependencies at the versions its lock file pins,
+  with licence counts for every other crate the lock file holds.
+- Python: each project's direct dependencies; then every third-party package
+  it installs to run (its runtime closure, development groups left out), at
+  the versions its uv.lock pins; then the native libraries bundled inside
+  those wheels on this Mac (section 4).
+- Node: the renderer's direct dependencies, plus the one runtime package they
+  pull in.
+- Each package's own licence text ships inside its distribution. The lock
+  files list everything else (app/Cargo.lock, spikes/m1-platform/Cargo.lock,
+  workers/common/uv.lock, workers/capture/uv.lock, workers/forecast/uv.lock,
+  eval/uv.lock, renderer/pnpm-lock.yaml).
+- Licences were read on this machine from the packages' own files:
+  `cargo metadata --offline`; the installed wheels' METADATA, licence and
+  SBOM files; renderer/node_modules/*/package.json. No network was used.
+- Not covered yet, TODO(M5): the licence texts of the native libraries that
+  eccodeslib and eckitlib bundle (4f); the Linux wheels inside the Lambda
+  image, whose bundled libraries differ from the macOS ones in 4f (section
+  7); and the renderer's transitive development tools, which never ship.
+
+Lookout's own licence
+- Not chosen yet. The Python packages declare "MIT" in their pyproject.toml,
+  the renderer's package.json says "UNLICENSED" (private), and the Rust crates
+  declare none. The repository has no LICENSE file. The owner chooses one
+  before the repository is made public.
+
+
+1. DATA SOURCES
+-------------------------------------------------------------------------------
+
+National Park Service webcam imagery (8 cameras; DECISIONS.md D-020)
+  Basis:  generally public domain, per the NPS website disclaimer,
+          https://www.nps.gov/aboutus/disclaimer.htm
+          - The 7 Air Resources Division air cams name "National Park
+            Service" as Artist and Copyright in their EXIF data (spot check,
+            19 Nov 2026).
+          - The Mount Rainier park camera (webcams-mora/mountain.jpg) carries
+            no ownership metadata.
+          - Written confirmation is requested; the drafts are in
+            docs/outreach/nps-confirmation.md, not yet sent.
+  Duty:   credit "Webcam imagery courtesy National Park Service. Derived
+          images are not NPS products." No implied endorsement.
+  Status: frames stay private until NPS confirms (PRD §15.1). None are in
+          this repository.
+
+NPS AirWebCams archive (metadata and archived frames; D-018)
+  Same basis and duty as the imagery above. Not a documented public API.
+
+NOAA High-Resolution Rapid Refresh (HRRR), s3://noaa-hrrr-bdp-pds (AWS)
+  Basis:  US government work, public domain; distributed through NOAA Open
+          Data Dissemination (NODD) on AWS.
+  Duty:   credit "Forecast data: NOAA HRRR via NOAA Open Data Dissemination".
+
+US government geographic facts used in viewpoints/manifests/
+  USGS 3DEP elevations (Elevation Point Query Service), USGS GNIS place
+  coordinates, the NPS ARD webcams feature layer (ArcGIS), and EPA AirNow and
+  CASTNET site coordinates.
+  Basis:  US government works, public domain. Only coordinates and heights
+          are used; each manifest lists its sources with access dates.
+
+Other cited sources in the manifests
+  TopoQuest and Wikipedia are cited for single facts (a GNIS id, a summit
+  height). No content is copied from them.
+
+IANA Time Zone Database
+  Basis:  public domain. Bundled through tzdata (Python) and chrono-tz (Rust).
+
+Planned, not used yet
+  - Open-Meteo, pinned GFS beyond 48 h: data CC BY 4.0; free API for
+    non-commercial use. Duty: a link beside any display, marked "modified".
+  - GOES-18 (s3://noaa-goes18): US government, public domain.
+
+
+2. CODE AND ALGORITHMS USED IN LOOKOUT'S SOURCE
+-------------------------------------------------------------------------------
+
+oculus-core (https://github.com/swarit-1/oculus, crate core/, rev 1b5410b)
+  Licence: MIT. Used by app/core (Rust, a Cargo git dependency) and by eval's
+  optional "oculus" group (Python binding oculus-core-py, built from source).
+  Its MIT notice ships with any build that contains it, including the WASM
+  bundle once the renderer uses it (PRD §8.4; D-002, D-025).
+
+lowbias32 integer hash, by Chris Wellons (hash-prospector)
+  Public domain. renderer/src/math/noise.ts; the credit is a legal comment
+  that the bundle keeps.
+
+Inverse normal CDF rational approximation, by Peter J. Acklam
+  A published algorithm, credited in renderer/src/math/normal.ts (a legal
+  comment that the bundle keeps).
+
+NOAA solar position equations (NOAA Global Monitoring Laboratory solar
+calculator)
+  US government work, public domain. Transcribed in
+  eval/src/lookout_eval/noaa_solar.py (an independent check of oculus-core),
+  workers/capture/src/lookout_capture/sun.py (the Sun position in capture
+  sidecars), renderer/src/ephemeris/sun.ts (the renderer's Sun check) and the
+  app/core tests.
+
+Jean Meeus, Astronomical Algorithms (2nd ed.)
+  Cited: the Saemundsson refraction formula (eq. 16.4) in eval, and worked
+  examples 25.a and 28.b as test values in eval and the renderer.
+
+Astronomical Almanac low-precision Moon formulas
+  Cited; used only in the app/core tests (tests/moon_vs_almanac.rs).
+
+Planned, not in the code yet
+  - Hillaire 2020 atmosphere, ported from sebh/UnrealEngineSkyAtmosphere
+    (MIT) or Babylon.js (Apache-2.0); the notice stays in the source and the
+    bundle (D-013; TODO(M1.5) in the renderer).
+  - Z-Image-Turbo (Apache-2.0), if Tier 2 passes its kill test (M3).
+  - Parakeet weights (CC BY 4.0), only if used (D-004).
+  - The depth model, embedding model and DEM: named in M2; non-commercial
+    weights are excluded.
+
+
+3. RUST
+-------------------------------------------------------------------------------
+
+3a. app/core: crate lookout-core 0.1.0 (ships in the app from M1)
+    Direct dependencies, from app/Cargo.lock:
+
+    Crate          Version   Kind     Licence
+    chrono         0.4.45    normal   MIT OR Apache-2.0
+    chrono-tz      0.10.4    normal   MIT OR Apache-2.0 (bundles IANA tz data)
+    oculus-core    0.1.0     normal   MIT (git, rev 1b5410b)
+    rphonetic      4.0.0     normal   Apache-2.0
+    serde          1.0.229   normal   MIT OR Apache-2.0
+    serde_json     1.0.154   normal   MIT OR Apache-2.0
+    strsim         0.11.1    normal   MIT
+    thiserror      2.0.21    normal   MIT OR Apache-2.0
+    proptest       1.12.0    dev      MIT OR Apache-2.0 (tests only)
+    tempfile       3.27.0    dev      MIT OR Apache-2.0 (tests only)
+
+    Without the dev dependencies, 40 third-party crates are reachable (build
+    scripts included): 23 MIT OR Apache-2.0, 8 MIT, 2 BSD-2-Clause OR
+    Apache-2.0 OR MIT (zerocopy, zerocopy-derive), 2 Unlicense OR MIT
+    (aho-corasick, memchr), 2 0BSD (enum-iterator, enum-iterator-derive),
+    1 Apache-2.0 (rphonetic), 1 (MIT OR Apache-2.0) AND Unicode-3.0
+    (unicode-ident) and 1 Apache-2.0 OR MIT (autocfg). The whole lock file,
+    dev dependencies included, holds 78 third-party crates.
+
+3b. spikes/m1-platform: the throwaway M1 1a platform spike. NOT SHIPPED.
+    Direct dependencies, from spikes/m1-platform/Cargo.lock:
+
+    Crate                          Version   Licence
+    cpal                           0.18.2    Apache-2.0
+    libc                           0.2.191   MIT OR Apache-2.0
+    objc2                          0.6.5     MIT
+    objc2-app-kit                  0.3.2     Zlib OR Apache-2.0 OR MIT
+    objc2-core-foundation          0.3.2     Zlib OR Apache-2.0 OR MIT
+    objc2-core-graphics            0.3.2     Zlib OR Apache-2.0 OR MIT
+    objc2-foundation               0.3.2     MIT
+    screencapturekit               11.1.2    MIT OR Apache-2.0
+    serde                          1.0.229   MIT OR Apache-2.0
+    serde_json                     1.0.154   MIT OR Apache-2.0
+    chrono                         0.4.45    MIT OR Apache-2.0
+    tauri                          2.12.7    Apache-2.0 OR MIT
+    tauri-build                    2.7.6     Apache-2.0 OR MIT (build)
+    tauri-nspanel                  2.1.1     MIT OR Apache-2.0
+    tauri-plugin-global-shortcut   2.4.1     Apache-2.0 OR MIT
+    tempfile                       3.27.0    MIT OR Apache-2.0 (tests only)
+
+    The spike's lock file holds 471 third-party crates. Most are MIT and/or
+    Apache-2.0; others include Unicode-3.0 (18), MPL-2.0 (7), BSD-3-Clause,
+    Zlib and ISC. When the real app shell is built (M1), its own lock file
+    gets its own entry here.
+
+
+4. PYTHON (uv projects; versions from each uv.lock)
+-------------------------------------------------------------------------------
+
+4a. workers/common: lookout-common 0.1.0 (declares MIT)
+    httpx        0.28.1   BSD-3-Clause
+    jsonschema   4.26.0   MIT
+    tzdata       2026.6   Apache-2.0 (the zone data itself is public domain)
+    pillow       13.0.0   MIT-CMU
+    boto3        1.44.6   Apache-2.0 (the "s3" extra)
+    Development only: pytest 9.2.0 (MIT), ruff 0.17.5 (MIT),
+    moto 5.2.5 (Apache-2.0).
+
+4b. workers/capture: lookout-capture 0.2.0 (declares MIT)
+    lookout-common   0.1.0    this repository, with the "s3" extra
+    httpx            0.28.1   BSD-3-Clause
+    pillow           13.0.0   MIT-CMU
+    Development only: pytest, ruff, moto, boto3 (as above).
+
+4c. workers/forecast: lookout-forecast 0.1.0 (declares MIT)
+    lookout-common   0.1.0       this repository, with the "s3" extra
+    httpx            0.28.1      BSD-3-Clause
+    jsonschema       4.26.0      MIT
+    numpy            2.5.5       BSD-3-Clause AND 0BSD AND MIT AND Zlib AND
+                                 CC0-1.0
+    eccodes          2.50.1      Apache-2.0 (ECMWF)
+    eccodeslib       2.50.0.34   Apache-2.0 (ECMWF; its licence file, as its
+                                 METADATA names no licence). It bundles native
+                                 libraries (4f).
+    Pulled in by these and named here because they are ECMWF's too:
+    eckitlib         2.5.0.34    Apache-2.0 (ECMWF; its licence file).
+                                 eccodeslib requires it. It holds ECMWF's 13
+                                 libeckit libraries and bundles 3 others (4f).
+    findlibs         0.1.5       Apache-2.0 (ECMWF); eccodes requires it.
+    Development only: pytest, ruff (as above).
+
+4d. eval: lookout-eval 0.1.0 (declares MIT)
+    lookout-common   0.1.0      this repository
+    numpy            2.5.5      as above
+    pillow           13.0.0     MIT-CMU
+    jsonschema       4.26.0     MIT
+    scipy            1.18.1     BSD-3-Clause
+    oculus-core-py   0.1.0      MIT (optional "oculus" group; git rev 1b5410b)
+    lookout-forecast 0.1.0      this repository (optional "forecast" group)
+    Development only: pytest, ruff (as above), hypothesis 6.170.15 (MPL-2.0).
+
+4e. Runtime closures: every third-party package each project installs to
+    run, development groups left out, at its uv.lock version. Licences as
+    each package's METADATA states them (License-Expression, else License),
+    or its licence file where the METADATA names none. Third-party packages
+    in each closure: common 14, capture 21, forecast 28, eval 16 (17 with its
+    default "oculus" group; its optional "forecast" group adds forecast's).
+
+    In all four closures (common, capture, forecast and eval):
+      anyio                      4.16.0       MIT
+      attrs                      26.1.0       MIT
+      certifi                    2026.10.23   MPL-2.0 (the CA bundle httpx uses)
+      h11                        0.16.0       MIT
+      httpcore                   1.0.9        BSD-3-Clause
+      httpx                      0.28.1       BSD-3-Clause
+      idna                       3.20         BSD-3-Clause
+      jsonschema                 4.26.0       MIT
+      jsonschema-specifications  2025.9.1     MIT
+      pillow                     13.0.0       MIT-CMU
+      referencing                0.37.0       MIT
+      rpds-py                    2026.9.1     MIT
+      typing-extensions          4.16.0       PSF-2.0
+      tzdata                     2026.6       Apache-2.0
+    Also in capture and forecast (common's "s3" extra brings boto3):
+      boto3                      1.44.6       Apache-2.0
+      botocore                   1.44.6       Apache-2.0
+      jmespath                   1.1.0        MIT
+      python-dateutil            2.9.0.post0  Apache-2.0 AND BSD-3-Clause
+                                              ("Dual License"; BSD covers all)
+      s3transfer                 0.19.3       Apache-2.0
+      six                        1.17.0       MIT
+      urllib3                    2.8.0        MIT
+    Also in forecast:
+      cffi                       2.1.1        MIT-0
+      eccodes                    2.50.1       Apache-2.0
+      eccodeslib                 2.50.0.34    Apache-2.0
+      eckitlib                   2.5.0.34     Apache-2.0
+      findlibs                   0.1.5        Apache-2.0
+      numpy                      2.5.5        BSD-3-Clause AND 0BSD AND MIT AND
+                                              Zlib AND CC0-1.0 (in eval too)
+      pycparser                  3.12         BSD-3-Clause
+    Also in eval, besides numpy:
+      scipy                      1.18.1       BSD-3-Clause
+      oculus-core-py             0.1.0        MIT (the default "oculus" group)
+
+4f. Native libraries bundled inside the wheels (the macOS arm64 builds
+    installed on this Mac)
+
+    pillow 13.0.0, PIL/.dylibs (18 files). Licence texts: the wheel's
+    pillow-13.0.0.dist-info/licenses/LICENSE. Licence ids: its CycloneDX SBOM
+    (sboms/pillow-13.0.0.cdx.json) where it gives one.
+      libjpeg-turbo 3.2.0 (IJG / BSD-3-Clause), libpng (PNG Reference Library
+      License version 2), libtiff 4.7.2 (libtiff), libwebp 1.6.0 with
+      sharpyuv, demux and mux (BSD-3-Clause), libavif 1.4.2 (BSD-2-Clause),
+      OpenJPEG 2.5.4 (BSD-2-Clause), FreeType 2.14.3 (FTL), HarfBuzz
+      (MIT, "Old MIT"), Brotli (MIT), Little CMS 2.19 (MIT), liblzma (XZ
+      Utils), zlib-ng 2.3.3 (Zlib), libxcb 1.17.0 (X11) and libXau (The Open
+      Group's permission notice). This build has no libimagequant, FriBiDi
+      or raqm (PIL.features), so the GPL and LGPL components the SBOM also
+      names do not ship here.
+
+    scipy 1.18.1, scipy/.dylibs (3 files): the GCC runtime, libgfortran 5
+      and libgcc_s (GPL-3.0-or-later WITH GCC-exception-3.1), and
+      libquadmath (LGPL-2.1-or-later). Licence texts: the wheel's
+      scipy-1.18.1.dist-info/LICENSE.txt. Only eval installs scipy.
+
+    eccodeslib 2.50.0.34, eccodeslib/lib: libaec, OpenJPEG 2.5.2 and
+      libpng 1.6.55. eckitlib 2.5.0.34, eckitlib/.dylibs: LZ4 1.10.0, PROJ
+      9.8.1 and SQLite 3.53.0. Neither wheel carries their licence texts
+      (each dist-info holds only ECMWF's Apache-2.0 text and AUTHORS).
+      Upstream licences: OpenJPEG BSD-2-Clause (as in Pillow's SBOM); libpng
+      as in Pillow's LICENSE; the LZ4 library BSD-2-Clause and SQLite public
+      domain (as in this Mac's Homebrew copies); libaec BSD-2-Clause and
+      PROJ MIT (not checked against a local file). TODO(M5): add their
+      licence texts to the generated notices.
+
+    numpy 2.5.5 bundles nothing on this Mac (no numpy/.dylibs; it uses
+      Apple's Accelerate). Its licence file names OpenBLAS, LAPACK and the
+      GCC runtime for the builds that bundle them, such as the Linux wheel
+      in the Lambda image (section 7).
+
+
+5. NODE (renderer/package.json: @lookout/renderer, private)
+-------------------------------------------------------------------------------
+
+    Package                Version   Licence       Use
+    esbuild                0.28.2    MIT           runtime (in-memory bundling)
+    jpeg-js                0.4.4     BSD-3-Clause  runtime
+    playwright-core        1.65.0    Apache-2.0    runtime (headless runner)
+    pngjs                  7.0.0     MIT           runtime
+    @esbuild/darwin-arm64  0.28.2    MIT           runtime (esbuild's binary)
+    @types/node            24.19.2   MIT           development
+    @types/pngjs           6.0.5     MIT           development
+    ajv                    8.20.0    MIT           development
+    typescript             6.0.3     Apache-2.0    development
+    vite                   8.3.6     MIT           development
+    vitest                 5.1.0     MIT           development
+
+    @esbuild/darwin-arm64 is the only package the four runtime ones pull in
+    (renderer/pnpm-lock.yaml; esbuild's other platform binaries are optional
+    and not installed here).
+
+    Test tools fetched outside the repository, not shipped: Playwright's
+    Chromium headless shell (revision 1254; BSD-3-Clause with its bundled
+    third-party licences), which renders through SwiftShader (Apache-2.0).
+
+
+6. SWIFT (app/speech-macos)
+-------------------------------------------------------------------------------
+
+    Not written yet; no third-party packages. When it is, it uses Apple's
+    system frameworks (Speech / SpeechAnalyzer, Foundation Models) under the
+    Apple SDK terms.
+
+
+7. INFRASTRUCTURE (deployed to the owner's AWS account; not shipped to users)
+-------------------------------------------------------------------------------
+
+    hashicorp/aws Terraform provider 6.73.0 (MPL-2.0), pinned in
+    infra/terraform/.terraform.lock.hcl and the bootstrap's lock file.
+    The Lambda image starts from public.ecr.aws/lambda/python:3.13 (AWS). It
+    installs, with uv 0.11.6 (MIT OR Apache-2.0), the locked runtime closures
+    of capture and forecast: the 28 third-party packages of the capture and
+    forecast rows in 4e, plus this repository's lookout-common,
+    lookout-capture and lookout-forecast. The package list of the first local
+    image build (20 Nov) matches them. They are the Linux wheels, whose
+    bundled native libraries differ from the macOS ones in 4f (numpy's
+    licence file names OpenBLAS and the GCC runtime for such builds) and are
+    not listed yet: TODO(M5).
+    Terraform, Docker and uv themselves are build tools and are not
+    redistributed.

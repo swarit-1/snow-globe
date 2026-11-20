@@ -1,17 +1,22 @@
 # Lookout: Product Requirements Document
 
-> **Version:** v0.4, a synthesis of two drafts:
+> **Changelog:** v0.4.1, 19–20 Nov 2026 (UTC).
+> - **Factual corrections:** the status, name and companion-docs lines; §0's "Nothing else has been measured"; the §1 calls marked accepted; the oculus-core pin (§2.4, §8.4); Herbie (§8.3, §11.3); the HRRR lag range and Rainier's measured cadence (§8.1); the National Mall (§8.2); G+25 (§16); pointers from the cost lines of §11.3 and §17 to the newer estimate (D-035); Appendix B.
+> - **Two spec updates that record decisions:** §8.7 storage (D-028), and Appendix A, redrawn to the shape of the committed manifest schema (D-044; to be confirmed, or reverted to v0.4's sketch).
+> - No latency, accuracy or cost target changed, and the $3 hosting cap stands.
+>
+> **Version:** v0.4.1, a synthesis of two drafts:
 > - your **Lookout** draft (18 Nov 2026);
 > - **Snow Globe PRD v0.3** (Milestone 0, two council rounds, commit `d0ba83d`).
 >
-> **Status:** design only; no application code exists. Waiting on your calls in [§1](#1-decisions-to-confirm).
+> **Status:** M0.5 in progress since 19 Nov 2026. You accepted every default in [§1](#1-decisions-to-confirm) that day (DECISIONS.md D-012). Progress and measured numbers are in [PRD_PROGRESS.md](PRD_PROGRESS.md).
 >
-> **Name:** "Lookout" is a working title. The repo stays `snow-globe` until you choose.
+> **Name:** Lookout, accepted on 19 Nov (D-016). The repo stays `snow-globe` until you rename it.
 >
 > **Date:** 19 Nov 2026. **Owner:** Swarit Srivastava.
 >
 > **Companion docs:**
-> - [PLAN.md](PLAN.md) and [DECISIONS.md](DECISIONS.md) still describe v0.3; both get updated once §1 is set.
+> - [PLAN.md](PLAN.md), [DECISIONS.md](DECISIONS.md) and [PRD_PROGRESS.md](PRD_PROGRESS.md) follow v0.4; they were updated on 19 Nov, after §1 was set.
 > - [docs/research/](docs/research/) holds the sourced landscape notes.
 > - [docs/council/](docs/council/) is the council record.
 > - [docs/review/prd-crosscheck.md](docs/review/prd-crosscheck.md) lists every disagreement between the two drafts and how it was settled.
@@ -63,31 +68,33 @@ It is a visual forecast, not an image generator. Sun and Moon, cloud layers, clo
 - The NPS feeds are live: Point Reyes serves 3840×2160 frames (1.86 MB) and the Rainier park camera serves 1920×1080 frames (577 KB).
 - Open-Meteo's docs list HRRR as "Discontinued 2026-11-30".
 
-Nothing else has been measured.
+Nothing else had been measured when v0.4 was written. Every number since is in PRD_PROGRESS.md.
 
 ---
 
 ## 1. Decisions to confirm
 
-These choices are assumptions, not decisions. Each row has a recommended default; "yes to all defaults" is a valid answer. Rows 1, 2, 3, 5, 6 and 9 are your Lookout rows. Row 4 is new, from the cross-check, and the rest come from v0.3's open questions.
+These choices were assumptions, not decisions, until you set them. Each row has a recommended default; "yes to all defaults" is a valid answer. Rows 1, 2, 3, 5, 6 and 9 are your Lookout rows. Row 4 is new, from the cross-check, and the rest come from v0.3's open questions.
+
+**You accepted every default on 19 Nov 2026** ("yes to all defaults", DECISIONS.md D-012).
 
 | # | Decision | Recommended default | What changes if you pick otherwise | Your call |
 |---|---|---|---|---|
-| 1 | Platform | macOS 26.5.x on Apple silicon, held through M4; Windows later. | Speech and overlay code are platform-specific; the renderer, parser and backend are not. Upgrading to macOS 27 mid-milestone breaks latency comparisons. | ☐ |
-| 2 | Shell and renderer | Tauri 2 shell, one WebGL2 renderer. Swift as an **in-process static library** (C ABI) for SpeechAnalyzer and Foundation Models. | A native Swift + Metal app integrates better with macOS, but evaluation would need a second renderer. A separate Swift helper process loses Foundation Models, which must run in the UI process. | ☐ |
-| 3 | Evaluation viewpoints | National Park Service cameras.<br>• The MSV makes claims on **Mount Rainier** (Paradise park camera) and **Point Reyes**.<br>• Grand Canyon is third.<br>• Up to 8 NPS cameras are captured from M0.5.<br>• Golden Gate only with written permission by **4 Dec 2026**. | A Bay Area or Austin-only set has no licence-clean camera and no archive, so accuracy numbers wait weeks. | ☐ |
-| 4 | Size of v1 | The MSV (2 viewpoints, sealed P1) first, then grow toward 8 verified viewpoints. | Starting with 8 costs an estimated 1.5–2 days per viewpoint (plate, pose, landmarks, labels) before the sealed window, and that window can't move. | ☐ |
-| 5 | Compute and budget | Hosted, pay-per-call inference; a $25 development cap with hard caps in code totalling $24. | With your own GPU, Tier 2 can be self-hosted and the cap goes away. | ☐ |
-| 6 | Speech privacy | On-device by default (SpeechAnalyzer `DictationTranscriber`).<br>• A cloud engine (Deepgram Nova-3) runs in the replay bake-off.<br>• In the product it is off by default, behind a visible toggle. | Cloud-first is simpler but sends audio off the machine by default. If cloud is much faster, you decide with the numbers in hand. | ☐ |
-| 7 | Paid vendors | **Now:** Deepgram for the bake-off ($200 sign-up credit, training opt-out on every request) and fal for the Tier 2 kill test (≤ $1).<br>**Later:** Runware, Claude Haiku (only if Foundation Models fails), and the ungrounded-generation baseline (≤ $1). | Nothing is called until you approve that vendor. | ☐ |
-| 8 | Hosting | AWS serverless:<br>• Lambda, EventBridge Scheduler, S3, CloudFront and a budget alarm, built from Oculus's `bootstrap`, `storage`, `cdn` and `monitoring` Terraform.<br>• Whatever hosts the Tier 2 proxy must add ≤ 100 ms p95 when idle; Lambda and a Cloudflare Worker are both measured.<br>• GitHub Actions runs CI only.<br>• The repo is public. | • Oculus's full stack (ALB, Fargate, Redis) costs ~$60 a month, by Oculus's own estimate.<br>• GitHub Actions as the scheduler adds jitter, and scheduled workflows in a public repo are disabled after 60 days without activity, which is risky over a holiday sealed window. | ☐ |
-| 9 | Name | Lookout. | The repo, bundle id and overlay wordmark follow the name. | ☐ |
-| 10 | Fallbacks | Keep the LLM parser fallback (Foundation Models, on device, $0). Unverified places move to Later. | Unverified generation is exactly the "invented weather" image this project argues against. | ☐ |
-| 11 | Tier 0 when Tier 1 is close behind | If Tier 1 is ready within ~100 ms, skip painting Tier 0. It still runs and is measured. | Showing both causes a brief flicker. | ☐ |
-| 12 | Calendar | Tell me your hours per week; I assume ~25. A milestone more than 25 % late loses the next item on the cut list. | Dates in §16 move. | ☐ |
-| 13 | Start the clock | Go-ahead for M0.5 now: forecast worker, camera capture, NPS archive check and one backtest pair. | Every day of delay is a day less of archive and live data. | ☐ |
-| 14 | Your time | • ~20 min recording scripted utterances, plus ≥ 30 real-use ones.<br>• ~150 frames labelled per metric, plus 50 re-labels.<br>• Someone else to judge the Tier 2 preference test.<br>• Several nights of unattended idle trials.<br>• Permissions: Microphone and Speech Recognition; Screen Recording and Input Monitoring for the harness only; Apple Intelligence on. | Without the recordings and labels, the latency and accuracy numbers can't be published. | ☐ |
-| 15 | Emails and contact | You send the NPS confirmation emails (I draft them). The README lists a project-specific takedown address. | Without NPS confirmation, the public repo carries numbers only: no frames, plates or renders (§15). | ☐ |
+| 1 | Platform | macOS 26.5.x on Apple silicon, held through M4; Windows later. | Speech and overlay code are platform-specific; the renderer, parser and backend are not. Upgrading to macOS 27 mid-milestone breaks latency comparisons. | ☑ Accepted, 19 Nov |
+| 2 | Shell and renderer | Tauri 2 shell, one WebGL2 renderer. Swift as an **in-process static library** (C ABI) for SpeechAnalyzer and Foundation Models. | A native Swift + Metal app integrates better with macOS, but evaluation would need a second renderer. A separate Swift helper process loses Foundation Models, which must run in the UI process. | ☑ Accepted, 19 Nov |
+| 3 | Evaluation viewpoints | National Park Service cameras.<br>• The MSV makes claims on **Mount Rainier** (Paradise park camera) and **Point Reyes**.<br>• Grand Canyon is third.<br>• Up to 8 NPS cameras are captured from M0.5.<br>• Golden Gate only with written permission by **4 Dec 2026**. | A Bay Area or Austin-only set has no licence-clean camera and no archive, so accuracy numbers wait weeks. | ☑ Accepted, 19 Nov |
+| 4 | Size of v1 | The MSV (2 viewpoints, sealed P1) first, then grow toward 8 verified viewpoints. | Starting with 8 costs an estimated 1.5–2 days per viewpoint (plate, pose, landmarks, labels) before the sealed window, and that window can't move. | ☑ Accepted, 19 Nov |
+| 5 | Compute and budget | Hosted, pay-per-call inference; a $25 development cap with hard caps in code totalling $24. | With your own GPU, Tier 2 can be self-hosted and the cap goes away. | ☑ Accepted, 19 Nov |
+| 6 | Speech privacy | On-device by default (SpeechAnalyzer `DictationTranscriber`).<br>• A cloud engine (Deepgram Nova-3) runs in the replay bake-off.<br>• In the product it is off by default, behind a visible toggle. | Cloud-first is simpler but sends audio off the machine by default. If cloud is much faster, you decide with the numbers in hand. | ☑ Accepted, 19 Nov |
+| 7 | Paid vendors | **Now:** Deepgram for the bake-off ($200 sign-up credit, training opt-out on every request) and fal for the Tier 2 kill test (≤ $1).<br>**Later:** Runware, Claude Haiku (only if Foundation Models fails), and the ungrounded-generation baseline (≤ $1). | Nothing is called until you approve that vendor. | ☑ Accepted, 19 Nov |
+| 8 | Hosting | AWS serverless:<br>• Lambda, EventBridge Scheduler, S3, CloudFront and a budget alarm, built from Oculus's `bootstrap`, `storage`, `cdn` and `monitoring` Terraform.<br>• Whatever hosts the Tier 2 proxy must add ≤ 100 ms p95 when idle; Lambda and a Cloudflare Worker are both measured.<br>• GitHub Actions runs CI only.<br>• The repo is public. | • Oculus's full stack (ALB, Fargate, Redis) costs ~$60 a month, by Oculus's own estimate.<br>• GitHub Actions as the scheduler adds jitter, and scheduled workflows in a public repo are disabled after 60 days without activity, which is risky over a holiday sealed window. | ☑ Accepted, 19 Nov |
+| 9 | Name | Lookout. | The repo, bundle id and overlay wordmark follow the name. | ☑ Accepted, 19 Nov |
+| 10 | Fallbacks | Keep the LLM parser fallback (Foundation Models, on device, $0). Unverified places move to Later. | Unverified generation is exactly the "invented weather" image this project argues against. | ☑ Accepted, 19 Nov |
+| 11 | Tier 0 when Tier 1 is close behind | If Tier 1 is ready within ~100 ms, skip painting Tier 0. It still runs and is measured. | Showing both causes a brief flicker. | ☑ Accepted, 19 Nov |
+| 12 | Calendar | Tell me your hours per week; I assume ~25. A milestone more than 25 % late loses the next item on the cut list. | Dates in §16 move. | ☑ Accepted, 19 Nov |
+| 13 | Start the clock | Go-ahead for M0.5 now: forecast worker, camera capture, NPS archive check and one backtest pair. | Every day of delay is a day less of archive and live data. | ☑ Accepted, 19 Nov |
+| 14 | Your time | • ~20 min recording scripted utterances, plus ≥ 30 real-use ones.<br>• ~150 frames labelled per metric, plus 50 re-labels.<br>• Someone else to judge the Tier 2 preference test.<br>• Several nights of unattended idle trials.<br>• Permissions: Microphone and Speech Recognition; Screen Recording and Input Monitoring for the harness only; Apple Intelligence on. | Without the recordings and labels, the latency and accuracy numbers can't be published. | ☑ Accepted, 19 Nov |
+| 15 | Emails and contact | You send the NPS confirmation emails (I draft them). The README lists a project-specific takedown address. | Without NPS confirmation, the public repo carries numbers only: no frames, plates or renders (§15). | ☑ Accepted, 19 Nov |
 
 ---
 
@@ -136,7 +143,7 @@ That shows the idea is sound. Its agreement was scored against the *forecast's* 
 | Machine | MacBook Air M4 (10-core GPU), 16 GB, **fanless**, 60 Hz | Thermal state is recorded with every latency trace; one vsync is 16.7 ms. |
 | OS and tools | macOS 26.5.1; Xcode 26.2; Rust 1.98.1 with wasm32; Node 24; Python 3.14 with uv; Swift 6.2.3 | The SpeechAnalyzer and Foundation Models interfaces are in the SDK. The Tauri CLI is installed in M1. |
 | Time zone | America/Chicago | The viewpoints are in Los Angeles and Phoenix time (Phoenix has no DST), which gives two real cross-zone tests. |
-| oculus-core | `github.com/swarit-1/oculus` at `06809e6`, MIT. Runs in Rust, WASM and Python. | It is reused, not copied (§8.4). |
+| oculus-core | `github.com/swarit-1/oculus` at `06809e6`, MIT; re-pinned on 19 Nov to the public `1b5410b`, which has the same ephemeris code (D-025). Runs in Rust, WASM and Python. | It is reused, not copied (§8.4). |
 | This repo | M0 documents only, on branch `m0-prd` | No app code until §1 is set. |
 
 ---
@@ -516,10 +523,10 @@ Everything Lookout needs is free for a non-commercial project. The evaluation ar
 | Source | Used for | Cadence | Status |
 |---|---|---|---|
 | `oculus-core` (your Rust crate) | Sun and Moon position, illuminated fraction, twilight | Computed | Reused; refraction and the camera-frame transform are added (§8.4) |
-| **HRRR, direct from AWS** `noaa-hrrr-bdp-pds` | Visibility, cloud ceiling, cloud base, cloud top, low/mid/high cloud, boundary-layer cloud, RH, dew point, boundary-layer height, precipitation rate and type | Hourly runs: 18 h, or 48 h at 00/06/12/18Z. On S3 52–108 min after the run starts. | Public domain. Archived since 2014; HRRRv4 from Dec 2020. |
+| **HRRR, direct from AWS** `noaa-hrrr-bdp-pds` | Visibility, cloud ceiling, cloud base, cloud top, low/mid/high cloud, boundary-layer cloud, RH, dew point, boundary-layer height, precipitation rate and type | Hourly runs: 18 h, or 48 h at 00/06/12/18Z. On S3 from about 51 min (f00) after the run starts. Per-hour p95 up to 101 min for f00–f18 and 117 min for f48; 0.1 % of hours took over 120 min (max 131); 23Z runs publish f06–f18 at about 111 min (a survey of 124 runs, D-027). | Public domain. Archived since 2014; HRRRv4 from Dec 2020. |
 | Open-Meteo, pinned model | GFS from 48 h to 7 days | Model-dependent | Free for non-commercial use; data CC BY 4.0. Its HRRR is **discontinued 2026-11-30**, and its responses carry no run time (bracketed with `meta.json`). |
 | NPS air-quality webcams | Truth frames, plates, Tier 0 library, live view | One frame per 15 min at the air cams | Generally public domain. EXIF names NPS. Written confirmation requested. |
-| Mount Rainier park camera `webcams-mora/mountain.jpg` | Rainier truth and plate | Off the quarter-hour; cadence to be measured | 1920×1080, Axis P1387. **No ownership metadata**, so confirmation is requested from the park. |
+| Mount Rainier park camera `webcams-mora/mountain.jpg` | Rainier truth and plate | Off the quarter-hour; about once a minute (measured 19 Nov, PRD_PROGRESS.md) | 1920×1080, Axis P1387. **No ownership metadata**, so confirmation is requested from the park. |
 | GOES-18 (`noaa-goes18`) | Independent cloud and fog vote at the viewpoint pixels | 5 min | Public domain |
 | Golden Gate cameras | Demo viewpoint | — | No licence-clean source found. Crissy Field's cameras were "temporarily unavailable" on 18 Nov. Permission asks: Lawrence Hall of Science, ALERTCalifornia; cut-off 4 Dec. |
 | Hosted image model | Tier 2 | Per call | Chosen in M3 by kill test and benchmark |
@@ -538,13 +545,13 @@ Capture starts for every camera that passes the licence check. Building (plates,
 | Grand Teton | NPS air cam, 4K | Mountain cloud | v1 candidate |
 | Great Smoky Mountains, Look Rock | NPS air cam | Classic haze site | Checked in M0.5 |
 | Big Bend | NPS air cam | Very clear air, in Texas | Checked in M0.5 |
-| National Mall | No NPS air cam found | A recognisable landmark | Not available |
+| National Mall | NPS air cam `WASH`, mounted at the Netherlands Carillon (NPS ARD webcams feature layer; monitoring since 1 Jul 2003) | A recognisable landmark | Not in the capture set, which holds 8 cameras (D-043) |
 | Golden Gate Bridge | None licence-clean | The original demo ask | Only with permission by 4 Dec |
 
 ### 8.3 Forecast
 
 - **Primary source: HRRR, read directly.**
-  - Byte-range GETs via `.idx` files (Herbie) fetch only the needed fields at each viewpoint's sample points. A sample point sits where a view ray meets each layer height, not at the camera's grid cell.
+  - Byte-range GETs via `.idx` files fetch only the needed fields at each viewpoint's sample points. The worker parses the `.idx` files and decodes with ecCodes itself; Herbie was tried and is not used (D-026). A sample point sits where a view ray meets each layer height, not at the camera's grid cell.
   - One JSON file is written per viewpoint per run. It records the source and model, the run start, the availability time (S3 `LastModified`, live runs only), the fetch time, the grid cells, the byte ranges and the values.
 - **Lead time** is the valid time minus the availability time.
   - 24 h and 48 h leads come only from the 00/06/12/18Z runs, so the actual 24 h leads are 24–29 h; the actual lead is kept.
@@ -576,7 +583,7 @@ Capture starts for every camera that passes the licence check. Building (plates,
 - Sunrise and sunset against NOAA to ±1 min.
 - Targets: Sun ≤ 0.05°, Moon ≤ 0.3°.
 
-The crate is a Cargo git dependency pinned to `06809e6`. Its MIT notice ships inside the WASM bundle, and it is valid to 2050.
+The crate is a Cargo git dependency pinned to `1b5410b`, the public `main` (re-pinned from the unpushed `06809e6` on 19 Nov; the ephemeris code is identical, D-025). Its MIT notice ships inside the WASM bundle, and it is valid to 2050.
 
 ### 8.5 Viewpoint plates
 
@@ -605,9 +612,12 @@ A captured frame is scored only if it passes all of these. Exclusions apply iden
 
 ### 8.7 Storage
 
-Measured frame sizes are 577 KB for the Rainier 1080p JPEG and 1.86 MB for the Point Reyes 4K JPEG.
-- **What is stored:** the frame nearest each hour at ≤ 1920 px (~0.5 MB), plus 15-minute frames as 640 px thumbnails for staleness checks and Tier 0.
-- **Estimate:** ~17 MB per camera per day, or ~135 MB a day for 8 cameras. About 12 GB over three months, which costs well under $1 a month in S3.
+Measured frame sizes are 577 KB for the Rainier 1080p JPEG and 1.86 MB for the Point Reyes 4K JPEG (one night sample each). Stored ARD frames are re-encoded at 1920 px.
+- **What is stored** (as decided on 19 Nov, D-028):
+  - `rainier.paradise-mountain` and `point-reyes.beach` (design P) keep every downloaded frame at ≤ 1920 px;
+  - the other six keep the frame nearest each UTC hour at ≤ 1920 px;
+  - every download also gets a 640 px thumbnail, for staleness checks and Tier 0.
+- **Measured** (19 Nov, 105 frames, at the 4-an-hour cap): 262 MB a day for 8 cameras. Rainier takes 100.8 MB (its daytime frames average 1.69 MB), Point Reyes 55.4 MB and each of the other six 13.3–21.1 MB. That is about 23.6 GB over three months; keeping every frame everywhere would be 452 MB a day.
 - **Kept with the frames:** plates, the frame at every prediction's valid time, the forecast JSON files and the prediction log.
 - **Access:** all of it is private until NPS confirms (§15).
 
@@ -872,10 +882,10 @@ One small API on Lambda, five scheduled jobs and an on-demand backfill. Keys for
   - **Carried over from Oculus:** `bootstrap/` (state backend), `storage.tf`, `cdn.tf` and the `aws_budgets_budget` alarm.
   - **Not carried over:** the ALB, Fargate service, ElastiCache and NAT gateway. Oculus's own PRD estimates that stack at ~$60 a month.
 - **Workers and API:**
-  - Lambda, with a container image for `eccodes` and Herbie.
+  - Lambda, with a container image for ecCodes (Herbie is not used, D-026).
   - EventBridge Scheduler (its free tier covers 14 M invocations a month).
   - S3 and CloudFront.
-  - Estimated ≈ $0–1 a month; the Lambda free-tier figures are checked on AWS's page before deploying.
+  - Estimated ≈ $0–1 a month in v0.4. The infra code's estimate from AWS list prices is $1.60–2.81 a month with the free tiers, under the $3 cap (D-035). The Lambda free-tier figures are checked on AWS's page before deploying.
 - **The Tier 2 proxy** must add ≤ 100 ms p95 over a direct call when idle. Lambda (with SnapStart or a compiled runtime) and a Cloudflare Worker are both measured, and the result goes in DECISIONS.md.
 - **GitHub Actions** runs CI only. Its schedules jitter, and a public repo's schedules are disabled after 60 days without activity. The sealed window spans the holidays.
 - **A server-side daily cap** on Tier 2 calls. At the cap, `/v1/refine` answers "keep Tier 1".
@@ -1165,7 +1175,7 @@ Each milestone ends at a gate. **A gate passes when its evidence exists**: the m
 - the Golden Gate cut-off, **4 Dec 2026**;
 - the sealed window, **15 Dec 2026 – 14 Jan 2027** (design P), with the pre-registration frozen before it.
 
-Under design P, the freeze needs τ, S_mos, the analog weights and the MDE from development data by 14 Dec. With go-ahead on 20 Nov that is about G+24, so it moves to the front of M2. Under design H the date doesn't bind.
+Under design P, the freeze needs τ, S_mos, the analog weights and the MDE from development data by 14 Dec. With go-ahead on 19 Nov that is G+25, so it moves to the front of M2. Under design H the date doesn't bind.
 
 | Milestone | Builds | Gate evidence |
 |---|---|---|
@@ -1208,7 +1218,7 @@ Development is capped at $25.
 | Tier 2 during development and the evaluation sample | Interactive use; a sample in evaluation; result cache | ≈ $3–5 | $5 |
 | Ungrounded-generation baseline | ~50 images | ≈ $0.25–1 | $1 |
 | Haiku (only if Foundation Models fails) | < 10 % of asks, cached | ≈ $0.05–0.50 | $1 |
-| Hosting and storage (AWS serverless) | Lambda, Scheduler, S3 (~12 GB), CloudFront | ≈ $0–1 a month | $3 |
+| Hosting and storage (AWS serverless) | Lambda, Scheduler, S3 (~12 GB in v0.4; ~24 GB under §8.7 as decided), CloudFront | ≈ $0–1 a month (v0.4); $1.60–2.81 in the infra estimate (D-035) | $3 |
 | Tier 1, backtests, scoring | Headless shader renders and CPU metrics | $0 | — |
 | **Total** | | **≈ $10–19** | **$24** |
 
@@ -1334,58 +1344,71 @@ Checked 18–19 Nov 2026. Fuller source lists are in [docs/research/](docs/resea
 
 ## Appendix A: Viewpoint manifest
 
-One JSON file per viewpoint, validated against a schema in CI. The values below are placeholders that show the shape.
+One JSON file per viewpoint, validated in CI against `viewpoints/schema/viewpoint.schema.json`, which is the source of truth for the shape (D-044). The values below are placeholders that show it. The loader refuses v0.4's old spellings (pose fields under `camera`, `plate.landmarks`, `polite_caps.max_per_hour`).
 
 ```json
 {
+  "schema_version": 1,
   "id": "rainier.paradise-mountain",
+  "place_id": "rainier",
   "place": "Mount Rainier",
   "aliases": ["rainier", "mount rainier", "the mountain", "paradise"],
   "default": true,
   "time_zone": "America/Los_Angeles",
+  "status": "msv",
   "camera": {
     "lat": 0.0, "lon": 0.0, "elevation_m": 0,
+    "view_azimuth_deg": 0.0, "view_azimuth_source": "", "position_uncertainty_m": 0,
+    "sources": [{"url": "https://...", "used_for": "", "accessed": "2026-11-19"}]
+  },
+  "pose": {
     "heading_deg": 0.0, "pitch_deg": 0.0, "roll_deg": 0.0, "fov_deg": 0.0,
     "pose_rms_px": 0.0, "pose_check_deg": 0.0, "pose_check_method": "landmarks+sunset-shadow"
   },
+  "landmarks": [{"name": "", "band": "summit", "px": [0, 0], "lat": 0.0, "lon": 0.0,
+                 "height_m": 0, "distance_km": 0.0, "azimuth_deg": 0.0, "sources": []}],
   "plate": {
     "version": 1,
     "base": "base.webp", "night": "night.webp", "depth": "depth.png", "world_height": "height.png",
     "normals": "normals.webp", "horizon_map": "horizon.bin",
     "sky_mask": "sky.png", "lights_mask": "lights.png", "landmark_bands": "bands.png",
     "dem": {"source": "", "licence": "", "datum": ""},
-    "assets_licence": {"base": "NPS public domain (pending confirmation)"},
-    "landmarks": [{"name": "", "band": "summit", "px": [0, 0], "lat": 0.0, "lon": 0.0,
-                   "height_m": 0, "distance_km": 0.0}]
+    "assets_licence": {"base": "NPS public domain (pending confirmation)"}
   },
   "haze_profile": {"fitted_on": "dev frames", "season": "", "beta_per_km": 0.0},
   "camera_response": {"params": [], "fitted_on_frames": []},
   "forecast_samples": [{"layer": "low", "height_m": 0, "lat": 0.0, "lon": 0.0, "grid_cell": [0, 0]}],
   "truth_camera": {
-    "operator": "National Park Service", "json_url": "", "image_url": "",
-    "terms_url": "", "terms_checked": "2026-11-19", "ownership_basis": "", "confirmation": "requested",
-    "interval_min_measured": 0, "fixed_view": true, "night_mode": "colour|infrared",
-    "polite_caps": {"max_per_hour": 4, "fetch_on_change": true},
-    "publish_cleared": false, "people_in_frame": true
+    "operator": "National Park Service", "kind": "park-cam", "json_url": null, "image_url": "",
+    "archive_code": null, "archive_since": null,
+    "terms_url": "", "terms_checked": "2026-11-19", "ownership_basis": "", "confirmation": "to-request",
+    "interval_min_nominal": null, "interval_min_measured": null,
+    "fixed_view": true, "night_mode": "colour|infrared|mixed|unknown",
+    "polite_caps": {"max_images_per_hour": 4, "poll_interval_s": 300, "fetch_on_change": true},
+    "publish_cleared": false, "people_in_frame": true,
+    "view_label": "", "image_px": [1920, 1080]
   },
   "truth_sources": ["webcam", "goes18_acmc"],
-  "attribution": "Webcam imagery courtesy National Park Service. Derived images are not NPS products."
+  "attribution": "Webcam imagery courtesy National Park Service. Derived images are not NPS products.",
+  "notes": []
 }
 ```
+
+`pose`, `plate`, `haze_profile`, `camera_response` and `forecast_samples` may be null until M2, and a landmark's `px` may be null until the pose is solved.
 
 ## Appendix B: Kickoff checklist
 
 **Yours:**
-- [ ] Set the calls in §1.
-- [ ] Send the NPS confirmation emails (drafts come in M0.5). If you want Golden Gate, contact Lawrence Hall of Science and ALERTCalifornia by 4 Dec.
+- [x] Set the calls in §1: every default accepted on 19 Nov (D-012).
+- [ ] Send the NPS confirmation emails (the drafts are in [docs/outreach/](docs/outreach/)). If you want Golden Gate, contact Lawrence Hall of Science and ALERTCalifornia by 4 Dec.
 - [ ] Confirm the AWS account to use. Terraform creates the budget alarm before anything else is deployed; confirm its email subscription.
 - [ ] Create the Deepgram and fal accounts once approved, and put the keys in the server's environment, never in the app.
 - [ ] Grant Microphone and Speech Recognition when the app first asks. Grant Screen Recording and Input Monitoring to the harness only. Turn Apple Intelligence on.
 - [ ] Record the replay set in M1; label frames in M2–M4.
 
 **Claude Code's next session:**
-- [ ] Bring PLAN.md and DECISIONS.md in line with your §1 calls (the sky model, hosting, the viewpoint plan), and start PRD_PROGRESS.md.
-- [ ] Run M0.5 as in §16.
+- [x] Bring PLAN.md and DECISIONS.md in line with your §1 calls (the sky model, hosting, the viewpoint plan), and start PRD_PROGRESS.md (19 Nov).
+- [ ] Run M0.5 as in §16 (in progress since 19 Nov).
 - [ ] Optionally, a council round on the parts taken from Lookout (§18.2).
 
 ## Appendix C: Council review (v0.3), summarised

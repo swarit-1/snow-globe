@@ -32,8 +32,12 @@ I'm building **Lookout**, a non-commercial, open-source portfolio project. It re
 
 **What I'd like to confirm:**
 1. Are the images from these cameras NPS works in the public domain, per the NPS website disclaimer? Or do any carry other terms? The air-quality images name "National Park Service" as artist and copyright holder in their EXIF data. The Rainier Paradise image carries no ownership metadata, so I'd also like to know who operates that camera and what terms apply.
-2. Is the automated collection described above acceptable? Is there a preferred way to get archive images in bulk?
+2. Is the automated collection described above acceptable? Is there a preferred way to get archive images in bulk? The archive images I have seen are 999 pixels wide; are full-resolution originals kept anywhere?
 3. May I publish derived images in the project's repository, README and a short demo video? These are relit or simulated views, and crops of camera frames no wider than 1280 px with people and vehicles blurred. Each would carry the credit *"Webcam imagery courtesy National Park Service. Derived images are not NPS products."* Nothing would suggest NPS endorsement.
+4. **For Mount Rainier National Park, about the Paradise "mountain" camera:**
+   - Where is it mounted: which building, and roughly which way does it face? I have assumed the Henry M. Jackson Memorial Visitor Center, but the webcam page says only "Paradise".
+   - How often does it update? From my checks on 19 Nov 2026, the newest image was never more than about 2 minutes old when I looked, and usually under a minute. The camera's own time stamp falls within a few seconds of a whole minute. So I believe it updates about once a minute. Is that right, and is it the same day and night?
+   - Are past images from this camera kept anywhere? I couldn't find a public archive.
 
 If any of this isn't appropriate, I'll change the plan, and I'll remove any image on request within 7 days.
 

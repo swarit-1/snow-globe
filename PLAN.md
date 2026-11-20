@@ -1,27 +1,19 @@
 # PLAN.md: milestones, dates, cut order and evidence
 
-Companion to [PRD.md](PRD.md) v0.4 (§16 milestones, §19 cut list). Per-ticket status and measured numbers are in [PRD_PROGRESS.md](PRD_PROGRESS.md). Decisions and spend are in [DECISIONS.md](DECISIONS.md).
+Companion to [PRD.md](PRD.md) v0.4.1 (§16 milestones, §19 cut list). Per-ticket status and measured numbers are in [PRD_PROGRESS.md](PRD_PROGRESS.md). Decisions and spend are in [DECISIONS.md](DECISIONS.md).
 
 Each milestone ends at a gate and stops for review. **A gate passes when its evidence exists: the measured value and, for a miss, the bottleneck.** Compiling code is not evidence. A missed target triggers the cut-order rule. It never triggers a stall or a retune.
 
-**Where things stand on Thu 19 Nov 2026 (day G):**
-- **M0 is done.** The owner accepted every PRD §1 default today (DECISIONS.md D-012).
-- **M0.5 is in progress** (day 1 of 4). Being built today, with no evidence yet:
-  - the repo scaffold and the CI workflow;
-  - capture and the forecast worker;
-  - the infra code;
-  - renderer v−1 and eval scoring;
-  - the Rust core.
-- **A stopgap Rainier capture** has run on this laptop since 06:30 UTC, only while the laptop is awake. D-021 lists where it falls short of CLAUDE.md.
-- **Evaluation design** (D-019): Rainier is design P, decided on evidence. The ARD cameras are design H, pending the archive check.
-- **Waiting on the owner:**
-  - AWS account, credentials and alarm email;
-  - sending the NPS emails;
-  - permission to push;
-  - Deepgram and fal keys;
-  - by 14 Dec, which renderer P1 scores (D-019).
-
-  The full list is in PRD_PROGRESS.md.
+**Where things stand at 02:15 UTC on Fri 20 Nov 2026 (still the evening of 19 Nov in US time):**
+- **M0 is done.** The owner accepted every PRD §1 default on 19 Nov (DECISIONS.md D-012).
+- **M0.5 is in progress** (day 2 of 4). Its packages are built, reviewed, fixed and committed (`0bb42ab` to `3ac98b3`); a second round of fixes is in the working tree for the lead to commit.
+  - **Two of the four gate items have evidence:** the archive report with H or P per viewpoint (D-019, D-022, D-024), and the backtest pair, scored and labelled v−1 ([docs/evidence/m05-backtest-pair.md](docs/evidence/m05-backtest-pair.md)).
+  - **The 72 h log clock** started at 12:24:23 UTC on 19 Nov for all 8 cameras (06:30 UTC for Rainier). Outages extend it, as they extend the sealed window. On 19 Nov the Mac ran on battery and slept for 8.2 h of the loop's first 12.3 h (D-030), so the clock closes at about 20:36 UTC on Sun 22 Nov at the earliest.
+  - **The emails** wait for the owner.
+- **Running on this laptop** until AWS is live (D-030): `lookout-capture loop` for all 8 cameras, and the forecast Lambda handler every 5 minutes, both from a frozen snapshot of committed code. The loop runs under `caffeinate -s`, which keeps the whole Mac awake only on AC power; the forecast tick relies on it. The Rainier stopgap was retired at 12:13 UTC (D-023).
+- **Evaluation design** (D-024): Rainier and Point Reyes are design P on the sealed window; Point Reyes adds design H for K2; five ARD cameras are design H; Grand Teton has no design H. Grand Canyon's 3:2 epoch needs a registration check first (D-042).
+- **M1 preparation started early,** code only, with no gate claim (D-032): the 1a spike app is built and waits for the owner to run its checks.
+- **Waiting on the owner:** AC power for the Mac; AWS, with the hard-stop choice (D-035) before the first deploy; sending the NPS emails; permission to push, with the answer on the committed goldens (D-041) first; Deepgram and fal keys; and, by 14 Dec, four confirmations (D-019, D-036, D-038, D-039). The full list is in PRD_PROGRESS.md.
 
 ---
 
@@ -95,7 +87,7 @@ Go-ahead day is **G = Thu 19 Nov 2026**. The owner gave no hours per week, so ~2
   4. Stop and show the evidence.
 - **Code hygiene.** Small commits, tests beside the code, CI on every push, and secrets in environment variables only.
 - **Owner-only actions.** These wait for the owner's word: `git push`, GitHub changes, `terraform apply`, any AWS call that creates something, and emails.
-- **Polite collection.** Only one NPS fetcher runs at a time, under the CLAUDE.md rules. While the stopgap runs, it is that fetcher (D-021).
+- **Polite collection.** Only one NPS fetcher runs at a time, under the CLAUDE.md rules. That fetcher is `lookout-capture loop`, behind a host-wide lock (D-023); archive backfill runs inside it, never beside it (D-029).
 
 ## Cut order (PRD §19)
 
@@ -138,45 +130,55 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
 
 ## M0.5: Start the clock · Thu 19 → Mon 23 Nov · in progress
 
-"In progress" means code is being written and its evidence does not exist yet.
+"In progress" means code exists but its evidence doesn't yet, or isn't complete. Measured numbers are in PRD_PROGRESS.md.
 
-| Build (PRD §16) | Status, 19 Nov | Where |
+| Build (PRD §16) | Status, 20 Nov, 02:15 UTC | Where |
 |---|---|---|
-| **Forecast worker.**<br>• HRRR byte-range GETs from `noaa-hrrr-bdp-pds` at each viewpoint's sample points (where view rays meet each layer height).<br>• One JSON per viewpoint per run: source, run start, availability (S3 `LastModified`), fetch time, grid cells, byte ranges and values.<br>• Live lag per forecast hour logged for the hindcast availability model.<br>• GRIB subsets deleted after extraction. | in progress | `workers/forecast/` |
-| **Capture of every camera that passes the licence check: all 8 (D-020).**<br>• Poll the JSON or headers at most every 5 min, and download only on change.<br>• At most 4 per camera per rolling hour, enforced with persisted state.<br>• Quality gates (PRD §8.6); stale and move flags.<br>• Private storage at ≤ 1920 px.<br>• Measure Rainier's real update cadence.<br>• Takes Rainier over from the stopgap. | in progress | `workers/capture/`, `workers/common/` |
-| **Stopgap Rainier capture** (D-021) | running since 06:30 UTC, only while the laptop is awake. Its cap isn't persisted, and it runs from a scratch folder (D-021). | `$LOOKOUT_DATA_DIR/frames/rainier.paradise-mountain/` |
-| **NPS archive check:** depth, cadence and camera epochs per camera, leading to H or P per viewpoint | in progress.<br>• The API and depth are found (D-018).<br>• Rainier is design P, decided: its camera has no archive (D-019).<br>• The ARD cameras are design H if this check finds no camera change across the HRRRv4 years.<br>• Guard: metadata for any date, but archived frames only from before 1 Jun 2026, because summer 2026 is held out (D-019). | `docs/research/nps-archive-check.md` (being written) |
-| **Repo scaffold, CI, trace skeleton, PRD_PROGRESS.md.** The scaffold covers the uv, pnpm and Cargo projects per CLAUDE.md. | • Scaffold and trace skeleton: in progress.<br>• PRD_PROGRESS.md: started.<br>• CI: workflow written (`.github/workflows/ci.yml`). Its first run on GitHub needs a push, which needs the owner. | repo root, `app/core/`, `.github/workflows/` |
-| **Infra code:** Terraform for the serverless stack (D-014), and the Lambda container image | in progress, code only. Its checks run offline (`infra/test.sh`). Nothing is planned or applied: there are no AWS credentials, and `apply` waits for the owner. | `infra/terraform/`, `infra/lambda/` |
-| **One backtest pair end to end:** an archived frame plus an archived HRRR run, then a crude headless render (renderer v−1), then a crude extractor score, labelled "v−1" | in progress | `renderer/`, `eval/` |
-| **Email drafts.**<br>• NPS Air Resources Division and Mount Rainier NP: public domain, collection, archive and publication.<br>• Lawrence Hall of Science and ALERTCalifornia: Golden Gate. | done (drafts committed in `e4722a6`). Sending them is the owner's step. | [docs/outreach/](docs/outreach/) |
-| **Early M1 logic:** `lookout-core` with the parser, time rules, an ephemeris wrapper over oculus-core `06809e6`, solar events, trace and lifecycle | in progress | `app/core/` |
+| **Forecast worker.**<br>• HRRR byte-range GETs from `noaa-hrrr-bdp-pds` at each viewpoint's sample points (where view rays meet each layer height).<br>• One JSON per viewpoint per run: source, run start, availability (S3 `LastModified`), fetch time, grid cells, byte ranges and values.<br>• Live lag per forecast hour logged for the hindcast availability model.<br>• GRIB subsets deleted after extraction. | in progress.<br>• Built and committed (`09e2ec8`); no Herbie, datums pinned (D-026).<br>• The local stand-in has written every hourly run of 19 Nov, 00Z–23Z, with 454 live lags (D-030).<br>• Lag model keyed by cycle and forecast hour, with a 120 min fallback (D-027). Survey logging (`lag-survey --log`) is not wired up yet, and 1 test fails (135 pass). | `workers/forecast/` |
+| **Capture of every camera that passes the licence check: all 8 (D-020).**<br>• Poll the JSON or headers at most every 5 min, and download only on change.<br>• At most 4 per camera per rolling hour, enforced with persisted state.<br>• Quality gates (PRD §8.6); stale and move flags.<br>• Private storage at ≤ 1920 px.<br>• Measure Rainier's real update cadence.<br>• Takes Rainier over from the stopgap. | in progress.<br>• 0.1.0 (`4fae4c1`) runs as `lookout-capture loop` for all 8 cameras since 12:24:23 UTC on 19 Nov, behind the host-wide lock (D-023).<br>• Rainier's cadence is measured: about once a minute.<br>• 0.2.0 is in the working tree: the storage policy (D-028), backfill inside the loop with one shared back-off (D-029), and the cadence tool. It runs only after the lead commits and re-snapshots. | `workers/capture/`, `workers/common/` |
+| **Stopgap Rainier capture** (D-021) | done and retired: it ran 06:30–12:13 UTC on 19 Nov and stored 24 frames (D-023). | `$LOOKOUT_DATA_DIR/frames/rainier.paradise-mountain/` |
+| **NPS archive check:** depth, cadence and camera epochs per camera, leading to H or P per viewpoint | done: [docs/research/nps-archive-check.md](docs/research/nps-archive-check.md), 217 requests. Every ARD camera changed from a 3:2 to a 16:9 frame in 2023–25. Design per viewpoint in D-024, with the guard breach in D-022 and Grand Canyon's re-aim in D-042. | `docs/research/` |
+| **Repo scaffold, CI, trace skeleton, PRD_PROGRESS.md.** The scaffold covers the uv, pnpm and Cargo projects per CLAUDE.md. | • Scaffold: done (`0bb42ab`). `make test` passes every suite but forecast (8 suites in 230 s, 22:46 UTC); `make docs-check` runs 13 invariant checks on the planning docs.<br>• Trace skeleton: done (`e7b87e8`).<br>• PRD_PROGRESS.md: kept current.<br>• CI: workflow written. Its first run on GitHub needs a push, which needs the owner. | repo root, `app/core/`, `.github/workflows/`, `docs/checks/` |
+| **Infra code:** Terraform for the serverless stack (D-014), and the Lambda container image | in progress, code only (D-034). `make test-infra`: 82 passed. A first local image build and a local run of the forecast handler (Runtime Interface Emulator) took place on 20 Nov, 00:12–00:33 UTC; its report is not in yet. Nothing is planned or applied: there are no AWS credentials, and `apply` waits for the owner. | `infra/terraform/`, `infra/lambda/` |
+| **One backtest pair end to end:** an archived frame plus an archived HRRR run, then a crude headless render (renderer v−1), then a crude extractor score, labelled "v−1" | done: Grand Canyon, 15 Jan 2024, 24 h lead; scored, labelled v−1, a correct negative by accident; 4 runs, byte-identical renders. Evidence awaits the lead's commit. | [docs/evidence/m05-backtest-pair.md](docs/evidence/m05-backtest-pair.md), `renderer/`, `eval/` |
+| **Email drafts.**<br>• NPS Air Resources Division and Mount Rainier NP: public domain, collection, archive and publication.<br>• Lawrence Hall of Science and ALERTCalifornia: Golden Gate. | done (`e4722a6`; the NPS draft gained the Rainier camera questions on 20 Nov). Sending them is the owner's step. | [docs/outreach/](docs/outreach/) |
+| **Early M1 logic:** `lookout-core` with the parser, time rules, an ephemeris wrapper over oculus-core `1b5410b` (D-025), solar events, trace and lifecycle | in progress (early): committed (`e7b87e8`, `fd0f206`), 108 tests, 295 parser table cases. Some rule readings wait for the owner (D-039). | `app/core/` |
+| **Early M1 preparation** (D-032): the 1a spike app, the Swift speech library, the owner runbooks | in progress (early), code only. The spike app is built (105 unit tests) and none of its 11 checks has run (D-033). The speech library and the runbooks are not in the repo yet. | `spikes/m1-platform/` |
 
-**Also done today:**
-- The data directory now lives outside iCloud (D-017).
+**Also done on 19 Nov:**
+- The data directory lives outside iCloud (D-017), and the iCloud workarounds are recorded (D-031).
 - All 8 NPS feeds were scouted and found live, and the viewpoint IDs were fixed (D-020).
-- PLAN.md, DECISIONS.md and PRD_PROGRESS.md were brought to v0.4.
+- The oculus-core pin moved to a public commit (D-025).
+- PLAN.md, DECISIONS.md and PRD_PROGRESS.md were brought to v0.4, and PRD.md got its factual corrections (v0.4.1). A first `THIRD_PARTY_NOTICES` was written on 20 Nov.
 
 **Optional, not scheduled:** a council round on the parts taken from the Lookout draft, adding a forecast-verification judge (PRD §18.2, Appendix B).
 
 **Gate evidence:**
-- [ ] ≥ 72 h of worker and capture logs: runs and frames per viewpoint, plus exclusions. So far there is only the Rainier stopgap log, from 06:30 UTC on 19 Nov, with one outage (06:52–07:09 UTC, laptop asleep).
-- [ ] The archive report, with H or P chosen per viewpoint in DECISIONS.md (D-019):
-  - Rainier: design P, decided.
-  - Point Reyes: design P on the sealed window, plus design H for K2.
-  - The other six ARD cameras: design H.
-  - Both H parts stay open until the epoch check reports.
-- [ ] The backtest pair rendered and scored, labelled "v−1".
+- [ ] ≥ 72 h of worker and capture logs: runs and frames per viewpoint, plus exclusions.
+  - **Clock:** all 8 cameras from the loop's start at 12:24:23 UTC on 19 Nov. Outages extend it and are listed as exclusions, so after 19 Nov's 8.2 h it closes at about 20:36 UTC on Sun 22 Nov at the earliest. Rainier has logs from 06:30 UTC on 19 Nov (the stopgap), and the forecast stand-in from 12:18 UTC.
+  - **Outages so far:** the stopgap lost about 28 polls in 4 sleeps (2.4 h), and the loop about 92 passes in 4 sleeps (8.2 h), all on battery. PRD_PROGRESS.md lists them.
+  - **Exclusion:** the archived `run` event of the backtest pair (run 2024011412, line 475 of `forecast_log/2026-11-19.jsonl`) is not live-worker evidence.
+- [x] The archive report, with H or P chosen per viewpoint in DECISIONS.md: [docs/research/nps-archive-check.md](docs/research/nps-archive-check.md); D-019, D-022 and D-024, corrected by D-042.
+  - Rainier: design P. Point Reyes: design P on the sealed window, plus design H for K2.
+  - Grand Canyon, Yosemite, Acadia and the Smokies: design H on their usable spans. Big Bend: design H after a check.
+  - Grand Teton: no design H; it is captured for Tier 0 only.
+- [x] The backtest pair rendered and scored, labelled "v−1": [docs/evidence/m05-backtest-pair.md](docs/evidence/m05-backtest-pair.md) (awaiting the lead's commit).
 - [ ] Emails sent (owner).
 
 **Risks to this gate:**
-- **Gaps in the 72 h logs.** Until AWS is live, capture and the forecast worker run only while this laptop is awake. Gaps are reported as outages. Rainier gaps can never be backfilled, because that camera has no archive.
-- **The epoch check.** A camera it can't clear by 23 Nov has no design H yet. D-019 records that camera as open, and the gate reports the miss with its bottleneck.
-- **One NPS fetcher at a time.** While the stopgap runs, the archive check can't fetch from nps.gov in a separate process (CLAUDE.md). The lead settles how they share.
+- **Gaps in the 72 h logs.** Until AWS is live, capture and the forecast worker run only while this laptop is awake, and `caffeinate -s` keeps it awake only on AC power. Gaps are reported as outages and extend the 72 h clock. Rainier gaps can never be backfilled, because that camera has no archive.
+- **The frozen snapshot.** The jobs run committed code from 19 Nov morning (`cfefa79`). The storage policy, the archive queue and common's log fixes reach them only when the lead re-snapshots.
+- **Disk.** 28 GiB was free at 00:50 UTC on 20 Nov. The running loop keeps every frame (about 450–470 MB a day); the new policy needs about 262 MB a day.
 
 ## M1: Voice to first pixel · Mon 23 Nov → Mon 7 Dec · not started (core logic started early)
 
-**1a. Platform spike** (one day, throwaway branch). Stop and report if any check fails:
+**Started early, code only, with no M1 gate claim (D-032):**
+- **The 1a spike app** (`spikes/m1-platform/`, never shipped): built on 19 Nov, 105 unit tests pass, and its criteria are fixed in code before any run (D-033). None of the 11 checks has run; they need the owner at the keyboard, and the steps are in its README.
+- **`lookout-core`** (`app/core/`): the parser, time rules, ephemeris wrapper, trace and lifecycle; numbers in PRD_PROGRESS.md (M1-02 to M1-04).
+- **Not in the repo yet:** the Swift speech library (`app/speech-macos/`) and the owner runbooks. Checks 6 and 7 need the library.
+- **The real app shell waits** for the spike's results.
+
+**1a. Platform spike** (one day of checks; the code lives in `spikes/m1-platform/` and is never shipped, D-032). Stop and report if any check fails:
 - hotkey press and release, including when the modifier is released first;
 - a non-activating panel over another app that keeps focus;
 - click-to-key focus, with focus returning to the previous text field;
@@ -222,7 +224,7 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
 **1d. README skeleton,** with the headline sentence and blanks.
 
 **From the owner in M1:**
-- Permissions: Microphone and Speech Recognition; Screen Recording and Input Monitoring for the harness only; Apple Intelligence on.
+- Permissions: Microphone and Speech Recognition; Screen Recording and Input Monitoring for the harness only; Apple Intelligence on. The spike's `CGEventPost` check also needs Accessibility, which PRD §1 row 14 doesn't list (open, D-033).
 - The replay recordings, and several nights of idle trials.
 - A Deepgram account and key, for arm D. The owner is asked again before its first paid call.
 
@@ -362,7 +364,7 @@ M5 ships on schedule whatever P1 shows.
   - 10–25 s: scrubbing the evening;
   - 25–45 s: yesterday's 24 h forecast vs what the camera saw vs persistence;
   - 45–60 s: skill against lead time, with confidence intervals.
-- **`THIRD_PARTY_NOTICES`,** generated from the licence ledger.
+- **`THIRD_PARTY_NOTICES`,** generated from the licence ledger. A first version, written by hand from the lock files, exists since 20 Nov.
 - **Only content cleared for publication:** NPS confirmation received, and people and vehicles blurred.
 
 **Gate evidence:**

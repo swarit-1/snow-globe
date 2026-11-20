@@ -405,6 +405,242 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - A camera-change exclusion rule goes into the pre-registration and is applied mechanically at scoring.
 - **Not used:** the observations made from frames past the guard (D-022).
 
+## D-025 — oculus-core pinned to the public commit 1b5410b · decided (lead) · 2026-11-19 · amends D-002
+- **Decision:** eval (`1ba95d2`) and `app/core` (`fd0f206`) pin `oculus-core` to `1b5410b`, the public `main` of github.com/swarit-1/oculus, instead of `06809e6`.
+- **Why:** `06809e6` is on no remote. It sits only on the local branch `overnight/2026-09-22`, 33 commits ahead of `1b5410b`, so a fresh clone or CI could not fetch it (Cargo: "revspec not found"; GitHub's API: 422, from the builders' reports).
+- **Evidence** (19 Nov):
+  - `ephem.rs`, `core/bindings`, `core/Cargo.toml` and `core/Cargo.lock` are identical in both commits. The diff only adds a `fly` feature that nothing here uses.
+  - On `1b5410b`: eval 179 passed, 1 skipped; core 108 passed, with its NOAA and Moon statistics identical to 4 decimals.
+  - A clean `CARGO_HOME` fetched the lock file with `--locked`.
+  - The core builder's injected ref in `~/.cargo/git/db` was removed.
+- **Unchanged from D-002:** the Horizons check (Sun 0.19′, Moon 0.13′) and its caveats. D-012 accepted D-002 as part of the PRD.
+- **Left over, for the owners:** eval's `OCULUS_PINNED_REV` constant and a doc comment in `app/core/src/solar.rs` still name `06809e6`. The eval venv holds a `1b5410b` build (its `direct_url.json`), but eval's backend version string, and with it the M0.5 pair record, read `0.1.0+06809e6`.
+
+## D-026 — HRRR extraction without Herbie; height datums; PRES:cloud base kept · decided (evidence; PRES:cloud base by the lead) · 2026-11-19 · amends D-008
+- **Decision:** lookout-forecast parses the `.idx` files, makes the byte-range GETs (through `lookout_common.polite_client`) and decodes with ecCodes itself. Herbie is not used, so the Lambda image needs the ecCodes wheels (`eccodes` 2.50.1, `eccodeslib` 2.50.0.34), not "eccodes and Herbie" (PRD §11.3, D-014).
+- **Why not Herbie** (a logged trial of Herbie 2026.10.0, 19 Nov):
+  - its requests carried `python-requests/2.34.2` as the User-Agent, not the project's;
+  - two HEADs and the `.idx` GET had no timeout;
+  - it made 4 requests for one field-hour and exposes no S3 `LastModified`, so a listing is needed anyway;
+  - it wrote config files to `~/.config/herbie` and left the GRIB subset on disk;
+  - it adds pandas, pyproj, xarray, cfgrib and requests (about 84 MB).
+  - Its VIS f00 byte range equals ours; a test keeps it so.
+- **Datums** (NOAA-EMC UPP code, plus a whole-grid check of run 2026111907 f00):
+
+| Field | Datum | Data check |
+|---|---|---|
+| `HGT:cloud ceiling` | m above MSL | 0 of 502,664 cloudy cells below the model terrain |
+| `HGT:cloud top` | m above MSL | 0 of 457,194 cells below the terrain |
+| `HGT:cloud base` | m above MSL where valid; often a phantom | 110,670 of 891,599 cells (12.4 %) sit 7.4–8.3 km below the height `PRES:cloud base` implies, in columns with high cloud only; just 2.47 % are below the terrain, so a terrain check misses most |
+| `HPBL` | m above ground | below the terrain height in 100 % of the 86,217 cells where terrain is above 2,000 m |
+| `HGT:surface` | m above MSL: model terrain, not the DEM | identical bit for bit at f00, f01, f18 and f48, so it is fetched once per run |
+| every other field | n/a (not a height); `UGRD`/`VGRD` are grid-relative | |
+
+- **`PRES:cloud base` stays in the default field set** (the lead, 19 Nov), which is then 22 fields. It costs 1.33 MB an hour and no extra request. The phantom rate was 12.4 % on 07Z f00 and 19.8 % on 09Z f03 (the review), so it varies.
+- **Still to do:** mask phantom bases in the renderer and extractor inputs (TODO(M1.5)). The local stand-in's 7-field profile leaves `PRES:cloud base` out (D-030).
+- **Field codes corrected on live data:** HPBL is WMO 0-3-18, and CRAIN, CFRZR, CICEP and CSNOW are 0-1-33 to 0-1-36. The decoder's identity check caught all five before anything was written.
+
+## D-027 — Issue time and the availability-lag model · decided (lead) · 2026-11-19 · amends D-008
+- **Issue time, as built** (lookout-forecast):
+  - **Live runs:** an hour counts as available at the later of its S3 `LastModified` (GRIB2 and `.idx`) and the time Lookout finished fetching it (`fetch_finished_utc`). Selection reads stored files only, so a run that was never fetched is never modelled into existence.
+  - **Archived runs:** run start plus a `LagModel` lag, recomputed at selection from the current log, never the value an old file stored.
+  - Lead time = valid − availability, as in D-008.
+- **The lag model** (PRD §8.3):
+  - It is keyed by (cycle hour, forecast hour): the p95 of the cell's logged lags once it has 20. Before that, the later of the pooled p95 for that forecast hour and the cell's largest logged lag. With too little data, a flat 120 min (`conservative-fallback`).
+  - Lags may come from S3 `LastModified` surveys of past runs (`lag-survey --log`) as well as from live runs. Survey lags are stored apart (`forecast_log/lag_survey/`) and labelled `"method": "survey"`; a live lag wins when both exist.
+  - PRD §8.3's "live-measured p95" is read as "measured from S3 `LastModified`, never assumed".
+- **Evidence** (19 Nov):
+  - A survey of 124 runs (14 Nov 06Z – 19 Nov 09Z): 2,986 hour-lags, 37.3 % of them later than the forecast.md curve the first build used. 3 lags (0.10 %) exceeded 120 min, all in run 2026111715 (max 131.2 min).
+  - All five 23Z runs published f06–f18 at about 111 min, against medians of 62.6–85.1 min for the other cycles. A p95 pooled over cycles would model those hours 10–37 min early.
+  - The first build's default was earlier than all 19 lags logged for run 2026111908, by 1.1–12.3 min.
+- **State at 00:50 UTC on 20 Nov:** the keyed model and the 120 min fallback are committed (`09e2ec8`). The survey log (`laglog.py`) is written, but `lag-survey --log` is not wired into the CLI yet, so no survey lag is logged. The live log holds 454 lags from the 24 runs of 19 Nov.
+
+## D-028 — Frame storage: every frame at the design-P cameras, the hourly frame elsewhere, a thumbnail for every download · decided (lead) · 2026-11-19
+- **Amends PRD §8.7,** which kept the frame nearest each hour plus 15-minute thumbnails at every camera.
+- **Decision:**
+  - `rainier.paradise-mountain` and `point-reyes.beach` (design P, D-024; Rainier has no archive) keep every downloaded frame at ≤ 1920 px.
+  - The other six keep the frame nearest each UTC hour at ≤ 1920 px. Each download waits in `cache/staging/`; hour H is decided at H + 60 min, and only the staged copies are deleted.
+  - Every download also gets a 640 px JPEG thumbnail (q85) at `thumbs/<viewpoint_id>/<UTC date>/`, named like its frame (`lookout_common.thumb_key`).
+  - The capture job never deletes anything under `frames/`, `archive/` or `thumbs/`. Retention after M5 (PRD §15.2) and takedowns (PRD §15.5) are separate deletions, each approved by the owner.
+- **Measured** (`lookout-capture storage --day 2026-11-19` at 22:38 UTC, on the 105 frames of 06:30–22:23 UTC, at 96 downloads a camera a day, the 4-an-hour cap):
+
+| Camera | Policy | MB a day |
+|---|---|---|
+| `rainier.paradise-mountain` | every frame | 100.8 |
+| `point-reyes.beach` | every frame | 55.4 |
+| the other six | the frame nearest each hour | 13.3–21.1 each |
+| **All 8** | | **262.0**, against 451.9 for every frame everywhere |
+
+- **Over 90 days:** 23.6 GB, against 40.7 GB for every frame and PRD §8.7's ~12 GB. A re-run at 23:58 UTC over every frame of 19 Nov gave 269.9 MB a day (24.3 GB per 90 days).
+- **Rainier is the big one:** its frames average 1,687 KB with the Sun up (n=6), against 825 KB over all 32.
+- **Why:** design P scores live frames only, and Rainier's can never be backfilled. The six design-H cameras have an archive.
+- **State:** the policy is in capture 0.2.0, in the working tree. The running loop is the frozen 0.1.0 snapshot (D-030): until the lead re-snapshots, it keeps every frame at all 8 cameras and makes no thumbnails. The disk had 28 GiB free of 460 GiB at 00:50 UTC on 20 Nov.
+
+## D-029 — One NPS fetcher: archive backfill runs inside the capture loop · decided (lead) · 2026-11-19 · amends D-023
+- **Decision:** archive backfill runs only in the capture loop's idle time between live passes (`lookout-capture loop --archive-queue PATH`), in the same process and under the same host-wide lock. It never runs as a second process.
+- **Rules in the code** (capture 0.2.0):
+  - one request at a time, at least 5 s apart (the `nps-archive` limiter);
+  - a request starts only if it fits before the next live pass is due (the limiter's wait + 30 s + 5 s);
+  - **one back-off for `www.nps.gov`:** an HTTP 429 or 503 from a live poll or an archive request holds both, and a hold is never shortened;
+  - the held-out guard (D-019, D-022), a request budget per UTC day (default 1,000), a cap per viewpoint and a 5 GB total cap (PRD §15.3); resumable.
+- **Evidence** (a fake clock, no network): after a live 503 asking for 30 min, the first build let 89 archive requests out during the hold; this code lets 0. After an archive 503, the next live pass is held with 0 HEADs.
+- **State:** not running. The frozen loop (D-030) predates it, and no queue file exists.
+
+## D-030 — Local stand-ins for the capture and forecast jobs until AWS is live · decided (lead; running) · 2026-11-19 · amends D-014
+- **What runs on this laptop** until the owner deploys (D-014):
+  - **Capture:** `lookout-capture loop --interval 300`, all 8 cameras, from 12:24:23 UTC on 19 Nov.
+  - **Forecast:** the forecast Lambda handler every 5 minutes, with a light profile: 7 fields (VIS, cloud ceiling, cloud base, LCDC, MCDC, HCDC and terrain), f00–f02, at most 40 MB a run. First tick 12:18 UTC; 20.8–22.3 MB of GRIB for each run it fetched on 19 Nov (the forecast builder's 08Z smoke run fetched 25.4 MB in 12 GRIB requests).
+  - Both run from a frozen snapshot of committed code (`~/lookout-data/cache/runtime/cfefa79`), with third-party packages from the repo's venvs.
+  - Only the capture loop runs under `caffeinate -s`, which keeps the whole Mac awake while it is on AC power. The forecast tick has no sleep assertion of its own and stays awake through the loop's (`pmset -g assertions` and `ps`, 01:48 UTC on 20 Nov).
+- **Limits:**
+  - `caffeinate -s` keeps the Mac awake only on AC power. On 19 Nov the Mac ran on battery from 06:13 to 22:48 UTC. From its start to 00:41 UTC on 20 Nov, the loop lost about 92 of its 139 expected passes (8.2 of 12.3 h) in 4 sleeps. PRD_PROGRESS.md lists them.
+  - The forecast tick slept too. Every hourly run of 19 Nov (00Z–23Z) was still written by 23:56 UTC: 00Z–11Z as catch-up at its first ticks (12:18–12:26, except 08Z and 10Z, written earlier by the builder's smoke tests), and four later runs 1.5–2.4 h after publication (13Z, 15Z, 16Z and 19Z). A late fetch makes that run's design-P availability late (D-027).
+  - Repo edits reach the jobs only when the lead re-snapshots, so state, log and file formats stay backward compatible.
+  - The light profile leaves out `PRES:cloud base` (D-026).
+- **Ends** when the AWS jobs are live.
+
+## D-031 — Working around iCloud on this Mac · decided (lead) · 2026-11-19
+- **Problem:** the repo is in iCloud-synced `~/Documents` (D-017). iCloud sets the macOS `hidden` flag on files in the venvs, and Python 3.13 skips hidden `.pth` files, so `import lookout_common` fails outside pytest.
+  - Measured on 19 Nov: 8,393 hidden entries in `workers/common/.venv`, and 6,173 in `workers/forecast/.venv` (173 at build time). Common's `.pth` was hidden again after being cleared.
+  - `UV_NO_EDITABLE=1` is no fix: it ran a stale cached wheel (`cli.py` from 04:02 while the source had changed at 05:59).
+- **Decision:**
+  - Python commands run with `PYTHONPATH=src:../common/src` (`src:../workers/common/src` from eval), and each project's pytest settings put its sources on the path.
+  - Rust builds use `CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target`. Terraform's 735 MB provider cache is `$LOOKOUT_DATA_DIR/cache/terraform-plugins`.
+  - CLAUDE.md carries both.
+- **Recommendation to the owner:** move the repo out of `~/Documents` (or keep the venvs outside it with `UV_PROJECT_ENVIRONMENT`). That ends the workarounds.
+
+## D-032 — M1 preparation started early, code only · decided (lead) · 2026-11-19
+- **Decision:** three M1 inputs start during M0.5, as code only and with no M1 gate claim:
+  - the M1 1a platform spike app, `spikes/m1-platform/`;
+  - the Swift speech library, `app/speech-macos/` (C ABI);
+  - the owner runbooks for the M1 checks.
+- **The real app shell waits** for the spike's results (PLAN M1 1a: stop and report if any check fails).
+- **State at 00:50 UTC on 20 Nov:**
+  - The spike is built: 105 unit tests pass, and its four release binaries build. None of the 11 checks has run. They need the owner at the keyboard, and some need a permission.
+  - The speech library and the runbooks are not in the repo; their work packages returned no report.
+  - Checks 6 (Swift partials) and 7 (network silence) need the speech library first.
+
+## D-033 — M1 1a spike: pass criteria fixed before any run · decided (spike code; the owner runs the checks) · 2026-11-19
+- **Rule:** every check's criterion is fixed in code before the check runs, and every result line prints it. Results are reported as measured, failures included (PLAN M1 1a).
+- **Criteria** (after the spike's adversarial review, 19 Nov):
+  - **Check 1, hotkey release:** a release is key-first or modifier-first by whether the modifiers are still held when the handler runs, with a 20 ms simultaneity band. Without `--key-state`, a modifier-up trigger inferred from the instructed order is counted apart, with its basis. The guided run asks until both orders are observed, at most 30 trials.
+  - **Check 6, Swift partials:** key-up → finish and finish → FINAL are reported beside release → FINAL (the D-004 measure). A FINAL before the finish call fails the trial.
+  - **Check 7, network silence:** a byte from the spike or a speech-recognition process fails. A byte from a speech-adjacent or general daemon makes the run inconclusive, never a pass, and a Wi-Fi-off run decides it. Processes are named by their executable, through their pid.
+  - **Check 8, window-only capture:** the evidence is the desktop-independent window filter and the tag decoded at the frame's corner. `contentRect` is logged but not judged until a run shows its unit (TODO(M1)).
+  - **Check 9, injection:** latency counts from the clock read just before each `CGEventPost`, an upper bound. A handler call outside every trial's window fails the join.
+  - **Check 10, clock agreement:** it fails if `Instant` is not `CLOCK_UPTIME_RAW`, if drift exceeds the bracket + 1 µs, if a frame arrives more than 1 ms early, if the median lag is outside 0–250 ms, or if the median-of-pairs slope is outside 1 ± 0.01. Late frames are reported.
+  - **Check 11, re-consent:** the run file keeps the signing identifier, CDHash and signature kind, never the certificate's subject (the owner's name) or the team id.
+- **The thresholds are the spike's own;** PLAN M1 1a gives none.
+- **Open:** PRD §1 row 14 and PLAN M1 list Input Monitoring for the harness, but check 9's `CGEventPost` also needs Accessibility.
+- **Measured without any permission:** Rust's `Instant` is `CLOCK_UPTIME_RAW` on this Mac (3 of 3 runs).
+
+## D-034 — AWS infrastructure choices in the Terraform (not applied) · decided (infra work package) · 2026-11-19 · amends D-014
+- **Budget and hard stop:** a $3 monthly budget (PRD §17's hosting cap), with emails at 33, 67 and 100 % of actual spend and when the month's forecast passes 100 %. At 100 % of actual spend, an AWS Budgets action attaches a deny-invoke policy to the scheduler role (`budget_hard_stop`, on by default). AWS resets it each month. D-035 asks the owner about the sealed window.
+- **Forecast every 5 minutes** (`rate(5 minutes)`, PRD §11.2), not the first build's 10.
+- **Keys per job:** each job writes only its own prefixes, `state/<job>/` and `state/locks/<job>*`, and deletes only its own locks (plus `cache/` for forecast). A test asserts that the two jobs' writable keys never overlap.
+- **Versioned data bucket:** old versions are kept 30 days, and 1 day for `capture_log/`, `forecast_log/` and `cache/`, because every logged record rewrites the day's log (about 0.8–4.8 GB of old versions a day).
+- **Region rule:** `deploy.sh` takes the region only from `TF_VAR_region` (default us-east-1), and refuses before any AWS call when the AWS CLI points elsewhere.
+- **Test pinning:** every test file pins every variable to its default, and a static check fails if a pin and its default disagree, so a `*.auto.tfvars` file or an exported `TF_VAR_*` cannot change the results.
+- **Kept from the first build:** hashicorp/aws `~> 6.73` and Terraform `>= 1.11, < 2.0.0`; S3-native state locking; reserved concurrency 1 and 0 retries per job; a two-phase deploy that creates the budget, the alarm email and ECR first; immutable image tags.
+- **Evidence:** `make test-infra` 82 passed, 0 failed (static 5, root 47, bootstrap 4, scripts 26), and 23 of 23 targeted mutations caught. Nothing is planned against an account or applied.
+
+## D-035 — Hosting: the $3 cap read as monthly; the hard stop in the sealed window · proposed (for the owner) · 2026-11-19
+- **Reading:** PRD §17's $3 hosting cap is a monthly cap, as the infra README and D-014 read it.
+- **Estimate** (the infra package, 19 Nov; computed from AWS list prices and from request counts read in the workers' code; nothing has run on AWS): about **$1.60–2.81 a month** with the free tiers, and $3.13–8.35 without them. PRD §17 and D-014 say "≈ $0–1".
+  - The largest line is S3 requests, $1.52–1.89: every logged record is a whole-log GET and PUT. Batching each capture pass's records into one append would save $0.37–0.75 a month.
+  - D-028's storage is above the estimate's 2–12 GB: 23.6 GB after 90 days, about $0.54 a month at $0.023 per GB-month (arithmetic, not a measurement).
+- **Recommendation:** turn the hard stop off for the sealed window, 15 Dec 2026 – 14 Jan 2027, and keep the email alerts. A halt at $3 would stop capture and forecast for the rest of that month, and sealed-window data can't be recovered (Rainier has no archive). The deploy flag is `-var budget_hard_stop=false`.
+- **Needed from the owner, before the first deploy:** confirm the monthly reading and choose the hard-stop setting.
+
+## D-036 — Persistence (b) beyond a 24 h lead · proposed (for the owner) · 2026-11-19
+- **Conflict:** PRD §13.6 defines persistence (b) as the frame at valid − 24 h, and PRD §13.1 says baselines see only frames available at the issue time. Beyond a 24 h lead the first breaks the second. Even at exactly 24 h, the first build read a frame from 5 min after the issue time.
+- **Implemented reading** (eval): (b) is the frame at valid − 24·k h, with k = ceil(lead / 24 h), chosen only from frames available at the issue time. k = 1 up to 24 h. Predictions with k > 1 carry the flag `valid-minus-<24k>h`.
+- **The alternative:** no (b) forecast beyond 24 h.
+- **Evidence:** the leakage audit over random issue times, with leads up to 48 h, finds no read after the issue time.
+- **Needed from the owner:** confirm it, or choose the alternative, before the 14 Dec freeze.
+
+## D-037 — Frame gates: a camera-fault class and a usable-frame gate · decided (eval and capture; v−1 thresholds) · 2026-11-19
+- **Additions to PRD §8.6:**
+  - **Camera fault:** a frame is `camera_fault` when at least 95 % of its analysis pixels are ≤ 4/255 or ≥ 251/255, or its whole luma range is ≤ 1/255. It is not `in_cloud`, it has no state, and no baseline uses it.
+  - **Usable frame:** a new gate that fails on a camera fault or on capture's `decode_failed` or `tiny_file` flags.
+- **Gates not built yet are reported, not passed:** Same view, Clear lens and the Colour-mode cut-off are "not checked" (TODO(M2)), and their counts are published with the exclusions.
+- **Capture records the inputs:** the Sun position with a `sun_below_3deg` flag (Daylight); a `monochrome` flag below a chroma spread of 1.0; a Laplacian-variance sharpness and the dHash distance to the previous frame, both without flags.
+- **Evidence:** before the class existed, black and white frames scored as "hidden, in cloud". Two foggy midday frames read 2.4 and 2.7 for sharpness, against 31–2,074 for other midday frames, so a sharpness floor would exclude the fog K2 measures; none is set.
+- **Night mode in the manifests** (a factual correction, 19 Nov): `infrared` at Grand Canyon, Grand Teton, Yosemite, the Smokies and Big Bend, from night frames with a chroma spread of 0–0.27. Acadia stays `unknown`: its only dark frame (the Sun at −8.9°) was in colour.
+
+## D-038 — The held-out split file (fixed, not yet in git), and how eval reads it · decided (eval, in code); readings proposed for the owner · 2026-11-19
+- **The split:** `eval/src/lookout_eval/heldout_periods.json`, version 1, SHA-256 `c437544eecdd7a0d33b67c2374e1d388ebe45c36aeca4b2923b39c0d1d31de83`.
+  - It encodes D-019, D-022 and D-024: design P's sealed window; design H's summer 2026 without 15 Jul 2026; Grand Teton out of scored metrics; the 1 Jun 2026 archive guard.
+  - It supersedes the builder's `e8194fff7793…`; only two descriptive texts changed. It has never been committed, so the version stays 1.
+  - **Not in git yet** (untracked on 20 Nov). PRD §13.2 needs the split committed before any held-out frame is touched, so it is the first file for the lead to commit.
+- **Enforced in eval:**
+  - A `FrameStore` takes only the packaged split, `committed_split()`: the file above, beside the module. Held-out frames are read only through `SealedScoring(<40-hex pre-registration commit>)`.
+  - The quarantine folder is refused in any letter case, after resolving links, and by folder identity.
+  - The archive guard also reads `ImageCreateDateTime` as local standard time. It can only hold out more, and only in the hour before local midnight from 1 Jun 2026 on.
+  - A record counts as archived on any one sign: its key, its source, or NPS archive times in its sidecar.
+- **Readings for the owner to confirm by 14 Dec:**
+  - an outage extension applies to both Rainier and Point Reyes;
+  - design-P fits at Point Reyes may use frames from after summer 2026;
+  - 15 Jul 2026 is excluded by the valid or truth local day;
+  - the three rules added in review: the standard-time reading, the three archive signs, and the quarantine refused in any case and by identity.
+- **Evidence:** at the held-out fix, eval 262 passed, 1 skipped (318 passed, 2 skipped on the working tree at 01:46 UTC on 20 Nov); 47 of 48 mutants caught (the survivor is equivalent). On the real catalogue (metadata only), nothing on disk is held out: 85 archive records and 105 live frames. Capture's guard does not yet use the standard-time reading; a 12,000-case fuzz shows eval is never looser.
+- **Still to do:** fits inside one camera epoch (D-024's usable spans) need split version 2 (TODO(M2)).
+
+## D-039 — Parser rule readings where PRD §7.4 is silent · proposed (for the owner) · 2026-11-19
+- **In the code now** (lookout-core; each pinned by table cases):
+  - **"tonight"** with a bare hour: 12 is midnight, 1–3 is after midnight and 4–11 is PM. 4 and 5 carry an AM/PM chip whose alternative is the next morning. Asked before 04:00, "tonight" means the night in progress.
+  - **Dates:** "the Nth" with no month is the next such day, so "the 31st" asked on 19 Nov is 31 Dec. A month and day without a year is the nearest such date, so a recent one reads as past.
+  - **The same day:** "today", the weekday or the date said alone, naming today, gives 12:00 while that is ahead, else now.
+  - **"next friday"** is the first Friday at least one day ahead (on a Thursday, tomorrow).
+  - **"tomorrow"** alone is 12:00.
+  - **A lone generic word** ("grand", "mount", "point", "big", "south") is a miss that lists the three closest places, not a close call or a match.
+- **Also in the code** (from the review, within PRD §7.4): during the repeated DST hour, an ambiguous time takes its second occurrence once the first has passed; an AM/PM alternative in the past or more than 7 days ahead is not offered; words left over beside a place name go to the fallback (`Unrecognised`).
+- **Evidence:** the parser table holds 295 cases in 16 categories, all passing, and 19 of 19 mutants of the new rules are caught.
+- **Needed from the owner:** confirm or change them. What the rules refuse goes to the M3 fallback.
+
+## D-040 — Query JSON: four fields after the PRD's ten · decided (core; additive to PRD §7.3) · 2026-11-19
+- The first ten fields are exactly the PRD §7.3 example; a field-by-field test checks it.
+- Then come `place_source`, `place_match` {`stage`, `score`}, `horizon`, and `flags` (`live`, `rolled_to_tomorrow`, `rolled_to_next_hour`, `rolled_to_next_week`, `dst_gap`, `dst_fold`, `gfs_horizon`).
+- Solar rules add `event`, `sun_altitude_deg` and `interval` to `time_source`.
+- `place_match.score` can be 1.0 on a miss for a generic word, so it is not a confidence. Confidence itself stays a fixed heuristic until the replay set calibrates it (TODO(M3)).
+
+## D-041 — Synthetic renderer goldens in the repo · proposed (for the owner; already committed in b5bc726) · 2026-11-19
+- **Proposal:** keep `renderer/goldens/` in the public repo as an exception to CLAUDE.md's rule against renders and plates in the repo. It holds a procedural plate, sky mask and depth image and three golden PNGs: 148 KB of PNGs (156 KB with the scenes and the manifest), no camera pixels.
+- **Already in git, before any sign-off:** all 10 files under `renderer/goldens/` (the 6 PNGs, 3 scene files and a manifest) were committed in `b5bc726` (renderer 0.2.0, 12:11 UTC on 19 Nov). That set aside CLAUDE.md's data rule ("never write … plates, renders … inside the repo") without the owner's word. Nothing has been pushed.
+- **Why:** the golden-image tests (PRD §9.5; M2's goldens in CI) need committed references, and these contain no NPS pixels.
+- **Guards in code:** `pnpm render` and the library refuse outputs inside the repo (links resolved), and `goldens:update` refuses any scene that is not the synthetic viewpoint and plate.
+- **Needed from the owner, before or with the permission to push** (PRD_PROGRESS.md, owner action 4): sign it off or decline.
+  - If declined, the goldens move under `$LOOKOUT_DATA_DIR` and CI makes its own.
+  - The lead must then also remove them from git history before the first push. A later commit that only deletes them would still publish them, inside `b5bc726`.
+
+## D-042 — Grand Canyon's 3:2 epoch holds two aims · decided (evidence) · 2026-11-19 · amends D-024
+- **Correction:** D-024 lets Grand Canyon's 3:2 epoch (Dec 2020 – Jan 2024, "one framing") serve development and backtests. A full-frame registration of the 15 Jan 2021 and 15 Jan 2024 hires (both 999×666) shows the camera re-aimed between them: the content moved 51 px right and 30 px up, 5.1 % of the width and 4.5 % of the height, at the same scale.
+- **Consequence:** inside one epoch, references, τ and landmark boxes are fitted across dates only after a full-frame registration against the plate (the Same view gate, M2). The contact sheets and dHash behind D-024 can't see a shift this small.
+- **Evidence:** `docs/evidence/m05-backtest-pair.md`, section 2. Gradient NCC is 0.45 aligned against −0.01 unaligned, and the shift holds over 5 windows × 3 analysis widths (+48.9 to +52.0 px across, −29.1 to −30.5 px up). Moving the pair's primary box by the shift moves its ratio from 0.330 to 0.360, across τ_lo.
+- **D-024 otherwise stands.**
+
+## D-043 — The National Mall has an NPS air cam; it stays out of the capture set · decided (correction) · 2026-11-19 · amends D-020
+- **Correction:** D-020 and PRD §8.2 say the National Mall has no NPS air cam. The NPS ARD webcams feature layer lists one: site `WASH`, at the Netherlands Carillon (38.89, −77.07), monitoring since 1 Jul 2003.
+- **Decision** (the lead): it stays out of the capture set, which already holds 8 cameras (PRD §1 row 3: up to 8).
+- **Source:** the scaffold builder's read of the NPS Air Quality Monitoring Map feature layer (ArcGIS FeatureServer, layer 9) on 19 Nov. Not re-checked since, because this run makes no nps.gov requests.
+
+## D-044 — The viewpoint manifest's shape is the schema's · decided (in code since 0bb42ab; PRD Appendix A redrawn to match, to be confirmed) · 2026-11-19 · amends D-020
+- **Correction:** D-020 points to PRD Appendix A for the manifests. The schema committed in `0bb42ab`, `viewpoints/schema/viewpoint.schema.json`, has another shape, and it is the one the loader and every worker read:
+  - the pose fields sit in a top-level `pose` object (null until M2), not under `camera`;
+  - landmarks form a top-level `landmarks` array, and `plate.landmarks` is refused;
+  - the hourly cap is `truth_camera.polite_caps.max_images_per_hour`, beside `poll_interval_s`;
+  - it adds `schema_version`, `place_id`, `status`, `notes`, `camera.view_azimuth_source`, `truth_camera.interval_min_nominal`, `view_label` and `image_px`.
+- **Enforcement** (common's second-round fix, in the working tree and not yet committed): the loader refuses Appendix A's old spellings (camera pose fields, `plate.landmarks`, `polite_caps.max_per_hour`), naming the new place. It also checks landmark bearings (within 0.5°), `archive_since` against `archive_code`, and alias collisions between places.
+- **PRD Appendix A** is redrawn to the schema's shape in v0.4.1. That changes the spec's text, not only a fact, so it is listed as a spec update and waits for the lead's or the owner's confirmation. The alternative is v0.4's sketch (`ab96af0`) with a note that the schema differs.
+
+## D-045 — A third overlap with the stopgap: the scaffold build's nps.gov requests · decided (record; D-023's fix covers it) · 2026-11-19 · amends D-023
+- **What happened:** at about 07:25 UTC on 19 Nov, while the Rainier stopgap was polling, the scaffold work package made 9 nps.gov requests:
+  - 6 `Range: bytes=0-65535` GETs of ARD images (grca, grte, yose, acad, grsm, bibe), through `polite_client`, at least 6 s apart. Yosemite ignored the range and sent 2,520,399 bytes, held in memory only.
+  - 3 page loads (the Rainier webcams page, the Grand Canyon air-webcam page and the Yavapai museum page). They did not carry the Lookout User-Agent.
+- **Rule broken:** CLAUDE.md at `e4722a6`: never run two NPS fetchers at once. The stopgap's log shows `rate_capped` HEADs at 07:20:35 and 07:25:35 and frames stored at 07:30:36 and 07:35:36. Rainier's 4-an-hour cap was not touched.
+- **Record:** no log of these 9 requests exists under `~/lookout-data`; the builder's report is the only record. D-023 lists the other two overlaps.
+- **Since then:** the host-wide lock (D-023) refuses any second `lookout-capture` fetcher. Page loads by other tools are outside that lock, so in this run no agent makes nps.gov requests at all (the lead's instruction).
+
 ---
 
 ## Spend ledger
