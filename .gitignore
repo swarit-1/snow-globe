@@ -1,41 +1,111 @@
-# Secrets
+# Secrets: keys live in environment variables only (CLAUDE.md "Secrets"). These catch the usual
+# files that hold them: dotenv and direnv files, key files, SSH keys, cloud and package-index
+# credentials. .env.example is committed on purpose.
 .env
 .env.*
 !.env.example
+.envrc
+.direnv/
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ecdsa*
+id_ed25519*
+.aws/
+credentials.json
+secrets.json
+service-account*.json
+client_secret*.json
+.netrc
+.pypirc
+.claude/settings.local.json
 
-# Never commit voice fixtures, camera frames, plates, thumbnails or traces (PRD §9.1)
-fixtures/audio/
+# Data lives outside the repo, under $LOOKOUT_DATA_DIR (CLAUDE.md "Data"). These catch strays:
+# voice fixtures, camera frames, plates, thumbnails, renders and traces (PRD §9.1, §15.1).
+# The owner's voice recordings belong in $LOOKOUT_DATA_DIR/fixtures/voice/ (PRD §12, §15.2), so
+# a fixtures/voice/ or fixtures/audio/ folder is ignored at any depth (bench/, app/, ...), and so is
+# every common raw or compressed audio format a speech harness writes.
+**/fixtures/audio/
+**/fixtures/voice/
 data/frames/
 data/archive/
 data/plates/
 data/thumbs/
-traces/
+data/traces/
+# lookout-core writes traces to $LOOKOUT_DATA_DIR/traces/ and refuses a data dir inside a git
+# work tree; this catches one at the root. Anchored, so source or fixture folders named traces
+# (app/core/src/traces/, renderer/test/traces/) stay visible.
+/traces/
 *.wav
 *.caf
 *.m4a
+*.aac
+*.aif
+*.aiff
+*.amr
+*.flac
+*.mp3
+*.ogg
+*.opus
+*.pcm
+*.raw
+*.webm
+*.weba
 
-# Build output
-target/
-node_modules/
-dist/
-.venv/
-__pycache__/
-.DS_Store
-.pytest_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-
-# Terraform: local state and plans can hold secrets; the lock file (.terraform.lock.hcl) is committed
-.terraform/
-*.tfstate*
-*.tfplan
-crash.log
-
-# Headless renderer test output
-test-results/
-playwright-report/
-
-# Forecast downloads belong in $LOOKOUT_DATA_DIR/cache, never in the repo
+# Forecast downloads belong in $LOOKOUT_DATA_DIR/cache, never in the repo. Partial and subset
+# downloads (*.grib2.part, *.subset.grib2) are covered; .idx inventories are small text fixtures.
+*.grib
 *.grib2
 *.grib2.*
+!*.grib2.idx
+*.grb
+*.grb2
+
+# Python: venvs, caches and build output
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+
+# Rust: CARGO_TARGET_DIR is outside the repo (Makefile), but a plain `cargo build` writes to the
+# workspace's own target/. Anchored to the workspaces (app/, and spikes/ crates), so a source
+# folder named target stays visible; a new workspace elsewhere adds its own line.
+/app/target/
+/spikes/**/target/
+**/*.rs.bk
+
+# Node and the renderer: dependencies, bundles, Playwright output, test coverage. The bundle and
+# coverage rules are anchored to the package that writes them ("coverage" is also a name for
+# cloud-coverage code in renderer/src/math). /app/dist/ is for the M1 overlay UI's bundle.
+node_modules/
+.pnpm-store/
+/renderer/dist/
+/app/dist/
+*.tsbuildinfo
+test-results/
+playwright-report/
+blob-report/
+/renderer/coverage/
+
+# Terraform: local state and plans can hold secrets. The lock files (.terraform.lock.hcl) are
+# committed on purpose; infra/.gitignore adds tfvars, backend.hcl and overrides.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Caches and OS files
+.cache/
+.DS_Store
+._*
