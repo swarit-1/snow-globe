@@ -33,7 +33,7 @@ from lookout_capture.archive import (
     search_body,
     search_cache_key,
 )
-from lookout_capture.heldout import HeldOutOverride, held_out_reason
+from lookout_capture.heldout import HeldOutOverride, asset_local_dates, held_out_reason
 
 from .conftest import FakeClock, FakeNPS, fixture_json, make_jpeg
 
@@ -516,6 +516,27 @@ def test_held_out_reason_reads_every_local_date_and_fails_closed():
         HeldOutOverride("scoring")
 
 
+def test_summer_edge_without_local_time_string_is_refused():
+    """Critic finding (20 Nov): ImageCreateDateTime stays on standard time in summer, so with
+    no LocalTimeString "05/31/2026 11:30:00 PM" (00:30 PDT on 1 Jun) used to pass. Same
+    cases as lookout-eval's test of nps_local_dates (D-038)."""
+    la = PORE.time_zone
+    assert la == "America/Los_Angeles"
+    edge = held_out_reason("05/31/2026 11:30:00 PM", "", la)
+    assert edge is not None and "2026-06-01" in edge
+    assert date(2026, 6, 1) in asset_local_dates("05/31/2026 11:30:00 PM", "", la)
+    # 23:00 standard is 00:00 PDT on 1 Jun: refused; one second earlier is still 31 May.
+    assert held_out_reason("05/31/2026 10:59:59 PM", "", la) is None
+    assert held_out_reason("05/31/2026 11:00:00 PM", "", la) is not None
+    assert held_out_reason("05/31/2026 12:00:00 PM", "", la) is None  # noon, not midnight
+    # Arizona keeps no daylight time: 23:30 on 31 May is 31 May.
+    assert held_out_reason("05/31/2026 11:30:00 PM", "", "America/Phoenix") is None
+    # Eastern zone, same edge.
+    assert held_out_reason("05/31/2026 11:30:00 PM", "", "America/New_York") is not None
+    # Winter: the standard-time reading is the stamp's own date.
+    assert asset_local_dates("11/30/2025 11:30:00 PM", "", la) == [date(2025, 11, 30)]
+
+
 def test_backfill_refuses_held_out_frames_unless_overridden(fake_nps, clock, tmp_path, data_root):
     storage = LocalStorage(data_root)
     summer = _asset_on("07/15/2026 01:15:00 PM", "7/15/2026 2:15 PM Pacific Daylight Time")
@@ -570,8 +591,11 @@ def test_archive_sidecars_carry_the_gate_inputs(fake_nps, clock, tmp_path, data_
 
 def test_archive_limiter_is_file_based_under_s3_storage(monkeypatch, data_root):
     monkeypatch.setenv("LOOKOUT_STORAGE", "s3")
-    assert MinIntervalLimiter("nps-archive", 5.0).mode == "process"  # common's auto fallback
-    limiter = archive_limiter()
+    # Since common's fix, "auto" is file-based everywhere except on Lambda.
+    assert MinIntervalLimiter("nps-archive", 5.0).mode == "file"
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "lookout-capture")
+    assert MinIntervalLimiter("nps-archive", 5.0).mode == "process"
+    limiter = archive_limiter()  # the archive's limiter stays file-based even there
     assert limiter.mode == "file" and limiter.min_interval_s == 5.0
     assert default_archive_client(LocalStorage(data_root)).limiter.mode == "file"
     assert (data_root / "state" / "ratelimit").is_dir()
@@ -584,8 +608,8 @@ from lookout_common.http import MinIntervalLimiter
 start_at, interval, which = float(sys.argv[1]), float(sys.argv[2]), sys.argv[3]
 if which == "archive":
     limiter = archive_limiter(interval)
-else:  # what default_archive_client built before the fix: common's mode="auto"
-    limiter = MinIntervalLimiter("nps-archive", interval)
+else:  # an in-process limiter, as common's mode="auto" gave under S3 before both fixes
+    limiter = MinIntervalLimiter("nps-archive", interval, mode="process")
 while time.time() < start_at:
     time.sleep(0.005)
 spans = []
@@ -605,8 +629,10 @@ def _two_processes_holding(tmp_path, data_root, which: str, interval: float):
     import sys
     import time
 
+    from .conftest import subprocess_prelude
+
     script = tmp_path / "holder.py"
-    script.write_text(_HOLDER)
+    script.write_text(subprocess_prelude() + _HOLDER)
     env = {**os.environ, "LOOKOUT_STORAGE": "s3", "LOOKOUT_DATA_DIR": str(data_root)}
     start_at = time.time() + 1.5
     procs = [

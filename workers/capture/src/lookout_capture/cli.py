@@ -3,8 +3,8 @@
 Live capture (polls NPS):
 
     lookout-capture once [--only <viewpoint_id>]...
-    lookout-capture loop [--interval 300] [--jitter 30]
-    lookout-capture status [--json]
+    lookout-capture loop [--interval 300] [--jitter 30] [--archive-queue PATH]
+                         [--archive-budget 1000] [--archive-total-gb 5]
 
 Archive (one request at a time, >= 5 s apart, resumable, size-capped, held-out guard):
 
@@ -13,11 +13,22 @@ Archive (one request at a time, >= 5 s apart, resumable, size-capped, held-out g
     lookout-capture archive sample <viewpoint_id> <YYYY-MM-DD>... [--pick midday|hourly|all]
     lookout-capture archive-check [--viewpoint <id>]... [--rainier-page] [--budget 220]
 
-Every command except ``status`` sends requests to www.nps.gov, so it runs inside the
-host-wide NPS-fetcher lock (:mod:`.fetcher_guard`): a second fetcher, or a running Rainier
-stopgap, makes it exit with status 3 before anything is sent (CLAUDE.md: never run two NPS
-fetchers at once). Archived frames dated on or after 1 Jun 2026 are refused (D-019) unless
-``--held-out-override "<reason>"`` is given, which only scoring may do; it is logged.
+No network (never contact nps.gov, never take the fetcher lock, safe beside a running loop):
+
+    lookout-capture status [--json] [--archive-queue PATH]
+    lookout-capture archive queue add <viewpoint_id> <YYYY-MM-DD>... [--hires] [--pick hourly]
+    lookout-capture archive queue list | remove <id>... [--finished] [--all]
+    lookout-capture archive queue resume <id>... [--all] [--max-gb G]
+    lookout-capture cadence <viewpoint_id> [--hours 24] [--json]
+    lookout-capture storage [--day YYYY-MM-DD] [--json]
+
+Every network command runs inside the host-wide NPS-fetcher lock (:mod:`.fetcher_guard`): a
+second fetcher, or a running Rainier stopgap, makes it exit with status 3 before anything
+is sent (CLAUDE.md: never run two NPS fetchers at once). ``loop --archive-queue`` does the
+queued archive backfill in the same process, between live passes (D-023,
+:mod:`.archive_queue`). Archived frames dated on or after 1 Jun 2026 are refused (D-019)
+unless ``archive day|sample --held-out-override "<reason>"`` is given, which only scoring
+may do; it is logged. The queue never takes an override.
 """
 
 from __future__ import annotations
@@ -27,10 +38,11 @@ import json
 import sys
 from collections.abc import Sequence
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from lookout_common.manifest import Viewpoint, load_manifests
-from lookout_common.storage import Storage, storage_from_env
+from lookout_common.storage import LocalStorage, Storage, storage_from_env
 from lookout_common.timeutil import utcnow
 
 __all__ = ["EXIT_FETCHER_BUSY", "build_parser", "main"]
@@ -80,42 +92,122 @@ def _cmd_loop(args: argparse.Namespace, storage: Storage, viewpoints: dict[str, 
 
     selected = _select(viewpoints, args.only)
     guard = getattr(args, "guard", None)
-    with CaptureRunner.default(storage, runner="cli-loop") as runner:
-        runner.loop(
-            selected,
-            interval_s=args.interval,
-            jitter_s=args.jitter,
-            max_passes=args.max_passes,
-            before_pass=guard.check_foreign if guard is not None else None,
+    queue_runner = None
+    if args.archive_queue:
+        from .archive_queue import (
+            DEFAULT_DAILY_BUDGET,
+            DEFAULT_TOTAL_CAP_GB,
+            ArchiveQueue,
+            QueueRunner,
         )
+
+        total_gb = DEFAULT_TOTAL_CAP_GB if args.archive_total_gb is None else args.archive_total_gb
+        queue_runner = QueueRunner(
+            storage,
+            viewpoints,
+            ArchiveQueue(_queue_path(args)),
+            daily_budget=DEFAULT_DAILY_BUDGET
+            if args.archive_budget is None
+            else args.archive_budget,
+            total_cap_gb=total_gb if total_gb > 0 else None,
+        )
+    try:
+        with CaptureRunner.default(storage, runner="cli-loop") as runner:
+            runner.loop(
+                selected,
+                interval_s=args.interval,
+                jitter_s=args.jitter,
+                max_passes=args.max_passes,
+                before_pass=guard.check_foreign if guard is not None else None,
+                idle=queue_runner.run_idle if queue_runner is not None else None,
+            )
+    finally:
+        if queue_runner is not None:
+            queue_runner.close()
     return 0
+
+
+def _queue_path(args: argparse.Namespace) -> Path:
+    """The queue file: as given, else ``state/archive/queue.json``; never in git or iCloud."""
+    from lookout_common.paths import UnsafeDataDirError, check_data_dir
+
+    from .archive_queue import default_queue_path
+
+    given = getattr(args, "archive_queue", None) or getattr(args, "queue", None)
+    path = Path(given).expanduser() if given else default_queue_path()
+    try:  # D-017: data, the queue included, stays outside the repo and synced folders
+        check_data_dir(path.parent)
+    except UnsafeDataDirError as exc:
+        raise SystemExit(f"refused queue file {path}: {exc}") from None
+    return path.resolve()
 
 
 def _cmd_status(
     args: argparse.Namespace, storage: Storage, viewpoints: dict[str, Viewpoint]
 ) -> int:
+    from .archive_queue import ArchiveQueue, queue_summary
     from .live import status_report
 
     report = status_report(storage, list(viewpoints.values()), now=utcnow())
+    queue_path = _queue_path(args)
+    if queue_path.exists() or args.archive_queue:
+        report["archive_queue"] = queue_summary(ArchiveQueue(queue_path))
     if args.json:
         _print(report)
         return 0
     print(f"capture status at {report['now']}  (storage: {report['storage']})")
     header = (
         f"{'viewpoint':<28} {'last poll':<21} {'last image (UTC)':<21} {'age':>7} "
-        f"{'GETs/h':>6} {'fail':>4}  next poll"
+        f"{'GETs/h':>6} {'fail':>4} {'policy':<14} {'staged':>6}  next poll"
     )
     print(header)
+    switching = []
     for row in report["cameras"]:
+        policy = row.get("frame_policy_recorded") or row.get("frame_policy") or "-"
+        if row.get("frame_policy_recorded") not in (None, row.get("frame_policy")):
+            policy += "*"
+            switching.append(row["viewpoint_id"])
         print(
             f"{row['viewpoint_id']:<28} {row.get('last_poll_at') or '-':<21} "
             f"{row.get('last_image_time_utc') or '-':<21} "
             f"{_dash(row.get('last_image_age_min')):>7} "
-            f"{row.get('gets_last_hour', 0):>6} {row.get('failures', 0):>4}  "
+            f"{row.get('gets_last_hour', 0):>6} {row.get('failures', 0):>4} "
+            f"{policy:<14} {row.get('staged', 0):>6}  "
             f"{row.get('next_poll_at') or 'now'}"
         )
+    if switching:
+        print(
+            "* policy: what the newest frame's writer did; this code would use "
+            + ", ".join(
+                f"{r['viewpoint_id']}={r['frame_policy']}"
+                for r in report["cameras"]
+                if r["viewpoint_id"] in switching
+            )
+        )
     print("today's capture_log events:", json.dumps(report.get("events_today", {})))
+    queue = report.get("archive_queue")
+    if queue:
+        _print_queue(queue)
     return 0
+
+
+def _print_queue(summary: dict[str, Any]) -> None:
+    print(f"archive queue {summary['path']}: {json.dumps(summary.get('by_status', {}))}")
+    if summary.get("error"):
+        print(f"  unreadable: {summary['error']}")
+    runner = summary.get("runner") or {}
+    if runner:
+        print(
+            f"  runner pid {runner.get('pid')} at {runner.get('updated_at')}, budget "
+            f"{json.dumps(runner.get('budget'))}"
+        )
+    for row in summary.get("rows", []):
+        pairs = row.get("pairs")
+        print(
+            f"  {row['status']:<8} {row['id']:<70} {_dash(row.get('next'))}/{_dash(pairs)} "
+            f"{json.dumps(row.get('outcomes', {}))} {row.get('bytes', 0)} B "
+            f"{row.get('requests', 0)} req {row.get('reason') or ''}"
+        )
 
 
 def _dash(value: Any) -> str:
@@ -221,6 +313,147 @@ def _cmd_archive(
         archive.client.close()
 
 
+#: ``archive queue add --through`` queues at most this many days at once.
+MAX_QUEUE_RANGE_DAYS = 400
+
+
+def _queue_days(dates: Sequence[str], through: str | None) -> list[date]:
+    """The days to queue: the dates given, or every day from the one date through ``through``."""
+    days = [date.fromisoformat(d) for d in dates]
+    if through is None:
+        return days
+    if len(days) != 1:
+        raise ValueError("--through takes exactly one start date")
+    end = date.fromisoformat(through)
+    count = (end - days[0]).days + 1
+    if count < 1 or count > MAX_QUEUE_RANGE_DAYS:
+        raise ValueError(
+            f"--through must be 0-{MAX_QUEUE_RANGE_DAYS - 1} days after the start date"
+        )
+    return [date.fromordinal(days[0].toordinal() + i) for i in range(count)]
+
+
+def _cmd_archive_queue(
+    args: argparse.Namespace, storage: Storage, viewpoints: dict[str, Viewpoint]
+) -> int:
+    """``archive queue add|list|remove``: edit the queue file; never contacts nps.gov."""
+    from .archive_queue import ArchiveQueue, make_entry, queue_summary
+
+    queue = ArchiveQueue(_queue_path(args))
+    if args.queue_cmd == "add":
+        vp = _archive_viewpoint(viewpoints, args.viewpoint)
+        kinds = [k for k, wanted in (("hires", args.hires), ("thumbmedium", args.thumbs)) if wanted]
+        min_sun = (
+            args.min_sun_deg
+            if args.min_sun_deg is not None
+            else (0.0 if args.daytime_only else None)
+        )
+        try:
+            days = _queue_days(args.dates, args.through)
+            entries = [
+                make_entry(
+                    vp,
+                    day,
+                    kinds=kinds or ["hires"],
+                    pick=args.pick,
+                    min_sun_deg=min_sun,
+                    max_gb=args.max_gb,
+                    convention=args.convention,
+                )
+                for day in days
+            ]
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from None
+        added, present = queue.add(entries)
+        _print({"queue": str(queue.path), "added": added, "already_queued": present})
+        return 0
+    if args.queue_cmd == "remove":
+        if not (args.ids or args.finished or args.all):
+            raise SystemExit("archive queue remove: give ids, --finished or --all")
+        removed = queue.remove(args.ids, finished=args.finished, everything=args.all)
+        _print({"queue": str(queue.path), "removed": removed})
+        return 0
+    if args.queue_cmd == "resume":
+        if not (args.ids or args.all):
+            raise SystemExit("archive queue resume: give ids or --all")
+        try:
+            resumed = queue.resume(args.ids, every=args.all, max_gb=args.max_gb)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from None
+        _print({"queue": str(queue.path), "resumed": resumed})
+        return 0
+    summary = queue_summary(queue)
+    if args.json:
+        _print(summary)
+    else:
+        _print_queue(summary)
+    return 0
+
+
+def _cmd_cadence(
+    args: argparse.Namespace, storage: Storage, viewpoints: dict[str, Viewpoint]
+) -> int:
+    """``cadence``: the camera's update cadence from logs and sidecars on disk (no network)."""
+    from .cadence import camera_cadence
+
+    vp = _viewpoint(viewpoints, args.viewpoint)
+    report = camera_cadence(storage, vp, now=utcnow(), hours=args.hours, max_gap_s=args.max_gap)
+    if args.json:
+        _print(report)
+        return 0
+    print(
+        f"{vp.id} ({report['camera_kind']}) {report['window_utc'][0]} .. "
+        f"{report['window_utc'][1]}: {report['polls']['total']} polls "
+        f"{json.dumps(report['polls']['by_source'])}, spacing "
+        f"{json.dumps(report['poll_spacing_s'])}, {report['gaps_over_max']} gaps over "
+        f"{report['max_gap_s']:g} s"
+    )
+    for name, series in report["series"].items():
+        stats = series["interval_s"]
+        ages = series["age_at_poll_s"]
+        print(
+            f"  {name} ({series['what']}): {series['distinct_values']} distinct; pairs "
+            f"{json.dumps(series['consecutive_pairs'])}; interval median {stats['median']} s, "
+            f"p10 {stats['p10']} s, p90 {stats['p90']} s (n={stats['n']}, min {stats['min']}, "
+            f"max {stats['max']}); histogram {json.dumps(series['histogram_10s'])}"
+        )
+        print(
+            f"    age at poll: median {ages['median']} s, p90 {ages['p90']} s, min "
+            f"{ages['min']} s, max {ages['max']} s (n={ages['n']}); 30 s bins "
+            f"{json.dumps(series['age_histogram_30s'])}"
+        )
+        print(f"    => {series['cadence']['text']}")
+    print(f"  note: {report['note']}")
+    return 0
+
+
+def _cmd_storage(
+    args: argparse.Namespace, storage: Storage, viewpoints: dict[str, Viewpoint]
+) -> int:
+    """``storage``: bytes per frame and per day, old policy against PRD §8.7 (no network)."""
+    from .storage_report import storage_report
+
+    if not isinstance(storage, LocalStorage):
+        raise SystemExit("storage reads files on local disk; unset LOOKOUT_STORAGE=s3")
+    day = date.fromisoformat(args.day) if args.day else utcnow().date()
+    report = storage_report(storage, _select(viewpoints, args.only), day=day)
+    if args.json:
+        _print(report)
+        return 0
+    print(f"storage on {report['day']} (frames {report['frames_span_utc']})")
+    for row in report["cameras"]:
+        proj = row["projection"]
+        print(
+            f"  {row['viewpoint_id']:<28} {row['frame_policy']:<14} n={row['frames_on_disk']:<3} "
+            f"frame {_dash(row['frame_bytes']['mean'])} B, thumb "
+            f"{_dash(row['thumb_bytes_made_in_memory']['mean'])} B; per day old "
+            f"{_dash(proj.get('old_bytes_per_day'))} B, "
+            f"new {_dash(proj.get('new_bytes_per_day'))} B"
+        )
+    print(f"  totals per day: {json.dumps(report['totals_per_day'])}")
+    return 0
+
+
 def _cmd_archive_check(
     args: argparse.Namespace, storage: Storage, viewpoints: dict[str, Viewpoint]
 ) -> int:
@@ -319,11 +552,62 @@ def build_parser() -> argparse.ArgumentParser:
     loop.add_argument("--jitter", type=float, default=30.0, help="extra random 0..J s per pass")
     loop.add_argument("--only", action="append", metavar="VIEWPOINT_ID")
     loop.add_argument("--max-passes", type=int, default=None, help=argparse.SUPPRESS)
+    loop.add_argument(
+        "--archive-queue",
+        metavar="PATH",
+        default=None,
+        help="also work this archive queue between live passes, one request at a time "
+        "(see 'archive queue'); default: no archive work",
+    )
+    loop.add_argument(
+        "--archive-budget",
+        type=int,
+        default=None,
+        metavar="N",
+        help="archive requests the queue may send per UTC day (default 1000; 0 = no budget)",
+    )
+    loop.add_argument(
+        "--archive-total-gb",
+        type=float,
+        default=None,
+        metavar="G",
+        help="stop queued archive work once every viewpoint's backfill together has "
+        "downloaded G GB (default 5; 0 = only the per-viewpoint --max-gb caps)",
+    )
     loop.set_defaults(func=_cmd_loop, nps_fetcher=True)
 
     status = sub.add_parser("status", help="show persisted capture state (no network)")
     status.add_argument("--json", action="store_true")
+    status.add_argument(
+        "--archive-queue",
+        metavar="PATH",
+        default=None,
+        help="archive queue to report (default: state/archive/queue.json if it exists)",
+    )
     status.set_defaults(func=_cmd_status)
+
+    cadence = sub.add_parser(
+        "cadence", help="a camera's update cadence from logs and sidecars on disk (no network)"
+    )
+    cadence.add_argument("viewpoint")
+    cadence.add_argument("--hours", type=float, default=24.0, help="look back this far (24)")
+    cadence.add_argument(
+        "--max-gap",
+        type=float,
+        default=None,
+        metavar="S",
+        help="consecutive polls further apart than this break a pair (1.8 poll intervals)",
+    )
+    cadence.add_argument("--json", action="store_true")
+    cadence.set_defaults(func=_cmd_cadence)
+
+    store = sub.add_parser(
+        "storage", help="bytes per frame and per day, old policy against PRD §8.7 (no network)"
+    )
+    store.add_argument("--day", default=None, help="UTC day whose daylight weights (today)")
+    store.add_argument("--only", action="append", metavar="VIEWPOINT_ID")
+    store.add_argument("--json", action="store_true")
+    store.set_defaults(func=_cmd_storage)
 
     archive = sub.add_parser("archive", help="NPS archive: availability and backfill")
     asub = archive.add_subparsers(dest="archive_cmd", required=True)
@@ -371,6 +655,56 @@ def build_parser() -> argparse.ArgumentParser:
         else:
             p.add_argument("--pick", choices=("all", "hourly", "midday"), default="all")
         p.set_defaults(func=_cmd_archive, nps_fetcher=True)
+
+    queue = asub.add_parser(
+        "queue", help="edit the backfill queue that 'loop --archive-queue' works (no network)"
+    )
+    qsub = queue.add_subparsers(dest="queue_cmd", required=True)
+    add = qsub.add_parser("add", help="queue days to backfill at one viewpoint")
+    add.add_argument("viewpoint")
+    add.add_argument("dates", nargs="+", metavar="YYYY-MM-DD")
+    add.add_argument(
+        "--through",
+        metavar="YYYY-MM-DD",
+        default=None,
+        help="queue every day from the one date given through this one (a season)",
+    )
+    add.add_argument("--hires", action="store_true", help="full-size frames (the default)")
+    add.add_argument("--thumbs", action="store_true", help="thumbmedium (with --hires: both)")
+    add.add_argument("--pick", choices=("all", "hourly", "midday"), default="hourly")
+    add.add_argument(
+        "--daytime-only", action="store_true", help="only frames with NPS SolarElevationAngle >= 0"
+    )
+    add.add_argument("--min-sun-deg", type=float, default=None)
+    add.add_argument(
+        "--max-gb",
+        type=float,
+        default=1.0,
+        help="stop once this viewpoint's backfill has downloaded this many GB in all",
+    )
+    add.add_argument("--convention", choices=("label", "wall"), default="label")
+    listing = qsub.add_parser("list", help="show the queue and each entry's progress")
+    listing.add_argument("--json", action="store_true")
+    remove = qsub.add_parser("remove", help="remove entries (what they stored stays)")
+    remove.add_argument("ids", nargs="*", metavar="ID")
+    remove.add_argument(
+        "--finished", action="store_true", help="every done, refused, failed or stopped one"
+    )
+    remove.add_argument("--all", action="store_true")
+    resume = qsub.add_parser("resume", help="set stopped (size cap) or failed entries back to work")
+    resume.add_argument("ids", nargs="*", metavar="ID")
+    resume.add_argument("--all", action="store_true", help="every stopped or failed entry")
+    resume.add_argument(
+        "--max-gb",
+        type=float,
+        default=None,
+        help="raise the entries' per-viewpoint size cap to this many GB (a stopped entry needs it)",
+    )
+    for p in (add, listing, remove, resume):
+        p.add_argument(
+            "--queue", metavar="PATH", default=None, help="queue file (state/archive/queue.json)"
+        )
+        p.set_defaults(func=_cmd_archive_queue)
 
     check = sub.add_parser("archive-check", help="the M0.5 archive depth/epoch check")
     check.add_argument("--viewpoint", action="append", metavar="VIEWPOINT_ID")

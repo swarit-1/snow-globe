@@ -17,6 +17,9 @@ Politeness, enforced here for every archive request from every process on this m
   in-process limiter;
 - error back-off shared by every process (``defer``), honouring ``Retry-After``. A 200
   whose body is not a decodable JPEG counts as an error too (:class:`ArchiveBadBody`);
+- one back-off for the whole of www.nps.gov, shared with live capture
+  (:mod:`lookout_capture.host_backoff`): an HTTP 429/503 here also pauses live polling, and a
+  hold that a live 429/503 set is waited out before any archive request;
 - an optional request budget persisted in ``state/`` (the archive check uses 220);
 - single-threaded; resumable; an asset already stored is never downloaded again; a total
   size cap (``max_bytes``) stops a backfill before the next download; a failing asset is
@@ -33,9 +36,11 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -54,6 +59,7 @@ from . import CAPTURE_VERSION
 from .fetch import Fetched
 from .frames import gate_flags, process_image, sun_position
 from .heldout import HeldOutOverride, held_out_reason
+from .host_backoff import HOST, extend_host_hold, host_hold_until
 
 __all__ = [
     "API_CODE_CASE",
@@ -273,6 +279,8 @@ class SearchResult:
     pages_fetched: int
     search_id: str | None
     paging_error: str | None = None
+    #: Paging stopped because ``may_continue()`` said no (the archive queue's time check).
+    cut_short: bool = False
 
 
 def search_body(
@@ -387,6 +395,8 @@ class ArchiveClient:
         clock: Callable[[], datetime] = utcnow,
         monotonic: Callable[[], float] = time.monotonic,
         log_requests: bool = True,
+        request_deadline_s: float | None = None,
+        share_host_backoff: bool = True,
     ) -> None:
         self.client = client
         self.limiter = limiter
@@ -396,8 +406,45 @@ class ArchiveClient:
         self.clock = clock
         self.monotonic = monotonic
         self.log_requests = log_requests and storage is not None
+        #: A body still arriving after this many seconds is abandoned as an error (the
+        #: archive queue bounds each step this way so it never runs into a live pass).
+        self.request_deadline_s = request_deadline_s
+        #: Honour and extend the www.nps.gov hold that live capture also uses
+        #: (:mod:`lookout_capture.host_backoff`); needs ``storage``.
+        self.share_host_backoff = share_host_backoff and storage is not None
         self.stats = RequestStats()
         self.failures = 0
+
+    # -- the shared www.nps.gov hold --------------------------------------------------
+    def _shares_hold(self, url: str) -> bool:
+        return self.share_host_backoff and httpx.URL(url).host == HOST
+
+    def _wait_for_host_hold(self, url: str) -> None:
+        """Defer the archive limiter to the end of a host hold (a live 429/503's, say)."""
+        if not self._shares_hold(url):
+            return
+        assert self.storage is not None
+        now = self.clock()
+        until = host_hold_until(self.storage, now)
+        if until is not None:
+            wait = (until - now).total_seconds()
+            print(
+                f"lookout-capture: www.nps.gov is held until {isoformat_z(until, 'seconds')} "
+                f"(an HTTP 429/503); waiting {wait:.0f} s before {url}",
+                file=sys.stderr,
+            )
+            self.limiter.defer(wait)
+
+    def _extend_host_hold(self, url: str, seconds: float, reason: str) -> None:
+        """An archive 429/503 holds live capture too (PRD §15.3: back off on errors).
+
+        If the hold cannot be written, the archive's own back-off (``defer``) still applies
+        and the HTTP error is still the one raised.
+        """
+        if self._shares_hold(url):
+            assert self.storage is not None
+            with suppress(Exception):
+                extend_host_hold(self.storage, self.clock(), seconds, reason, source="archive")
 
     # -- transport ------------------------------------------------------------------
     def _send(
@@ -415,7 +462,12 @@ class ArchiveClient:
         ``validate`` checks a 2xx/3xx body; a problem it names is an error like an HTTP
         5xx: it is logged, counted, deferred for every process and raised as
         :class:`ArchiveBadBody`.
+
+        A www.nps.gov hold in force (:mod:`lookout_capture.host_backoff`, set by a live or an
+        archive 429/503) is waited out first, through the limiter; an HTTP 429/503 here
+        extends that hold, so live capture backs off too.
         """
+        self._wait_for_host_hold(url)
         if self.budget is not None:
             self.budget.consume(f"{kind} {url}")
         started_wall = self.clock()
@@ -430,10 +482,13 @@ class ArchiveClient:
                 with self.client.stream(method, url, json=json_body) as response:
                     status = response.status_code
                     chunks = []
+                    deadline = self.request_deadline_s
                     for chunk in response.iter_bytes():
                         size += len(chunk)
                         if size > max_bytes:
                             raise ArchiveError(f"{url} is larger than {max_bytes} bytes")
+                        if deadline is not None and self.monotonic() - t0 > deadline:
+                            raise ArchiveError(f"{url} took longer than {deadline:g} s")
                         chunks.append(chunk)
                     result = Fetched(response.status_code, response.headers, b"".join(chunks), url)
                 if validate is not None and status is not None and status < 400:
@@ -458,9 +513,12 @@ class ArchiveClient:
                 self.failures += 1
                 wait = retry_after_s(result) if status in (429, 503) else None
                 if status in (429, 503) or status >= 500:
-                    self.limiter.defer(
-                        max(wait or 0.0, backoff_delay(self.failures, base_s=30.0, cap_s=1800.0))
+                    delay = max(
+                        wait or 0.0, backoff_delay(self.failures, base_s=30.0, cap_s=1800.0)
                     )
+                    self.limiter.defer(delay)
+                    if status in (429, 503):
+                        self._extend_host_hold(url, delay, f"HTTP {status} on archive {kind}")
                 raise ArchiveHTTPError(status, url, result.text[:120] if kind != "asset" else "")
             if bad_body:
                 self.failures += 1
@@ -512,9 +570,18 @@ class ArchiveClient:
         return AvailableDays.from_json(code, raw), raw
 
     def search_day(
-        self, code: str, day: date, *, page_size: int = 300
+        self,
+        code: str,
+        day: date,
+        *,
+        page_size: int = 300,
+        may_continue: Callable[[], bool] | None = None,
     ) -> tuple[SearchResult, list[dict[str, Any]]]:
-        """All assets of one local day, following the server's paging (``Page``/``SearchID``)."""
+        """All assets of one local day, following the server's paging (``Page``/``SearchID``).
+
+        ``may_continue()`` is asked before each page after the first; when it says no,
+        paging stops and the result is marked ``cut_short`` (and so incomplete).
+        """
         wire_code = api_code(code)
         url = f"{self.api_root}api/Search/Execute"
         body = search_body(wire_code, day, page_size=page_size)
@@ -526,7 +593,12 @@ class ArchiveClient:
         search_id = page.get("SearchID")
         number = 1
         paging_error: str | None = None
+        cut_short = False
         while isinstance(page_count, int) and number < min(page_count, MAX_PAGES):
+            if may_continue is not None and not may_continue():
+                cut_short = True
+                paging_error = f"stopped before page {number + 1} of {page_count}: no time left"
+                break
             number += 1
             # POST /api/Search/Execute/<SearchID> answered HTTP 500 on 2026-11-19, so later
             # pages go to the same URL with Page/CurrentPage set and the SearchID in the body.
@@ -555,6 +627,7 @@ class ArchiveClient:
             pages_fetched=len(pages),
             search_id=search_id,
             paging_error=paging_error,
+            cut_short=cut_short,
         )
         return result, pages
 
@@ -662,12 +735,15 @@ def cached_search(
     *,
     today: date,
     page_size: int = 300,
+    may_continue: Callable[[], bool] | None = None,
 ) -> tuple[list[ArchiveAsset], dict[str, Any]]:
     """One day's assets (metadata only), from the cache once the day is closed.
 
     A search is read from, and written to, ``cache/`` only when ``day`` is at least
     :data:`SEARCH_CACHE_MIN_AGE_DAYS` before ``today`` (UTC) and the search was complete.
     Today's and yesterday's searches are never cached: frames may still be arriving.
+    ``may_continue`` goes to :meth:`ArchiveClient.search_day`; a search it cut short is
+    marked ``cut_short`` and incomplete, and is never cached.
     """
     key = search_cache_key(code, day)
     if _old_enough(day, today):
@@ -675,7 +751,7 @@ def cached_search(
         if _usable_cache(cached, day):
             assets = [ArchiveAsset.from_result({"Asset": a}) for a in cached.get("assets", [])]
             return assets, {**cached.get("meta", {}), "from_cache": True}
-    result, _pages = archive.search_day(code, day, page_size=page_size)
+    result, _pages = archive.search_day(code, day, page_size=page_size, may_continue=may_continue)
     meta = {
         "code": code,
         "day": day.isoformat(),
@@ -687,7 +763,9 @@ def cached_search(
         "page_size": page_size,
         "search_id": result.search_id,
         "paging_error": result.paging_error,
-        "complete": result.result_count is None or len(result.assets) >= result.result_count,
+        "cut_short": result.cut_short,
+        "complete": not result.cut_short
+        and (result.result_count is None or len(result.assets) >= result.result_count),
         "from_cache": False,
     }
     if meta["complete"] and _old_enough(day, today):

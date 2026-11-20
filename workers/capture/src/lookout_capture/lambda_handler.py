@@ -4,7 +4,10 @@ EventBridge Scheduler invokes ``lookout_capture.lambda_handler.handler`` every 5
 (``infra/terraform/scheduler.tf``). One invocation runs one pass with
 ``LOOKOUT_STORAGE=s3``. It is safe under concurrent invocation: each camera is handled
 under an S3 conditional-put lock and its persisted poll slot, so a second invocation skips
-cameras that are locked or not yet due instead of polling them twice.
+cameras that are locked or not yet due instead of polling them twice. The pass writes its
+``capture_log`` records in one ``append_jsonl_many`` (each S3 append rewrites the day's log),
+thumbnails to ``thumbs/``, and stages the six hourly cameras' frames under
+``cache/staging/`` (:mod:`.retention`); the role needs those prefixes (README, "Storage").
 """
 
 from __future__ import annotations

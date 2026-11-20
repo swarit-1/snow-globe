@@ -1,6 +1,6 @@
 [project]
 name = "lookout-capture"
-version = "0.1.0"
+version = "0.2.0"
 description = "NPS webcam capture for Lookout: polite live capture, archive backfill and the archive check (PRD §8.6, §11.2, §13.2, §15.3)."
 readme = "README.md"
 license = "MIT"

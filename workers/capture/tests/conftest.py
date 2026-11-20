@@ -21,6 +21,24 @@ from PIL import ExifTags, Image
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def subprocess_prelude() -> str:
+    """Python source that puts this checkout's packages on ``sys.path`` in a child process.
+
+    Child scripts run with ``-I`` (no environment, no script folder on the path), and iCloud
+    hides the venv's ``.pth`` files on this machine, so the child is told where the two
+    ``src`` folders are instead of relying on either.
+    """
+    import lookout_common
+
+    import lookout_capture
+
+    roots = [
+        str(Path(module.__file__).resolve().parents[1])
+        for module in (lookout_capture, lookout_common)
+    ]
+    return f"import sys\nsys.path[:0] = {roots!r}\n"
+
+
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Drop LOOKOUT_* and AWS_* variables from the developer's shell."""

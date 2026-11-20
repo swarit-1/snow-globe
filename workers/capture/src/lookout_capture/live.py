@@ -10,11 +10,14 @@ storage under a per-camera lock, so they survive restarts and concurrent invocat
   ``Last-Modified``/``ETag`` changed. The image GET is itself conditional on the last ETag.
 - **At most 4 image GETs per camera in any rolling hour** (the manifest's
   ``max_images_per_hour``). Each GET is written to state *before* it is sent. A pacing
-  rule keeps GETs at least 0.8 x 3600/N s apart, so a camera that changes every 5 minutes
-  yields frames spread through the hour.
+  rule keeps GETs at least 0.8 x 3600/N s apart, so a camera that changes at every poll
+  (Rainier updates about once a minute) yields frames spread through the hour.
 - **Back off** on errors, exponentially (5 min doubling to 1 h), per camera, with separate
-  counters for the feed and the image GET; HTTP 429/503 also pauses every camera on the
-  host, honouring ``Retry-After``.
+  counters for the feed, the image GET and the store; HTTP 429/503 also holds every request
+  to www.nps.gov, live and archive alike, honouring ``Retry-After`` (:mod:`.host_backoff`).
+- **A download is never fetched twice:** once a 200 JPEG has arrived, its validators and
+  ``imagedate`` are recorded as handled even if storing it fails (a denied or failed
+  write), so a broken store costs one GET per new image, never repeated GETs of one image.
 - **Seed** from frames already stored (the Rainier stopgap's sidecars hold
   ``http_last_modified``, ``etag`` and ``sha256``) so a first pass never re-downloads an
   unchanged image, and fold in frames stored by any other writer before each poll.
@@ -22,14 +25,22 @@ storage under a per-camera lock, so they survive restarts and concurrent invocat
   :func:`lookout_capture.fetcher_guard.nps_fetcher_lock`; :meth:`CaptureRunner.loop` takes a
   ``before_pass`` check that stops it if a foreign fetcher (the stopgap) appears.
 
-Every frame is stored at <= 1920 px. PRD §8.7 asks for the frame nearest each hour at
-1920 px plus 640 px thumbnails of the 15-minute frames; keeping all of them full size loses
-nothing (thumbnails can be derived later) and its cost is measured in the M0.5 report:
-TODO(M1) derive the 640 px Tier 0 thumbnails, once the lead records the deviation.
+**Storage (PRD §8.7, :mod:`.retention`).** Every downloaded frame gets a 640 px thumbnail
+in ``thumbs/``. The two design-P cameras (Rainier, Point Reyes) also keep every frame at
+<= 1920 px in ``frames/``; the other six stage it under ``cache/staging/`` and keep only
+the frame nearest each UTC hour, promoted to ``frames/`` once the hour's candidates are all
+in (every pass decides the ready hours, inside the camera's lock, before it polls). At a
+design-P camera the frame is written first; a thumbnail whose write failed or was cut short
+is made later from the stored frame (``thumbs_pending``).
 
-Stored frames follow the CLAUDE.md layout and carry a JSON sidecar with the PRD §8.6 gate
-inputs (:mod:`.frames`); events go to ``capture_log/<UTC date>.jsonl`` (stored, unchanged,
-duplicate, rate_capped, error, backoff, plus one ``pass`` record per pass).
+Stored files follow the CLAUDE.md layout and carry a JSON sidecar with the PRD §8.6 gate
+inputs (:mod:`.frames`); events go to ``capture_log/<UTC date>.jsonl`` (request, stored,
+unchanged, duplicate, rate_capped, error, backoff, promoted, staging_dropped, thumb_repaired,
+thumb_given_up, plus one ``pass`` record per pass; every poll outcome carries the feed's
+validator, for :mod:`.cadence`). With S3 storage a pass's records are written in one
+``append_jsonl_many`` call (each S3 append rewrites the day's whole log object), and records a
+failed write could not store go to stderr and out with the next pass; locally each record is
+appended at once.
 """
 
 from __future__ import annotations
@@ -38,9 +49,11 @@ import json
 import random
 import re
 import signal
+import sys
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
@@ -52,16 +65,37 @@ from lookout_common.http import backoff_delay, polite_client, retry_after_s, use
 from lookout_common.images import hamming64
 from lookout_common.jsonl import iter_jsonl_bytes
 from lookout_common.manifest import Viewpoint
-from lookout_common.paths import capture_log_key, frame_key, sidecar_key
+from lookout_common.paths import capture_log_key, frame_key, sidecar_key, thumb_key
 from lookout_common.storage import KeyNotFoundError, LocalStorage, LockTimeoutError, Storage
 from lookout_common.timeutil import isoformat_z, parse_nps_imagedate, utcnow
 
 from . import CAPTURE_VERSION
 from .fetch import Fetched, ResponseTooLarge, fetch
-from .frames import choose_image_time, gate_flags, process_image, sha256_hex, sun_position
+from .frames import (
+    THUMB_WIDTH,
+    choose_image_time,
+    describe_thumbnail,
+    gate_flags,
+    process_image,
+    sha256_hex,
+    sun_position,
+    thumbnail_of_stored,
+)
+from .host_backoff import extend_host_hold, host_hold_until
+from .retention import (
+    EVERY_FRAME_VIEWPOINTS,
+    HOURLY_SETTLE_S,
+    POLICY_EVERY,
+    POLICY_HOURLY,
+    STAGING_SCAN_EVERY_S,
+    frame_policy,
+    promote_ready_hours,
+    scan_staged,
+    staging_key,
+    thumb_sidecar,
+)
 from .state import (
     GET_HISTORY_S,
-    HOST_STATE_KEY,
     RECENT_SHA_LIMIT,
     CameraState,
     camera_state_key,
@@ -80,8 +114,23 @@ __all__ = [
 
 #: CLAUDE.md: poll the camera JSON or headers at most every 5 minutes.
 MIN_POLL_INTERVAL_S = 300.0
+#: Added to the poll spacing when deciding a camera is due, so a send-to-send gap measured
+#: from the request log never falls under MIN_POLL_INTERVAL_S. The critic found 8 of 504
+#: gaps at 299.06-299.7 s on 19-20 Nov 2026: the poll was stamped before its request's
+#: spacing wait. The stamp now moves to the send (``_request(poll_state=...)``) as well.
+POLL_MARGIN_S = 1.0
 #: An image older than this at fetch time means the feed has stalled.
 STALE_IMAGE_AFTER = timedelta(hours=2)
+#: Live sidecars. 2 (19 Nov 2026, additive over 1): ``frame_policy`` and ``thumb``; in a
+#: thumbnail's sidecar ``variant`` and ``full_frame``; in a promoted frame's ``hourly_selection``.
+SIDECAR_SCHEMA = 2
+#: Missing thumbnails listed for repair at most; past it the oldest is given up (and logged).
+THUMBS_PENDING_LIMIT = 48
+#: Thumbnails remade from stored frames per camera per pass, and tries per thumbnail.
+THUMB_REPAIRS_PER_PASS = 2
+THUMB_REPAIR_ATTEMPTS = 3
+#: Batched log records whose write failed, kept for the next pass at most (oldest dropped).
+LOG_CARRY_LIMIT = 2000
 _IMAGEDATE_RE = re.compile(r'"imagedate"\s*:\s*"([^"]*)"')
 _IMAGEFILE_RE = re.compile(r'"imagefilelarge"\s*:\s*"([^"]*)"')
 
@@ -100,6 +149,12 @@ class CaptureOptions:
     error_backoff_base_s: float = 300.0
     error_backoff_cap_s: float = 3600.0
     runner: str = "cli"
+    #: Cameras that keep every frame at <= 1920 px (PRD §8.7 exception, :mod:`.retention`).
+    every_frame: frozenset[str] = EVERY_FRAME_VIEWPOINTS
+    hourly_settle_s: float = HOURLY_SETTLE_S
+    staging_scan_every_s: float = STAGING_SCAN_EVERY_S
+    #: "auto" batches a pass's log records into one write when storage is not local (S3).
+    batch_logs: str = "auto"  # "auto" | "always" | "never"
 
 
 def parse_feed(text: str) -> dict[str, Any]:
@@ -132,6 +187,22 @@ def _is_local(storage: Storage) -> bool:
     return isinstance(storage, LocalStorage)
 
 
+def _json_bytes(doc: Mapping[str, Any]) -> bytes:
+    return (json.dumps(doc, indent=2, ensure_ascii=False) + "\n").encode()
+
+
+def _validators(context: Mapping[str, Any]) -> dict[str, Any]:
+    """The poll's feed validator for a log record: JSON ``Last-Modified`` (ARD) or HEAD's.
+
+    Logged in every poll outcome so ``lookout-capture cadence`` sees each poll's value.
+    """
+    if "json_url" in context:
+        return {"json_last_modified": context.get("json_last_modified")}
+    if "head_last_modified" in context:
+        return {"head_last_modified": context.get("head_last_modified")}
+    return {}
+
+
 class CaptureRunner:
     """Runs capture passes against one storage backend with one HTTP client."""
 
@@ -156,6 +227,15 @@ class CaptureRunner:
         self._last_request: float | None = None
         self._stop = False
         self._signals = 0
+        #: Records of the pass in progress, when logs are batched (S3); None otherwise.
+        self._log_buffer: list[tuple[str, dict[str, Any]]] | None = None
+        #: Batched records whose write failed, sent first with the next pass's batch.
+        self._log_carry: list[tuple[str, dict[str, Any]]] = []
+        #: Log writes that failed (the log never stops capture), and the last error.
+        self.log_errors = 0
+        self.last_log_error: str | None = None
+        #: Unwritten records dropped from the carry (they were printed to stderr).
+        self.log_records_dropped = 0
 
     @classmethod
     def default(
@@ -179,6 +259,7 @@ class CaptureRunner:
 
     # -- logging --------------------------------------------------------------------
     def _log(self, viewpoint_id: str | None, event: str, **fields: Any) -> dict[str, Any]:
+        """Write one ``capture_log`` record now, or queue it for the pass's single write."""
         now = self.clock()
         record = {
             "t": isoformat_z(now, "milliseconds"),
@@ -189,11 +270,57 @@ class CaptureRunner:
             "runner": self.options.runner,
             "capture_version": CAPTURE_VERSION,
         }
+        key = capture_log_key(now)
+        if self._log_buffer is not None:
+            self._log_buffer.append((key, record))
+            return record
         try:
-            self.storage.append_jsonl(capture_log_key(now), record)
+            self.storage.append_jsonl(key, record)
         except Exception as exc:  # the log must never stop capture; keep going
             record["log_error"] = repr(exc)[:200]
+            self.log_errors += 1
+            self.last_log_error = record["log_error"]
         return record
+
+    def _batch_logs(self) -> bool:
+        mode = self.options.batch_logs
+        return mode == "always" or (mode == "auto" and not _is_local(self.storage))
+
+    def _flush_logs(self, *, keep_batching: bool = False) -> int:
+        """Write the queued records, one ``append_jsonl_many`` per log file; returns writes.
+
+        Each S3 append is a GET and a PUT of the day's whole log (lookout_common.storage), so
+        one write per pass instead of one per record is most of the logging cost on Lambda.
+        Records whose write fails are never just dropped: they are printed to stderr as JSON
+        lines (CloudWatch keeps a Lambda's), and kept, up to :data:`LOG_CARRY_LIMIT`, to go
+        out first with the next pass of this runner (the CLI loop). ``keep_batching`` flushes
+        mid-pass and goes on batching.
+        """
+        buffer = self._log_buffer or []
+        self._log_buffer = [] if keep_batching else None
+        groups: dict[str, list[dict[str, Any]]] = {}
+        for key, record in buffer:
+            groups.setdefault(key, []).append(record)
+        writes = 0
+        for key, records in groups.items():
+            try:
+                self.storage.append_jsonl_many(key, records)
+                writes += 1
+            except Exception as exc:  # the log must never stop capture
+                self.log_errors += 1
+                self.last_log_error = repr(exc)[:200]
+                self._keep_unwritten(key, records)
+        return writes
+
+    def _keep_unwritten(self, key: str, records: list[dict[str, Any]]) -> None:
+        for record in records:
+            with suppress(Exception):  # an unprintable record must not stop capture either
+                print(json.dumps({"capture_log_unwritten": key, **record}), file=sys.stderr)
+        self._log_carry.extend((key, record) for record in records)
+        overflow = len(self._log_carry) - LOG_CARRY_LIMIT
+        if overflow > 0:
+            del self._log_carry[:overflow]
+            self.log_records_dropped += overflow
 
     # -- HTTP ---------------------------------------------------------------------------
     def _space(self) -> None:
@@ -212,13 +339,19 @@ class CaptureRunner:
         *,
         viewpoint_id: str,
         stage: str,
+        poll_state: CameraState | None = None,
     ) -> Fetched:
         """Send one live request, spaced from the last, and log it as a ``request`` event.
 
         Every nps.gov request of a pass is in ``capture_log`` (method, stage, status, bytes,
         time), so the request count of a measured run can be checked line by line.
+        ``poll_state`` (the poll's first request: the JSON GET or the HEAD) gets its
+        ``last_poll_at`` stamped after the spacing wait, at the send, so the 5-minute poll
+        spacing (CLAUDE.md, PRD §15.3) is measured from when the request really went out.
         """
         self._space()
+        if poll_state is not None:
+            poll_state.last_poll_at = isoformat_z(self.clock(), "milliseconds")
         started = self.monotonic()
         status: int | None = None
         size = 0
@@ -255,29 +388,11 @@ class CaptureRunner:
         self.storage.write_json(camera_state_key(state.viewpoint_id), state.to_dict())
 
     def _host_hold(self, now: datetime) -> datetime | None:
-        doc = self.storage.read_json(HOST_STATE_KEY, default={}) or {}
-        until = parse_time(doc.get("not_before"))
-        return until if until is not None and until > now else None
+        """The www.nps.gov hold in force: any live or archive 429/503 sets it (``host_backoff``)."""
+        return host_hold_until(self.storage, now)
 
     def _set_host_hold(self, seconds: float, reason: str) -> None:
-        now = self.clock()
-        until = now + timedelta(seconds=seconds)
-        try:
-            with self.storage.lock("capture/hosts", timeout_s=10.0, ttl_s=60.0):
-                doc = self.storage.read_json(HOST_STATE_KEY, default={}) or {}
-                current = parse_time(doc.get("not_before"))
-                if current is None or until > current:
-                    doc.update(
-                        {
-                            "host": "www.nps.gov",
-                            "not_before": isoformat_z(until, "seconds"),
-                            "reason": reason,
-                            "set_at": isoformat_z(now, "seconds"),
-                        }
-                    )
-                    self.storage.write_json(HOST_STATE_KEY, doc)
-        except LockTimeoutError:
-            pass
+        extend_host_hold(self.storage, self.clock(), seconds, reason, source="live")
 
     # -- reconciliation with frames stored by anyone ----------------------------------
     def reconcile(
@@ -287,16 +402,22 @@ class CaptureRunner:
 
         ``full`` (first run) reads the newest RECENT_SHA_LIMIT sidecars of the camera;
         otherwise today's and yesterday's folders are listed and only unseen sidecars read.
-        This is how the stopgap's frames seed the rate cap and the change check.
+        Both ``frames/`` and ``thumbs/`` are read: an hourly camera has a thumbnail for every
+        download but a full frame for one an hour. This is how the stopgap's frames seed the
+        rate cap and the change check. A frame whose sidecar names a thumbnail that does not
+        exist (a crash between the two writes) is listed in ``thumbs_pending`` for repair.
         """
+        roots = ("frames", "thumbs")
         if full:
-            prefixes = [f"frames/{viewpoint.id}/"]
+            prefixes = [f"{root}/{viewpoint.id}/" for root in roots]
         else:
             days = {now.date(), (now - timedelta(days=1)).date()}
-            prefixes = [f"frames/{viewpoint.id}/{d.isoformat()}/" for d in sorted(days)]
-        keys = sorted(
-            {k for p in prefixes for k in self.storage.list_prefix(p) if k.endswith(".json")}
-        )
+            prefixes = [
+                f"{root}/{viewpoint.id}/{d.isoformat()}/" for root in roots for d in sorted(days)
+            ]
+        found = {k for p in prefixes for k in self.storage.list_prefix(p) if k.endswith(".json")}
+        # Oldest first by file name (the image time), so frames/ and thumbs/ interleave.
+        keys = sorted(found, key=lambda k: (k.rsplit("/", 1)[-1], k))
         if full:
             keys = keys[-RECENT_SHA_LIMIT:]
         known = set(state.known_sidecars)
@@ -311,6 +432,11 @@ class CaptureRunner:
                 continue
             self._fold_sidecar(state, key, doc, now)
             folded += 1
+            thumb = doc.get("thumb")
+            if key.startswith("frames/") and isinstance(thumb, Mapping) and thumb.get("key"):
+                tkey = str(thumb["key"])  # its sidecar is written last, so it says "complete"
+                if not self.storage.exists(sidecar_key(tkey)):
+                    self._queue_thumb(state, key[: -len(".json")] + ".jpg", tkey, now)
         state.known_sidecars.extend(fresh)
         if full:
             recent = [t for t in get_times(state.gets) if (now - t).total_seconds() < 3600]
@@ -363,11 +489,22 @@ class CaptureRunner:
         """The camera's poll spacing: the manifest value, never under 300 s."""
         return max(MIN_POLL_INTERVAL_S, float(viewpoint.truth_camera.polite_caps.poll_interval_s))
 
+    def frame_policy(self, viewpoint: Viewpoint) -> str:
+        """``"every"`` or ``"hourly-nearest"`` for this camera (PRD §8.7, :mod:`.retention`)."""
+        return frame_policy(viewpoint.id, self.options.every_frame)
+
     def capture_camera(self, viewpoint: Viewpoint) -> dict[str, Any]:
-        """Poll one camera if its slot is due, fetch its image if changed and allowed, store it."""
+        """Poll one camera if its slot is due, fetch its image if changed and allowed, store it.
+
+        An hourly-retention camera first has its ready hours decided, and any camera has its
+        missing thumbnails made (no network), also when it is not due or the host is in
+        back-off. Once a poll has started the state is saved however it ends, so what it
+        learnt (poll time, validators, a reserved or completed GET) is never lost.
+        """
         now = self.clock()
         hold = self._host_hold(now)
-        if hold is not None:
+        hourly = self.frame_policy(viewpoint) == POLICY_HOURLY
+        if hold is not None and not hourly:
             return {"event": "skipped", "reason": "host_backoff", "until": isoformat_z(hold)}
         try:
             with self.storage.lock(
@@ -383,19 +520,80 @@ class CaptureRunner:
                 if first_run or mode == "always" or (mode == "auto" and _is_local(self.storage)):
                     self.reconcile(viewpoint, state, now, full=first_run)
                 state.prune(now)
-                due = state.poll_due_at(self.poll_interval_s(viewpoint))
+                if hourly:
+                    self._promote(viewpoint, state, now, scan=first_run)
+                if state.thumbs_pending:
+                    self._repair_thumbs(viewpoint, state)
+                if hold is not None:
+                    self._save_state(state)
+                    return {
+                        "event": "skipped",
+                        "reason": "host_backoff",
+                        "until": isoformat_z(hold),
+                    }
+                due = state.poll_due_at(self.poll_interval_s(viewpoint) + POLL_MARGIN_S)
                 if due is not None and due > now:
                     self._save_state(state)
                     return {"event": "not_due", "due_at": isoformat_z(due, "seconds")}
-                if viewpoint.truth_camera.kind == "ard-aircam":
-                    outcome = self._poll_ard(viewpoint, state)
-                else:
-                    outcome = self._poll_park(viewpoint, state)
-                state.prune(self.clock())
-                self._save_state(state)
+                try:
+                    if viewpoint.truth_camera.kind == "ard-aircam":
+                        outcome = self._poll_ard(viewpoint, state)
+                    else:
+                        outcome = self._poll_park(viewpoint, state)
+                finally:
+                    state.prune(self.clock())
+                    self._save_state(state)
                 return outcome
         except LockTimeoutError:
             return {"event": "skipped", "reason": "locked"}
+
+    def _promote(
+        self, viewpoint: Viewpoint, state: CameraState, now: datetime, *, scan: bool
+    ) -> None:
+        """Decide the camera's ready hours (PRD §8.7): promote the nearest frame, drop the rest.
+
+        The staging folder is listed on the first run, on every pass with local storage, and
+        every ``staging_scan_every_s`` with S3, so a staged copy that a crash left out of the
+        state is still decided. A failure is logged and retried next pass; it never stops the
+        poll.
+        """
+        try:
+            scanned_at = parse_time(state.staging_scan_at)
+            if (
+                scan
+                or _is_local(self.storage)
+                or scanned_at is None
+                or (now - scanned_at).total_seconds() >= self.options.staging_scan_every_s
+            ):
+                known = {str(e.get("key")) for e in state.staged}
+                for key in scan_staged(self.storage, viewpoint.id):
+                    if key not in known:
+                        state.staged.append({"key": key, "source": "scan"})
+                state.staging_scan_at = isoformat_z(now, "seconds")
+            if not state.staged:
+                return
+            result = promote_ready_hours(
+                self.storage,
+                viewpoint.id,
+                state.staged,
+                now,
+                settle_s=self.options.hourly_settle_s,
+            )
+        except Exception as exc:
+            state.bump("staging_error")
+            self._log(viewpoint.id, "staging_error", error=f"{type(exc).__name__}: {exc}"[:200])
+            return
+        state.staged = result.remaining
+        for side in result.written_sidecars:
+            if side not in state.known_sidecars:
+                state.known_sidecars.append(side)
+        if result.last is not None:
+            state.last_promotion = result.last
+        for event in result.events:
+            fields = dict(event)
+            name = str(fields.pop("event"))
+            state.bump(name)
+            self._log(viewpoint.id, name, **fields)
 
     def _start_poll(self, state: CameraState) -> datetime:
         now = self.clock()
@@ -471,6 +669,77 @@ class CaptureRunner:
             "backoff_s": delay,
         }
 
+    def _store_failed(
+        self,
+        viewpoint: Viewpoint,
+        state: CameraState,
+        exc: Exception,
+        *,
+        sha: str,
+        etag: str | None,
+        last_modified: str | None,
+        raw_imagedate: str | None,
+        context: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """A 200 JPEG arrived but could not be stored: settle it anyway, then back off.
+
+        The download's validators (and, at an ARD camera, its ``imagedate``) are recorded as
+        handled, exactly as for a stored frame, so the next polls see "unchanged" and the same
+        bytes are never fetched again (CLAUDE.md: download only when changed). The frame is
+        lost; the error is logged with its digest. Polling then backs off 5 min doubling to
+        1 h on ``store_failures`` (reset by the next stored download), so a store that keeps
+        failing costs one GET per new image at most.
+        """
+        now = self.clock()
+        error = f"{type(exc).__name__}: {exc}"[:200]
+        if viewpoint.truth_camera.kind == "ard-aircam":
+            state.handled_imagedate_raw = raw_imagedate
+        state.settled_etag, state.settled_last_modified = etag, last_modified
+        state.store_failures += 1
+        delay = backoff_delay(
+            state.store_failures,
+            base_s=self.options.error_backoff_base_s,
+            cap_s=self.options.error_backoff_cap_s,
+        )
+        until = now + timedelta(seconds=delay)
+        state.not_before = isoformat_z(until, "seconds")
+        state.last_error = {
+            "t": isoformat_z(now, "seconds"),
+            "stage": "store",
+            "status": 200,
+            "error": error,
+            "sha256": sha[:12],
+        }
+        state.bump("error")
+        state.bump("store_failed")
+        self._log(
+            viewpoint.id,
+            "error",
+            stage="store",
+            status=200,
+            error=error,
+            failures=state.store_failures,
+            sha256=sha[:12],
+            imagedate_raw=raw_imagedate,
+            http_last_modified=last_modified,
+            **_validators(context),
+        )
+        self._log(
+            viewpoint.id,
+            "backoff",
+            seconds=delay,
+            until=isoformat_z(until, "seconds"),
+            failures=state.store_failures,
+            stage="store",
+        )
+        return {
+            "event": "error",
+            "stage": "store",
+            "status": 200,
+            "error": error,
+            "backoff_s": delay,
+        }
+
     def _poll_ard(self, viewpoint: Viewpoint, state: CameraState) -> dict[str, Any]:
         tc = viewpoint.truth_camera
         assert tc.json_url is not None
@@ -488,6 +757,7 @@ class CaptureRunner:
                 self.options.max_json_bytes,
                 viewpoint_id=viewpoint.id,
                 stage="json",
+                poll_state=state,
             )
         except httpx.HTTPError as exc:
             return self._error(viewpoint, state, "json", error=f"{type(exc).__name__}: {exc}"[:200])
@@ -504,6 +774,9 @@ class CaptureRunner:
                 "unchanged",
                 reason="json_not_modified",
                 imagedate_raw=state.imagedate_raw,
+                # A 304 confirms the validators sent: the feed's Last-Modified is unchanged.
+                json_last_modified=response.headers.get("Last-Modified")
+                or state.json_last_modified,
             )
             return {"event": "unchanged", "reason": "json_not_modified"}
         if response.status_code != 200:
@@ -564,7 +837,13 @@ class CaptureRunner:
         self._start_poll(state)
         try:
             response = self._request(
-                "HEAD", tc.image_url, None, 0, viewpoint_id=viewpoint.id, stage="head"
+                "HEAD",
+                tc.image_url,
+                None,
+                0,
+                viewpoint_id=viewpoint.id,
+                stage="head",
+                poll_state=state,
             )
         except httpx.HTTPError as exc:
             return self._error(viewpoint, state, "head", error=f"{type(exc).__name__}: {exc}"[:200])
@@ -637,6 +916,7 @@ class CaptureRunner:
                 next_allowed_at=next_at,
                 imagedate_raw=context.get("json_imagedate_raw"),
                 http_last_modified=context.get("head_last_modified"),
+                **_validators(context),
             )
             return {
                 "event": "rate_capped",
@@ -687,6 +967,7 @@ class CaptureRunner:
                 reason="not_modified",
                 flags=flags,
                 imagedate_raw=raw_imagedate,
+                **_validators(context),
             )
             return {"event": "duplicate", "reason": "not_modified", "flags": flags}
         if response.status_code != 200:
@@ -743,20 +1024,33 @@ class CaptureRunner:
                 flags=dup_flags,
                 imagedate_raw=raw_imagedate,
                 http_last_modified=last_modified,
+                **_validators(context),
             )
             return {"event": "duplicate", "reason": "same_sha256", "flags": dup_flags}
-        return self._store(
-            viewpoint,
-            state,
-            body=body,
-            sha=sha,
-            response=response,
-            fetched_at=fetched_at,
-            context=context,
-            imagedate_utc=imagedate_utc,
-            flags=flags,
-            gets_last_hour=decision.gets_last_hour + 1,
-        )
+        try:
+            return self._store(
+                viewpoint,
+                state,
+                body=body,
+                sha=sha,
+                response=response,
+                fetched_at=fetched_at,
+                context=context,
+                imagedate_utc=imagedate_utc,
+                flags=flags,
+                gets_last_hour=decision.gets_last_hour + 1,
+            )
+        except Exception as exc:  # a denied write, a full disk: never fetch these bytes again
+            return self._store_failed(
+                viewpoint,
+                state,
+                exc,
+                sha=sha,
+                etag=etag,
+                last_modified=last_modified,
+                raw_imagedate=raw_imagedate,
+                context=context,
+            )
 
     def _store(
         self,
@@ -772,9 +1066,26 @@ class CaptureRunner:
         flags: list[str],
         gets_last_hour: int,
     ) -> dict[str, Any]:
+        """Store one new download (PRD §8.7, :mod:`.retention`) and record it in the state.
+
+        - Every camera: a 640 px thumbnail and its sidecar in ``thumbs/`` (none if the image
+          does not decode).
+        - ``"every"`` cameras: the <= 1920 px frame and sidecar in ``frames/``, as before.
+        - ``"hourly-nearest"`` cameras: the <= 1920 px frame and sidecar staged under
+          ``cache/staging/frames/``, listed in ``state.staged`` until its hour is decided.
+
+        Writes are create-only and ordered so that a crash between two of them leaves
+        nothing that cannot be completed: at an hourly camera the thumbnail's sidecar (which
+        holds everything needed to rebuild the frame's) is written before the staged frame;
+        at an "every" camera the frame comes first and a thumbnail that could not be written
+        is listed in ``state.thumbs_pending``, to be made from the stored frame. The outcome's
+        ``key`` is the download's durable file: the frame (``"every"``), else the thumbnail.
+        A write that fails otherwise raises; :meth:`_store_failed` then settles the download.
+        """
         tc = viewpoint.truth_camera
         last = state.last_image or {}
-        processed = process_image(body)
+        policy = self.frame_policy(viewpoint)
+        processed = process_image(body, thumb_width=THUMB_WIDTH)
         exif = processed.exif
         last_modified = response.headers.get("Last-Modified")
         times = choose_image_time(
@@ -807,7 +1118,10 @@ class CaptureRunner:
             all_flags.append("stale_image_time")
         if last_modified and last_modified == last.get("last_modified"):
             all_flags.append("same_last_modified_new_bytes")
-        key = frame_key(viewpoint.id, times.image_time_utc, sha)
+        fkey = frame_key(viewpoint.id, times.image_time_utc, sha)
+        thumb = processed.thumb
+        tkey = thumb_key(viewpoint.id, times.image_time_utc, sha) if thumb else None
+        skey = staging_key(fkey) if policy == POLICY_HOURLY else None
         sidecar: dict[str, Any] = {
             "viewpoint_id": viewpoint.id,
             "source": "live",
@@ -841,25 +1155,76 @@ class CaptureRunner:
             "flags": sorted(set(all_flags)),
             "previous_key": last.get("key"),
             "gets_last_hour": gets_last_hour,
+            "frame_policy": policy,
+            "thumb": {"key": tkey, **thumb.to_sidecar()} if thumb and tkey else None,
             "user_agent": user_agent(),
             "capture_version": CAPTURE_VERSION,
-            "sidecar_schema": 1,
+            "sidecar_schema": SIDECAR_SCHEMA,
         }
-        wrote = self.storage.put_bytes(
-            key, processed.stored, content_type="image/jpeg", if_absent=True
+        frame_json = _json_bytes(sidecar)
+        thumb_json = (
+            _json_bytes(
+                thumb_sidecar(sidecar, thumb, frame_key=fkey, policy=policy, staged_key=skey)
+            )
+            if thumb and tkey
+            else None
         )
-        side_key = sidecar_key(key)
-        self.storage.put_bytes(
-            side_key,
-            (json.dumps(sidecar, indent=2, ensure_ascii=False) + "\n").encode(),
-            content_type="application/json",
-            if_absent=True,
-        )
-        state.remember_sha(sha, key)
-        if side_key not in state.known_sidecars:
-            state.known_sidecars.append(side_key)
+
+        def put(key: str, data: bytes, content_type: str) -> bool:
+            return self.storage.put_bytes(key, data, content_type=content_type, if_absent=True)
+
+        def put_thumb() -> bool:
+            if not (thumb and tkey and thumb_json):
+                return False
+            wrote_thumb = put(tkey, thumb.data, "image/jpeg")
+            put(sidecar_key(tkey), thumb_json, "application/json")
+            return wrote_thumb
+
+        thumb_error: str | None = None
+        if policy == POLICY_EVERY:
+            wrote = put(fkey, processed.stored, "image/jpeg")
+            put(sidecar_key(fkey), frame_json, "application/json")
+            try:
+                put_thumb()
+            except Exception as exc:  # the frame is stored; make its thumbnail later
+                thumb_error = f"{type(exc).__name__}: {exc}"[:200]
+                if tkey:
+                    self._queue_thumb(state, fkey, tkey, fetched_at)
+            durable = fkey
+            written_sidecars = [sidecar_key(fkey)]
+        else:
+            assert skey is not None
+            if thumb_json is not None:
+                wrote = put_thumb()
+                wrote = put(skey, processed.stored, "image/jpeg") or wrote
+                put(sidecar_key(skey), frame_json, "application/json")
+            else:  # undecodable, so no thumbnail: the sidecar goes first
+                put(sidecar_key(skey), frame_json, "application/json")
+                wrote = put(skey, processed.stored, "image/jpeg")
+            if not any(e.get("key") == skey for e in state.staged):
+                state.staged.append(
+                    {
+                        "key": skey,
+                        "thumb_key": tkey,
+                        "sha256": sha,
+                        "image_time_utc": sidecar["image_time_utc"],
+                        "at": isoformat_z(fetched_at, "seconds"),
+                    }
+                )
+            durable = tkey or skey
+            written_sidecars = []
+        if tkey and thumb_error is None:
+            written_sidecars.append(sidecar_key(tkey))
+        state.store_failures = 0
+        state.remember_sha(sha, durable)
+        for side_key in written_sidecars:
+            if side_key not in state.known_sidecars:
+                state.known_sidecars.append(side_key)
         state.last_image = {
-            "key": key,
+            "key": durable,
+            "frame_key": fkey,
+            "thumb_key": tkey,
+            "frame_policy": policy,
             "sha256": sha,
             "etag": sidecar["etag"],
             "last_modified": last_modified,
@@ -878,9 +1243,14 @@ class CaptureRunner:
         event = "stored" if wrote else "duplicate"
         state.bump(event)
         summary = {
-            "key": key,
+            "key": durable,
+            "frame_policy": policy,
+            "frame_key": fkey,
+            "thumb_key": tkey,
+            **({"staged_key": skey} if skey else {}),
             "original_bytes": processed.original_bytes,
             "stored_bytes": len(processed.stored),
+            "thumb_bytes": len(thumb.data) if thumb else None,
             "width": processed.original_width,
             "height": processed.original_height,
             "stored_width": processed.stored_width,
@@ -889,9 +1259,94 @@ class CaptureRunner:
             "disagreement_min": times.disagreement_min,
             "flags": sidecar["flags"],
             "gets_last_hour": gets_last_hour,
+            **_validators(context),
+            **({"thumb_error": thumb_error} if thumb_error else {}),
         }
         self._log(viewpoint.id, event, **summary, **({} if wrote else {"reason": "key_exists"}))
         return {"event": event, **summary}
+
+    # -- thumbnails a write failure or a crash left out (PRD §8.7) --------------------------
+    def _queue_thumb(
+        self, state: CameraState, frame_key: str, thumb_key: str, when: datetime
+    ) -> None:
+        """List a stored frame whose thumbnail is missing; oldest dropped past the limit."""
+        if any(p.get("frame_key") == frame_key for p in state.thumbs_pending):
+            return
+        state.thumbs_pending.append(
+            {
+                "frame_key": frame_key,
+                "thumb_key": thumb_key,
+                "attempts": 0,
+                "at": isoformat_z(when, "seconds"),
+            }
+        )
+        while len(state.thumbs_pending) > THUMBS_PENDING_LIMIT:
+            dropped = state.thumbs_pending.pop(0)
+            state.bump("thumb_given_up")
+            self._log(state.viewpoint_id, "thumb_given_up", reason="queue_full", **dropped)
+
+    def _repair_thumbs(self, viewpoint: Viewpoint, state: CameraState) -> None:
+        """Make missing thumbnails from stored frames, a few per pass (no network).
+
+        Each pending frame is read back, thumbnailed exactly as live capture does (640 px,
+        Lanczos, q85, original EXIF), and written create-only with a sidecar built from the
+        frame's (``thumb_made_from: "stored_frame"``); a thumbnail JPEG that exists without its
+        sidecar keeps its bytes and gets the sidecar. The frame's own sidecar still describes
+        the thumbnail that could not be written. A frame that is gone, or that fails
+        :data:`THUMB_REPAIR_ATTEMPTS` times, is dropped and logged (``thumb_given_up``); every
+        repair is logged (``thumb_repaired``).
+        """
+        policy = self.frame_policy(viewpoint)
+        kept: list[dict[str, Any]] = []
+        budget = THUMB_REPAIRS_PER_PASS
+        for entry in state.thumbs_pending:
+            fkey, tkey = str(entry.get("frame_key")), str(entry.get("thumb_key"))
+            if budget <= 0:
+                kept.append(entry)
+                continue
+            budget -= 1
+            try:
+                if self.storage.exists(sidecar_key(tkey)):
+                    continue
+                if not self.storage.exists(fkey):
+                    state.bump("thumb_given_up")
+                    self._log(viewpoint.id, "thumb_given_up", reason="frame_missing", **entry)
+                    continue
+                doc = self.storage.read_json(sidecar_key(fkey))
+                if self.storage.exists(tkey):  # keep the thumbnail live capture made
+                    thumb = describe_thumbnail(self.storage.get_bytes(tkey))
+                    made_from = "live_capture"
+                else:
+                    thumb = thumbnail_of_stored(self.storage.get_bytes(fkey))
+                    made_from = "stored_frame"
+                tdoc = thumb_sidecar(
+                    {**doc, "thumb_made_from": made_from},
+                    thumb,
+                    frame_key=fkey,
+                    policy=doc.get("frame_policy") or policy,
+                )
+                tdoc["full_frame"]["key"] = fkey  # it is stored: we just read it
+                self.storage.put_bytes(tkey, thumb.data, content_type="image/jpeg", if_absent=True)
+                self.storage.put_bytes(
+                    sidecar_key(tkey),
+                    _json_bytes(tdoc),
+                    content_type="application/json",
+                    if_absent=True,
+                )
+            except Exception as exc:
+                entry = {**entry, "attempts": int(entry.get("attempts", 0)) + 1}
+                entry["last_error"] = f"{type(exc).__name__}: {exc}"[:200]
+                if entry["attempts"] >= THUMB_REPAIR_ATTEMPTS:
+                    state.bump("thumb_given_up")
+                    self._log(viewpoint.id, "thumb_given_up", reason="attempts", **entry)
+                else:
+                    kept.append(entry)
+                continue
+            if sidecar_key(tkey) not in state.known_sidecars:
+                state.known_sidecars.append(sidecar_key(tkey))
+            state.bump("thumb_repaired")
+            self._log(viewpoint.id, "thumb_repaired", frame_key=fkey, thumb_key=tkey)
+        state.thumbs_pending = kept
 
     # -- passes -----------------------------------------------------------------------------
     def run_pass(
@@ -904,15 +1359,35 @@ class CaptureRunner:
     ) -> dict[str, Any]:
         """Visit every camera once, earliest-due first, waiting up to ``wait_for_due_s`` for a slot.
 
-        ``time_left`` (Lambda's remaining time) stops the pass before the deadline.
+        ``time_left`` (Lambda's remaining time) stops the pass before the deadline. When logs
+        are batched (S3), every record of the pass, the ``pass`` record included, goes out in
+        one ``append_jsonl_many`` per log file when the pass ends, also if it fails; records an
+        earlier pass could not write go first. Once less than ``2 x min_time_left_s`` is left,
+        the records so far are written before each further camera, so a hard timeout loses
+        at most one camera's records.
         """
+        if not self._batch_logs() or self._log_buffer is not None:
+            return self._run_pass(viewpoints, wait_for_due_s, time_left, min_time_left_s)
+        self._log_buffer, self._log_carry = list(self._log_carry), []
+        try:
+            return self._run_pass(viewpoints, wait_for_due_s, time_left, min_time_left_s)
+        finally:
+            self._flush_logs()
+
+    def _run_pass(
+        self,
+        viewpoints: Sequence[Viewpoint],
+        wait_for_due_s: float,
+        time_left: Callable[[], float] | None,
+        min_time_left_s: float,
+    ) -> dict[str, Any]:
         started = self.clock()
         t0 = self.monotonic()
         order: list[tuple[datetime, Viewpoint]] = []
         for vp in viewpoints:
             try:
                 state = self._load_state(vp.id)
-                due = state.poll_due_at(self.poll_interval_s(vp)) or started
+                due = state.poll_due_at(self.poll_interval_s(vp) + POLL_MARGIN_S) or started
             except Exception:  # an unreadable state file: let the camera's own try report it
                 due = started
             order.append((due, vp))
@@ -925,6 +1400,8 @@ class CaptureRunner:
             if time_left is not None and time_left() < min_time_left_s:
                 outcomes[vp.id] = {"event": "skipped", "reason": "time_left"}
                 continue
+            if self._log_buffer and time_left is not None and time_left() < 2 * min_time_left_s:
+                self._flush_logs(keep_batching=True)  # close to the deadline: write what we have
             wait = (due - self.clock()).total_seconds()
             if 0 < wait <= wait_for_due_s:
                 self.sleep(wait + 0.05)
@@ -976,6 +1453,7 @@ class CaptureRunner:
         max_passes: int | None = None,
         install_signals: bool = True,
         before_pass: Callable[[], None] | None = None,
+        idle: Callable[[Callable[[], float], Callable[[], bool]], Any] | None = None,
     ) -> int:
         """Run passes every ``interval_s`` plus 0..``jitter_s`` s until Ctrl-C or SIGTERM.
 
@@ -983,6 +1461,12 @@ class CaptureRunner:
         one interrupts at once. ``before_pass`` runs before every pass; whatever it raises
         (the CLI passes the foreign-fetcher check) is logged and ends the loop. Returns the
         number of passes run.
+
+        ``idle(time_left, stopping)`` runs between passes, in this process and so inside the
+        host-wide NPS-fetcher lock (the CLI passes the archive queue, D-023). ``time_left()``
+        is the seconds until the next pass is due; ``idle`` must return before then, which
+        is how queued archive work never delays a live poll. An exception it raises is
+        logged (``idle_error``) and never stops live capture.
         """
         previous: dict[int, Any] = {}
         if install_signals:
@@ -1003,6 +1487,11 @@ class CaptureRunner:
                 if max_passes is not None and passes >= max_passes:
                     break
                 target = start + interval_s + self.rng.uniform(0.0, max(0.0, jitter_s))
+                if idle is not None and not self._stop:
+                    try:
+                        idle(lambda t=target: t - self.monotonic(), lambda: self._stop)
+                    except Exception as exc:  # archive work must never stop live capture
+                        self._log(None, "idle_error", error=f"{type(exc).__name__}: {exc}"[:300])
                 while not self._stop:
                     remaining = target - self.monotonic()
                     if remaining <= 0.001:  # never spin on a sub-millisecond remainder
@@ -1018,9 +1507,21 @@ class CaptureRunner:
 
 
 def status_report(
-    storage: Storage, viewpoints: Iterable[Viewpoint], *, now: datetime
+    storage: Storage,
+    viewpoints: Iterable[Viewpoint],
+    *,
+    now: datetime,
+    every_frame: Iterable[str] = EVERY_FRAME_VIEWPOINTS,
 ) -> dict[str, Any]:
-    """Persisted capture state per camera plus today's event counts (no network)."""
+    """Persisted capture state per camera plus today's event counts (no network).
+
+    Each camera row also gives its PRD §8.7 frame policy, how many full-size frames are
+    staged awaiting their hour's decision, and the last decision. ``frame_policy`` is what
+    this code would do; ``frame_policy_recorded`` is what the writer of the newest frame did
+    (from the state; code older than PRD §8.7 storage kept every frame), which differs while
+    an older snapshot is still the one running.
+    """
+    every = set(every_frame)
     cameras = []
     for vp in viewpoints:
         doc = storage.read_json(camera_state_key(vp.id), default=None)
@@ -1051,6 +1552,14 @@ def status_report(
                 "counters": state.counters,
                 "seeded": state.seeded,
                 "last_error": state.last_error,
+                "frame_policy": frame_policy(vp.id, every),
+                "frame_policy_recorded": last.get("frame_policy")
+                or (POLICY_EVERY if last else None),
+                "last_capture_version": last.get("capture_version"),
+                "staged": len(state.staged),
+                "last_promotion": state.last_promotion,
+                "store_failures": state.store_failures,
+                "thumbs_pending": len(state.thumbs_pending),
             }
         )
     events: Counter[str] = Counter()

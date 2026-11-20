@@ -19,7 +19,14 @@ from lookout_common.manifest import load_manifests
 from lookout_common.storage import LocalStorage, S3Storage
 
 from lookout_capture import lambda_handler
-from lookout_capture.live import CaptureOptions, CaptureRunner, parse_feed, status_report
+from lookout_capture.live import (
+    MIN_POLL_INTERVAL_S,
+    POLL_MARGIN_S,
+    CaptureOptions,
+    CaptureRunner,
+    parse_feed,
+    status_report,
+)
 from lookout_capture.state import CameraState, camera_state_key
 
 from .conftest import FakeClock, FakeNPS, fixture_text, make_jpeg
@@ -29,6 +36,8 @@ RAINIER = VPS["rainier.paradise-mountain"]
 PORE = VPS["point-reyes.beach"]
 GRCA = VPS["grand-canyon.yavapai"]
 ACAD = VPS["acadia.mcfarland"]
+#: One poll spacing as the scheduler applies it: 5 minutes plus the margin (POLL_MARGIN_S).
+POLL_STEP_S = MIN_POLL_INTERVAL_S + POLL_MARGIN_S
 
 
 def runner(storage, fake: FakeNPS, clock: FakeClock, **options) -> CaptureRunner:
@@ -185,12 +194,12 @@ def test_ard_unchanged_imagedate_or_304_never_fetches_the_image(data_root, clock
     runner(storage, fake_nps, clock).run_pass([PORE])
     assert len(image_gets(fake_nps, PORE.truth_camera.image_url)) == 1
     # Same JSON validators: the server answers 304; then a new JSON with the same imagedate.
-    clock.advance(300)
+    clock.advance(POLL_STEP_S)
     out = runner(storage, fake_nps, clock).run_pass([PORE])["outcomes"][PORE.id]
     assert out == {"event": "unchanged", "reason": "json_not_modified"}
     feed = fake_nps.resources[PORE.truth_camera.json_url]
     feed.etag, feed.last_modified = '"j-other"', shot + timedelta(minutes=30)
-    clock.advance(300)
+    clock.advance(POLL_STEP_S)
     out = runner(storage, fake_nps, clock).run_pass([PORE])["outcomes"][PORE.id]
     assert out["event"] == "unchanged" and out["reason"] == "imagedate_same"
     assert len(image_gets(fake_nps, PORE.truth_camera.image_url)) == 1
@@ -207,7 +216,11 @@ def test_poll_interval_is_never_under_five_minutes(data_root, clock, fake_nps):
     clock.current = first_poll + timedelta(seconds=299)
     out = runner(storage, fake_nps, clock).run_pass([RAINIER])["outcomes"][RAINIER.id]
     assert out["event"] == "not_due" and len(fake_nps.requests) == before
-    clock.advance(1)
+    # Exactly 5 minutes is still inside the scheduling margin: not due.
+    clock.current = first_poll + timedelta(seconds=MIN_POLL_INTERVAL_S)
+    out = runner(storage, fake_nps, clock).run_pass([RAINIER])["outcomes"][RAINIER.id]
+    assert out["event"] == "not_due" and len(fake_nps.requests) == before
+    clock.current = first_poll + timedelta(seconds=POLL_STEP_S)
     out = runner(storage, fake_nps, clock).run_pass([RAINIER])["outcomes"][RAINIER.id]
     assert out["event"] == "unchanged" and len(fake_nps.requests) == before + 1
 
@@ -360,13 +373,13 @@ def test_capped_imagedate_is_fetched_later_even_if_the_feed_then_answers_304(
         image_lm=later,
         image_etag='"b"',
     )
-    clock.advance(300)
+    clock.advance(POLL_STEP_S)
     out = runner(storage, fake_nps, clock).run_pass([PORE])["outcomes"][PORE.id]
     assert out["event"] == "rate_capped" and out["reason"] == "spacing"
-    clock.advance(300)  # the feed is unchanged now: 304, but the new image is still owed
+    clock.advance(POLL_STEP_S)  # the feed is unchanged now: 304, but the new image is still owed
     out = runner(storage, fake_nps, clock).run_pass([PORE])["outcomes"][PORE.id]
     assert out["event"] == "rate_capped"
-    clock.advance(300)
+    clock.advance(POLL_STEP_S)
     out = runner(storage, fake_nps, clock).run_pass([PORE])["outcomes"][PORE.id]
     assert out["event"] == "stored" and out["image_time_utc"] == "2026-11-19T07:15:00Z"
     statuses = [r for r in fake_nps.requests if r["url"] == PORE.truth_camera.json_url]
@@ -452,7 +465,7 @@ def test_cap_holds_across_restarts_for_a_camera_changing_every_5_min(data_root, 
     for i in range(30):  # 2.5 hours of 5-minute polls, a new runner (restart) every pass
         set_rainier(fake_nps, clock.now() - timedelta(seconds=30), etag=f'"e{i}"', pattern=i)
         runner(storage, fake_nps, clock).run_pass([RAINIER])
-        clock.advance(300)
+        clock.advance(POLL_STEP_S)
     gets = image_gets(fake_nps, url)
     for g in gets:  # any rolling hour
         assert sum(1 for h in gets if g - timedelta(seconds=3600) < h <= g) <= 4
@@ -547,7 +560,7 @@ def test_first_pass_seeds_from_stopgap_and_does_not_redownload(data_root, clock,
     assert state.seeded["sidecars_read"] == 4 and state.seeded["gets_last_hour"] == 4
     assert len(state.recent_shas) == 4
     # A new image appears, but the stopgap's four GETs fill the rolling hour.
-    clock.advance(300)
+    clock.advance(POLL_STEP_S)
     set_rainier(fake_nps, clock.now(), etag='"new-1"', pattern=9)
     out = runner(storage, fake_nps, clock).run_pass([RAINIER])["outcomes"][RAINIER.id]
     assert out["event"] == "rate_capped" and out["reason"] == "hourly_cap"
@@ -565,7 +578,7 @@ def test_frames_stored_by_another_writer_are_folded_in_every_pass(data_root, clo
     set_rainier(fake_nps, clock.now() - timedelta(minutes=1), etag='"a"')
     runner(storage, fake_nps, clock).run_pass([RAINIER])  # stores image "a"
     # Meanwhile the stopgap stores a newer image the camera still serves.
-    clock.advance(300)
+    clock.advance(POLL_STEP_S)
     newer = make_jpeg(1920, 1080, pattern=42)
     write_stopgap_frame(
         storage,
@@ -596,7 +609,7 @@ def test_errors_back_off_exponentially_and_recover(data_root, clock, fake_nps):
     clock.advance(301)
     out = runner(storage, fake_nps, clock).run_pass([PORE])["outcomes"][PORE.id]
     assert out["backoff_s"] == 600
-    clock.advance(300)
+    clock.advance(POLL_STEP_S)
     assert (
         runner(storage, fake_nps, clock).run_pass([PORE])["outcomes"][PORE.id]["event"] == "not_due"
     )
@@ -786,7 +799,7 @@ def test_image_errors_back_off_exponentially_even_when_the_feed_answers(data_roo
         if out["event"] == "error":
             assert out["stage"] == "image"
             backoffs.append(out["backoff_s"])
-        clock.advance(300)
+        clock.advance(POLL_STEP_S)
     gets = image_gets(fake_nps, PORE.truth_camera.image_url)
     assert backoffs == [300, 600, 1200, 2400, 3600]
     assert len(gets) == 5  # 8 before the fix: one every 901 s at a fixed 300 s back-off
@@ -873,3 +886,60 @@ def test_live_sidecars_carry_the_gate_inputs(data_root, clock, fake_nps):
     assert not {"monochrome", "sun_below_3deg"} & set(out["flags"])
     side = storage.read_json(out["key"][:-4] + ".json")
     assert side["sun"]["daylight"] is True and side["sun"]["apparent_elevation_deg"] > 20
+
+
+def test_poll_spacing_is_measured_from_the_send_and_never_under_300_s(data_root, clock, fake_nps):
+    """Critic finding (20 Nov 2026): 8 of 504 poll gaps were 299.06-299.7 s, measured on send
+    times, because ``last_poll_at`` was stamped before the request's spacing wait. Polls are
+    now stamped at the send and scheduled with POLL_MARGIN_S, so every send-to-send gap of a
+    camera's JSON GET or HEAD is at least MIN_POLL_INTERVAL_S (CLAUDE.md: at most every 5 min).
+
+    In the first pass one camera waits behind the other's requests (a 7 s spacing wait).
+    Then each camera is polled alone, first in its own pass, at its first due second: with
+    the old stamp the camera that waited got a 293 s gap.
+    """
+    storage = LocalStorage(data_root)
+    set_rainier(fake_nps, clock.now(), etag='"r0"')
+    shot = clock.now() - timedelta(minutes=20)
+    set_ard(
+        fake_nps,
+        PORE,
+        imagedate="Updated 11/19/2026 12:00 AM PST",
+        image=make_jpeg(exif_datetime=local_exif(shot, PORE.time_zone)),
+        image_lm=shot,
+        image_etag='"p0"',
+    )
+    runner(storage, fake_nps, clock, request_gap_s=7.0).run_pass([RAINIER, PORE])
+    waiting = {RAINIER.id: RAINIER, PORE.id: PORE}
+    for _ in range(400):  # 1 s steps
+        if not waiting:
+            break
+        clock.advance(1.0)
+        for vp_id, vp in list(waiting.items()):
+            out = runner(storage, fake_nps, clock, request_gap_s=7.0).run_pass([vp])
+            if out["outcomes"][vp_id]["event"] != "not_due":
+                del waiting[vp_id]
+    assert not waiting
+    log = [
+        json.loads(line)
+        for line in (data_root / "capture_log" / "2026-11-19.jsonl").read_text().splitlines()
+    ]
+    first_pass_order = []
+    for vp, stage in ((RAINIER, "head"), (PORE, "json")):
+        sends = [
+            datetime.fromisoformat(r["t"].replace("Z", "+00:00"))
+            - timedelta(milliseconds=r["elapsed_ms"])
+            for r in log
+            if r["event"] == "request" and r["viewpoint_id"] == vp.id and r["stage"] == stage
+        ]
+        assert len(sends) == 2, (vp.id, sends)
+        first_pass_order.append((sends[0], vp.id))
+        gap = (sends[1] - sends[0]).total_seconds()
+        assert MIN_POLL_INTERVAL_S <= gap <= MIN_POLL_INTERVAL_S + POLL_MARGIN_S + 1.0, (vp.id, gap)
+        state = CameraState.from_dict(json.loads((data_root / camera_state_key(vp.id)).read_text()))
+        assert state.last_poll_at is not None  # the stamp is the send, not the pass start
+        stamp = datetime.fromisoformat(state.last_poll_at.replace("Z", "+00:00"))
+        assert abs((stamp - sends[1]).total_seconds()) < 0.002
+    # The scenario really had one camera waiting behind the other in the first pass.
+    (t_a, _), (t_b, _) = sorted(first_pass_order)
+    assert (t_b - t_a).total_seconds() >= 7.0

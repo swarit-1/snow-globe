@@ -14,11 +14,20 @@ What it remembers:
 - recent SHA-256 digests, for dedupe; the last stored image, for "dimensions changed";
 - the error counts and the back-off deadline. Feed (JSON/HEAD) and image-GET errors are
   counted separately, so a feed that answers while its image keeps failing still backs
-  off exponentially instead of being reset by every good poll.
+  off exponentially instead of being reset by every good poll;
+- for a camera that keeps only the frame nearest each UTC hour (PRD §8.7,
+  :mod:`.retention`), the full-size frames staged under ``cache/staging/`` and not yet
+  decided, and when that folder was last listed;
+- downloads that could not be stored (``store_failures``), and stored frames whose
+  thumbnail is still to be made (``thumbs_pending``).
+
+Fields added later have defaults, and unknown fields are ignored, so state written by an
+older or newer version still loads (the running loop is a frozen snapshot of older code).
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, datetime, timedelta
@@ -101,9 +110,23 @@ class CameraState:
     failures: int = 0
     #: Consecutive failed image GETs; reset only by a good image (200 JPEG or 304).
     image_failures: int = 0
+    #: Consecutive downloads that arrived but could not be stored (a denied or failed write);
+    #: reset by a stored download. Each one is still marked handled, so it is never fetched
+    #: again, and polling backs off 5 min doubling to 1 h.
+    store_failures: int = 0
     not_before: str | None = None
     last_error: dict[str, Any] | None = None
     counters: dict[str, int] = field(default_factory=dict)
+    #: Hourly-retention cameras: full-size frames staged and not yet decided
+    #: ([{"key": "cache/staging/frames/...jpg", "thumb_key": ..., "sha256": ..., "at": iso}]).
+    staged: list[dict[str, Any]] = field(default_factory=list)
+    #: When ``cache/staging/frames/<id>/`` was last listed (orphans of a crash are found then).
+    staging_scan_at: str | None = None
+    #: The last hourly decision: {"hour_utc", "key", "candidates", "at"}.
+    last_promotion: dict[str, Any] | None = None
+    #: Stored frames whose thumbnail is missing (a failed or interrupted write), to be made
+    #: from the stored frame: [{"frame_key", "thumb_key", "attempts", "at"}].
+    thumbs_pending: list[dict[str, Any]] = field(default_factory=list)
 
     # -- serialisation --------------------------------------------------------------
     @classmethod
@@ -163,9 +186,15 @@ class CameraState:
         return max(candidates) if candidates else None
 
 
+_DAY_SEGMENT = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
 def _key_day(key: str) -> str:
-    parts = key.split("/")
-    return parts[2] if len(parts) > 3 else ""
+    """The ``YYYY-MM-DD`` folder of a frame, thumbnail or staging key ("" if it has none)."""
+    for segment in key.split("/")[:-1]:
+        if _DAY_SEGMENT.match(segment):
+            return segment
+    return ""
 
 
 def get_times(gets: Iterable[Mapping[str, Any]]) -> list[datetime]:
@@ -195,9 +224,10 @@ def cap_decision(
     """Apply the hard cap (``max_per_hour`` GETs in any rolling ``window_s``) and the pacing rule.
 
     A GET at time ``t`` counts while ``now - t < window_s``. Pacing keeps consecutive
-    GETs ``min_spacing_s`` apart, so a camera that changes every 5 minutes (Rainier)
-    yields frames spread through the hour instead of four in a row and then nothing.
-    Pacing is stricter than the cap, never looser.
+    GETs ``min_spacing_s`` apart, so a camera that changes at every 5-minute poll (Rainier
+    updates about once a minute: ``lookout-capture cadence``) yields frames spread through
+    the hour instead of four in a row and then nothing. Pacing is stricter than the cap,
+    never looser.
     """
     times = get_times(gets)
     recent = [t for t in times if (now - t).total_seconds() < window_s]

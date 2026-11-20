@@ -5,7 +5,8 @@ Shared by live capture and the archive backfill:
 - :func:`process_image` decodes the JPEG, reads EXIF, keeps the original bytes when the
   image is at most 1920 px wide and otherwise re-encodes a 1920 px Lanczos copy at JPEG
   quality 90 carrying the original EXIF bytes (CLAUDE.md data layout). It returns the
-  digests, sizes, dHash, mean luma, chroma spread and a sharpness score of what is stored.
+  digests, sizes, dHash, mean luma, chroma spread and a sharpness score of what is stored,
+  and on request a 640 px thumbnail (:func:`make_thumbnail`, PRD §8.7).
 - :func:`choose_image_time` picks the image time from the candidates (EXIF, the NPS
   ``imagedate``, HTTP ``Last-Modified``) and reports how far apart they are.
 - :func:`sun_position` and :func:`gate_flags` give the capture-time inputs of the PRD §8.6
@@ -49,19 +50,25 @@ __all__ = [
     "MAX_STORED_WIDTH",
     "MONOCHROME_MAX_CHROMA",
     "SHARPNESS_WIDTH",
+    "THUMB_JPEG_QUALITY",
+    "THUMB_WIDTH",
     "TIME_CONFLICT_MIN",
     "TINY_FILE_BYTES",
     "TINY_MIN_WIDTH",
     "UPLOAD_LAG_LIMIT_MIN",
     "ImageTimes",
     "ProcessedImage",
+    "Thumbnail",
     "choose_image_time",
+    "describe_thumbnail",
     "exif_block",
     "gate_flags",
     "laplacian_variance",
+    "make_thumbnail",
     "process_image",
     "sha256_hex",
     "sun_position",
+    "thumbnail_of_stored",
 ]
 
 MAX_STORED_WIDTH = 1920
@@ -94,6 +101,13 @@ DAYLIGHT_MIN_SUN_DEG = 3.0
 MONOCHROME_MAX_CHROMA = 1.0
 #: The sharpness score is measured on a copy at most this wide, so it compares across sizes.
 SHARPNESS_WIDTH = 640
+#: PRD §8.7: every downloaded frame also gets a thumbnail this wide (staleness checks, Tier 0).
+THUMB_WIDTH = 640
+#: Thumbnail JPEG quality. ``lookout-capture storage`` on the 105 frames on disk on 19 Nov
+#: 2026 (06:30-22:23 UTC): a 640 px copy at 85 measured 11.5-81.8 KB, means 34-59 KB per
+#: camera, EXIF included (0.4-0.8 KB); at 80 a scratch probe of 29 ARD frames gave 14-22 %
+#: less. PRD §8.7 budgets about 52 KB a thumbnail (5 MB for 96 a day).
+THUMB_JPEG_QUALITY = 85
 
 
 def sha256_hex(data: bytes) -> str:
@@ -116,6 +130,89 @@ def exif_block(summary: dict[str, Any] | None) -> dict[str, Any]:
         "Software": s.get("software"),
         "ImageDescription": s.get("image_description"),
     }
+
+
+@dataclass(frozen=True)
+class Thumbnail:
+    """A JPEG thumbnail and its size (PRD §8.7)."""
+
+    data: bytes
+    width: int
+    height: int
+    sha256: str
+    jpeg_quality: int
+    #: The width it was made for; ``width`` is smaller only for a narrower original.
+    target_width: int = THUMB_WIDTH
+
+    def to_sidecar(self) -> dict[str, Any]:
+        """The file fields a sidecar records for the thumbnail."""
+        return {
+            "stored": f"thumb-{self.target_width}",
+            "stored_width": self.width,
+            "stored_height": self.height,
+            "stored_bytes": len(self.data),
+            "stored_sha256": self.sha256,
+            "jpeg_quality": self.jpeg_quality,
+        }
+
+
+def make_thumbnail(
+    image: Image.Image,
+    *,
+    width: int = THUMB_WIDTH,
+    quality: int = THUMB_JPEG_QUALITY,
+    exif: bytes = b"",
+) -> Thumbnail:
+    """A ``width`` px wide Lanczos copy of ``image`` as JPEG ``quality`` (PRD §8.7 thumbnails).
+
+    The aspect ratio is kept; an image already at most ``width`` wide is re-encoded at its
+    own size, never enlarged. The original EXIF bytes (0.4-0.8 KB at the NPS cameras) are
+    carried over, as in the 1920 px copies, so a thumbnail keeps its camera time and owner.
+    """
+    rgb = image.convert("RGB")
+    if rgb.width > width:
+        height = max(1, round(rgb.height * width / rgb.width))
+        rgb = rgb.resize((width, height), Image.Resampling.LANCZOS)
+    buffer = io.BytesIO()
+    params: dict[str, Any] = {"format": "JPEG", "quality": quality, "optimize": True}
+    if exif:
+        params["exif"] = exif
+    rgb.save(buffer, **params)
+    data = buffer.getvalue()
+    return Thumbnail(data, rgb.width, rgb.height, sha256_hex(data), quality, target_width=width)
+
+
+def thumbnail_of_stored(
+    data: bytes, *, width: int = THUMB_WIDTH, quality: int = THUMB_JPEG_QUALITY
+) -> Thumbnail:
+    """A thumbnail made from a frame already stored, for one whose write failed (PRD §8.7).
+
+    The stored JPEG (at most 1920 px) is decoded and thumbnailed as :func:`process_image`
+    does, its EXIF kept. Live capture makes thumbnails from the pixels before the 1920 px
+    copy is encoded, so a remade one can differ from it by a few bytes. Raises
+    ``ValueError`` if the frame does not decode.
+    """
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image.load()
+            exif_raw = image.info.get("exif") or b""
+            return make_thumbnail(image, width=width, quality=quality, exif=exif_raw)
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise ValueError(f"stored frame does not decode: {type(exc).__name__}: {exc}") from exc
+
+
+def describe_thumbnail(data: bytes, *, quality: int = THUMB_JPEG_QUALITY) -> Thumbnail:
+    """A :class:`Thumbnail` for thumbnail bytes already written (their sidecar was not).
+
+    The bytes are kept as they are; only the size is read. ``quality`` is the one live
+    capture uses. Raises ``ValueError`` if they do not decode.
+    """
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            width, height = image.size
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise ValueError(f"thumbnail does not decode: {type(exc).__name__}: {exc}") from exc
+    return Thumbnail(data, width, height, sha256_hex(data), quality)
 
 
 @dataclass
@@ -141,6 +238,8 @@ class ProcessedImage:
     sharpness_lapvar: float | None = None
     decode_error: str | None = None
     flags: list[str] = field(default_factory=list)
+    #: The 640 px thumbnail, when :func:`process_image` was asked for one and could decode.
+    thumb: Thumbnail | None = None
 
 
 _LAPLACIAN_POS = ImageFilter.Kernel((3, 3), (0, 1, 0, 1, -4, 1, 0, 1, 0), scale=4)
@@ -205,13 +304,17 @@ def process_image(
     max_width: int = MAX_STORED_WIDTH,
     quality: int = DEFAULT_JPEG_QUALITY,
     keep_original: bool = False,
+    thumb_width: int | None = None,
+    thumb_quality: int = THUMB_JPEG_QUALITY,
 ) -> ProcessedImage:
     """Decode a JPEG and prepare the bytes to store (PRD §8.7: at most 1920 px wide).
 
     - At most ``max_width`` wide (or ``keep_original``): the downloaded bytes are kept as-is.
     - Wider: Lanczos to ``max_width`` (aspect kept), JPEG ``quality``, original EXIF bytes kept.
     - Undecodable: the bytes are kept as-is and the ``decode_failed`` flag is set, so the
-      quality gates can exclude the frame and count the exclusion.
+      quality gates can exclude the frame and count the exclusion. No thumbnail is made.
+    - ``thumb_width`` (live capture passes :data:`THUMB_WIDTH`): also a thumbnail, made from
+      the stored pixels (the 1920 px copy before its JPEG encoding, or the original).
 
     dHash, mean luma, chroma spread and the sharpness score are measured on the stored pixels.
     """
@@ -257,6 +360,11 @@ def process_image(
         stored_mode, stored_image, used_quality = f"downscaled-{max_width}", resized, quality
 
     stats = luma_stats(stored_image)
+    thumb = (
+        make_thumbnail(stored_image, width=thumb_width, quality=thumb_quality, exif=exif_raw)
+        if thumb_width
+        else None
+    )
     return ProcessedImage(
         original_bytes=len(body),
         sha256=sha,
@@ -276,6 +384,7 @@ def process_image(
         chroma_spread=round(chroma_spread(stored_image), 4),
         sharpness_lapvar=round(laplacian_variance(stored_image), 2),
         flags=flags,
+        thumb=thumb,
     )
 
 

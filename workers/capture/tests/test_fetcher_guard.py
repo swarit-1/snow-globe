@@ -70,8 +70,10 @@ with nps_fetcher_lock("holder-process", state_dir=root / "state", log_dir=root /
 
 
 def test_a_fetcher_in_another_process_blocks_this_one(tmp_path, data_root):
+    from .conftest import subprocess_prelude
+
     script = tmp_path / "hold.py"
-    script.write_text(_HOLD)
+    script.write_text(subprocess_prelude() + _HOLD)
     proc = subprocess.Popen(
         [sys.executable, "-I", str(script), str(data_root), "3"],
         stdout=subprocess.PIPE,

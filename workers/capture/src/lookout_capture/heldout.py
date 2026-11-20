@@ -19,8 +19,9 @@ is in ``docs/research/nps-archive-check.md``, section "Guard breach".
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from lookout_common.timeutil import parse_nps_archive_time
@@ -63,14 +64,58 @@ def _us_date(text: str) -> date | None:
         return None
 
 
+# ImageCreateDateTime as NPS writes it, e.g. "05/31/2026 11:30:00 PM" (lookout-common's form).
+_NPS_CLOCK_RE = re.compile(
+    r"^\s*(\d{1,2})/(\d{1,2})/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]m)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _standard_time_date(image_create_datetime: str, tz_name: str) -> date | None:
+    """The civil date of ``ImageCreateDateTime`` read as local *standard* time, or None.
+
+    NPS keeps ``ImageCreateDateTime`` on standard time all year (lookout-common's
+    ``parse_nps_archive_time``), so in summer civil time is one hour later:
+    "05/31/2026 11:30:00 PM" is 00:30 PDT on 1 Jun. Where the zone keeps no daylight time
+    (Arizona), or in winter, this is the stamp's own date. The same reading as lookout-eval's
+    held-out guard (D-038), so capture's guard is never looser than eval's.
+    """
+    match = _NPS_CLOCK_RE.match(image_create_datetime or "")
+    if match is None:
+        return None
+    month, day, year, hour, minute, second, meridiem = match.groups()
+    if not 1 <= int(hour) <= 12:
+        return None
+    hour24 = int(hour) % 12 + (12 if meridiem.lower() == "pm" else 0)
+    try:
+        wall = datetime(int(year), int(month), int(day), hour24, int(minute), int(second or 0))
+        zone = ZoneInfo(tz_name)
+    except (ValueError, KeyError):  # ZoneInfoNotFoundError is a KeyError
+        return None
+    probe = wall.replace(tzinfo=zone)
+    offset, daylight = probe.utcoffset(), probe.dst()
+    if offset is None:
+        return None
+    standard = offset - (daylight or timedelta(0))
+    return (wall - standard).replace(tzinfo=UTC).astimezone(zone).date()
+
+
 def asset_local_dates(
     image_create_datetime: str, local_time_string: str, tz_name: str
 ) -> list[date]:
     """Every local date an archive asset could be said to fall on (empty if none parses).
 
     In summer ``ImageCreateDateTime`` stays on local standard time while ``LocalTimeString``
-    gives civil time, so near midnight the two can name different days. Both are read, plus
-    the civil date of the parsed UTC time in the manifest zone; the guard uses the latest.
+    gives civil time, so near midnight the two can name different days. Read here (D-019,
+    D-022, D-038):
+
+    - the date of ``ImageCreateDateTime`` and the date of ``LocalTimeString``;
+    - the civil date of the parsed UTC time in the manifest zone;
+    - the civil date of ``ImageCreateDateTime`` read as local standard time, so a summer
+      frame stamped "05/31/2026 11:30:00 PM" with no readable ``LocalTimeString`` still
+      dates to 1 Jun (00:30 PDT).
+
+    The guard uses the latest. This is the same set lookout-eval's ``nps_local_dates`` reads.
     """
     found: list[date] = []
     for text in (image_create_datetime, local_time_string):
@@ -83,6 +128,9 @@ def asset_local_dates(
         found.append(utc.astimezone(ZoneInfo(tz_name)).date())
     except (ValueError, KeyError):
         pass
+    standard = _standard_time_date(image_create_datetime, tz_name)
+    if standard is not None:
+        found.append(standard)
     return sorted(set(found))
 
 
