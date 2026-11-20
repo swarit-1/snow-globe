@@ -1,0 +1,105 @@
+{
+  "kind": "lookout.heldout-periods",
+  "schema_version": 1,
+  "version": 1,
+  "decided": "2026-11-19",
+  "freeze": "2026-12-14",
+  "decisions": ["D-019", "D-022", "D-024"],
+  "change_rule": "Any change bumps `version`, cites a new DECISIONS.md entry, and is committed before any frame it releases or newly holds out is viewed (D-019, PRD §13.2). The owner may change it before the 14 Dec 2026 freeze (D-022, D-024).",
+  "day_basis": "Whole local civil days in each viewpoint's time_zone (the manifest's); a period runs from local midnight of first_day to local midnight after last_day.",
+  "periods": {
+    "sealed-window": {
+      "design": "P",
+      "first_day": "2026-12-15",
+      "last_day": "2027-01-14",
+      "extensions": [],
+      "extension_rule": "Extended by any outage (PRD §13.2: at least 28 days). Each extension is a whole-day range that starts the day after the previous end, with a reason naming the outage.",
+      "source": "PRD §13.2; D-019"
+    },
+    "summer-2026": {
+      "design": "H",
+      "first_day": "2026-06-01",
+      "last_day": "2026-08-31",
+      "extensions": [],
+      "extension_rule": "None planned: the season is fixed by D-019 and kept by D-022.",
+      "source": "D-019; kept by D-022; D-024"
+    }
+  },
+  "viewpoints": {
+    "rainier.paradise-mountain": {
+      "time_zone": "America/Los_Angeles",
+      "designs": {"P": "sealed-window"},
+      "scored": true,
+      "note": "D-019, D-024: the park camera has no NPS archive, so design P only (P1). Development: go-ahead (19 Nov 2026) to 14 Dec 2026."
+    },
+    "point-reyes.beach": {
+      "time_zone": "America/Los_Angeles",
+      "designs": {"P": "sealed-window", "H": "summer-2026"},
+      "scored": true,
+      "note": "D-019, D-024: design P on the sealed window (the MSV's second viewpoint), plus design H on summer 2026 for K2 (fog). Design-H development uses summers 2024 and 2025; the 3:2 epoch (2021-22) is a different view."
+    },
+    "grand-canyon.yavapai": {
+      "time_zone": "America/Phoenix",
+      "designs": {"H": "summer-2026"},
+      "scored": true,
+      "note": "D-024: usable span for design H from Jul 2024. Arizona keeps MST all year."
+    },
+    "yosemite.turtleback": {
+      "time_zone": "America/Los_Angeles",
+      "designs": {"H": "summer-2026"},
+      "scored": true,
+      "note": "D-024: usable span for design H from Jan 2024."
+    },
+    "acadia.mcfarland": {
+      "time_zone": "America/New_York",
+      "designs": {"H": "summer-2026"},
+      "scored": true,
+      "note": "D-024: usable span for design H from Jan 2024."
+    },
+    "smokies.look-rock": {
+      "time_zone": "America/New_York",
+      "designs": {"H": "summer-2026"},
+      "scored": true,
+      "note": "D-024: usable span for design H from Jul 2024."
+    },
+    "big-bend.panther-junction": {
+      "time_zone": "America/Chicago",
+      "designs": {"H": "summer-2026"},
+      "scored": true,
+      "note": "D-024: design H after a check of 2024-01 for a framing change, on frames from before the archive guard only; usable span from Jan 2024 (or Jul 2024)."
+    },
+    "grand-teton.science-center": {
+      "time_zone": "America/Denver",
+      "designs": {},
+      "scored": false,
+      "note": "D-024: no design H (its framing changed inside the 16:9 epoch). Excluded from scored metrics; development use only. Live capture continues for Tier 0."
+    }
+  },
+  "scoring_exclusions": [
+    {
+      "local_day": "2026-07-15",
+      "viewpoints": [
+        "point-reyes.beach",
+        "grand-canyon.yavapai",
+        "grand-teton.science-center",
+        "yosemite.turtleback",
+        "acadia.mcfarland",
+        "smokies.look-rock",
+        "big-bend.panther-junction"
+      ],
+      "reason": "One midday frame per ARD camera (and the Point Reyes hires) from this day was viewed in the archive-check breach, so the day's weather is known.",
+      "source": "D-022"
+    }
+  ],
+  "archive_guard": {
+    "from_local_day": "2026-06-01",
+    "viewpoints": "all",
+    "date_rule": "An archived frame is dated by the latest of: the date of ImageCreateDateTime, the date of LocalTimeString, the civil date of its UTC time in the viewpoint's zone, and (eval only, never looser than capture) the civil date of ImageCreateDateTime read as local standard time and the record's own UTC time. It is refused for development when that date is on or after from_local_day, or when no date can be read. Only the sealed scoring (SealedScoring) may read it. A frame counts as archived when its key is under archive/, its source is nps-archive, or it carries NPS's archive times.",
+    "source": "D-019; D-022; the same rule as workers/capture/src/lookout_capture/heldout.py"
+  },
+  "quarantine": {
+    "dir": "quarantine",
+    "rule": "Anything under $LOOKOUT_DATA_DIR/quarantine/ (or any folder of that name, in any letter case) is refused on every path, the sealed scoring included. Paths are checked where they resolve (symlinks followed) and by the folder's identity (device and inode), since this Mac's disk is case-insensitive.",
+    "source": "D-022"
+  }
+}

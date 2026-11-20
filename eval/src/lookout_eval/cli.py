@@ -3,8 +3,10 @@
 - ``lookout-eval backtest-pair``: one v−1 backtest pair (see :mod:`.backtest_pair`).
 - ``lookout-eval ephem-check``: the ephemeris against NPS's ``SolarElevationAngle``
   (see :mod:`.ephem_check`).
+- ``lookout-eval heldout``: the committed held-out split (PRD §13.2, :mod:`.heldout`), and
+  with ``--check`` what it lets given frame files be used for (metadata only).
 
-Neither touches the network, except ``backtest-pair --forecast auto``, which backfills one
+None touches the network, except ``backtest-pair --forecast auto``, which backfills one
 HRRR run from NOAA's public bucket through lookout-forecast.
 """
 
@@ -55,9 +57,27 @@ def _parser() -> argparse.ArgumentParser:
         "--forecast", required=True, help="forecast run JSON (forecast/hrrr/...) or 'auto'"
     )
     pair.add_argument(
+        "--forecast-summary",
+        type=Path,
+        help="the JSON printed by `python -m lookout_eval.pair_forecast` for this forecast file",
+    )
+    boxes = pair.add_mutually_exclusive_group(required=True)
+    boxes.add_argument(
         "--landmark-box",
-        required=True,
         help="'x0,y0,x1,y1', a polygon 'x,y;x,y;x,y' or the JSON form",
+    )
+    boxes.add_argument(
+        "--boxes",
+        metavar="v-1|FILE",
+        help=(
+            "named landmark boxes: 'v-1' for the committed by-eye boxes "
+            "(lookout_eval/landmark_boxes_v1.json) or a file of that form; the primary box "
+            "is the scored region and every other box is reported beside it"
+        ),
+    )
+    pair.add_argument(
+        "--tag",
+        help="label of a repeat run: output names get '.<tag>'; the pair id and scene do not",
     )
     pair.add_argument(
         "--landmark-frame-size",
@@ -88,8 +108,17 @@ def _parser() -> argparse.ArgumentParser:
         default=[],
         metavar="FIRST:LAST",
         help=(
-            "held-out local days YYYY-MM-DD:YYYY-MM-DD in the viewpoint's zone (repeatable); "
-            "replaces the default, design P's sealed window 2026-12-15:2027-01-14"
+            "extra held-out local days YYYY-MM-DD:YYYY-MM-DD in the viewpoint's zone "
+            "(repeatable), added to the committed split (lookout-eval heldout); it never "
+            "removes a committed period"
+        ),
+    )
+    pair.add_argument(
+        "--design",
+        choices=["P", "H"],
+        help=(
+            "the design the pair is for: its held-out period sets the fit bound for the "
+            "references and plate (default: the viewpoint's earliest period, the strictest)"
         ),
     )
 
@@ -97,12 +126,35 @@ def _parser() -> argparse.ArgumentParser:
     check.add_argument("--search", type=Path, default=Path(DEFAULT_SEARCH).expanduser())
     check.add_argument("--viewpoint", default="point-reyes.beach")
     check.add_argument("--json", type=Path, help="also write the full report as JSON")
+
+    held = sub.add_parser("heldout", help="the committed held-out split; --check frame files")
+    held.add_argument(
+        "--check",
+        action="append",
+        type=Path,
+        default=[],
+        metavar="FRAME",
+        help="a frame file to check (repeatable); exit 1 if any may not be used for development",
+    )
+    held.add_argument(
+        "--design", choices=["P", "H"], help="fit bound of this design (default: the strictest)"
+    )
     return parser
 
 
-def _references(args: argparse.Namespace) -> tuple[Path, ...]:
+def _refuse_quarantined_file(role: str, path: Path, root: Path) -> None:
+    """Refuse a file under the quarantine folder before reading it (D-022)."""
+    from .heldout import LeakageError, path_quarantine_reason
+
+    reason = path_quarantine_reason(path.expanduser(), roots=(root,))
+    if reason is not None:
+        raise LeakageError(f"{role} {path}: {reason}")
+
+
+def _references(args: argparse.Namespace, root: Path) -> tuple[Path, ...]:
     paths = list(args.reference)
     if args.references_file is not None:
+        _refuse_quarantined_file("references file", args.references_file, root)
         for line in args.references_file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line and not line.startswith("#"):
@@ -113,14 +165,37 @@ def _references(args: argparse.Namespace) -> tuple[Path, ...]:
 def _backtest_pair(args: argparse.Namespace) -> int:
     from dataclasses import replace
 
-    from .backtest_pair import PairInputs, run_pair
+    from lookout_common.paths import data_dir
+
+    from .backtest_pair import PairInputs, check_truth_frame, run_pair
     from .extractor import ExtractorParams, Region
+    from .landmark_boxes import load_boxes
     from .leakage import HeldOut
     from .scene import SceneAssumptions
 
-    with Image.open(args.truth.expanduser()) as image:
-        truth_size = image.size
-    region = Region.parse(args.landmark_box, frame_size=args.landmark_frame_size or truth_size)
+    root = data_dir()
+    held_out = None
+    if args.held_out:
+        zone = load_manifest(args.viewpoint).time_zone
+        held_out = HeldOut()
+        for first, last in args.held_out:
+            held_out = held_out | HeldOut.from_local_dates(first, last, zone)
+    # The truth frame's held-out checks come before it is opened for its size (PRD §13.2).
+    check_truth_frame(args.truth, viewpoint_id=args.viewpoint, held_out=held_out, data_root=root)
+    boxes = None
+    if args.boxes is not None:
+        # load_boxes refuses a quarantined file before reading it (D-022).
+        try:
+            boxes = load_boxes(
+                args.viewpoint, None if args.boxes == "v-1" else Path(args.boxes), roots=(root,)
+            )
+        except KeyError as exc:  # the file has no boxes for this viewpoint
+            raise ValueError(exc.args[0] if exc.args else str(exc)) from exc
+        region = boxes.primary_box.region()
+    else:
+        with Image.open(args.truth.expanduser()) as image:
+            truth_size = image.size
+        region = Region.parse(args.landmark_box, frame_size=args.landmark_frame_size or truth_size)
     params = ExtractorParams()
     if args.tau_hi is not None or args.tau_lo is not None:
         params = replace(
@@ -140,12 +215,6 @@ def _backtest_pair(args: argparse.Namespace) -> int:
     }
     if overrides:
         assumptions = replace(assumptions, **overrides)
-    held_out = None
-    if args.held_out:
-        zone = load_manifest(args.viewpoint).time_zone
-        held_out = HeldOut()
-        for first, last in args.held_out:
-            held_out = held_out | HeldOut.from_local_dates(first, last, zone)
     inputs = PairInputs(
         viewpoint_id=args.viewpoint,
         valid_time=parse_iso_utc(args.valid),
@@ -153,7 +222,7 @@ def _backtest_pair(args: argparse.Namespace) -> int:
         truth_path=args.truth,
         forecast=args.forecast,
         region=region,
-        reference_paths=_references(args),
+        reference_paths=_references(args, root),
         plate_path=args.plate,
         sky_mask_path=args.sky_mask,
         depth_path=args.depth,
@@ -165,16 +234,34 @@ def _backtest_pair(args: argparse.Namespace) -> int:
         renderer_backend=args.backend,
         scene_only=args.scene_only,
         held_out=held_out,
+        design=args.design,
+        boxes=boxes,
+        tag=args.tag,
+        forecast_summary=args.forecast_summary,
     )
     record = run_pair(inputs)
+    score = record.get("score") or {}
     summary = {
         "status": record["status"],
         "pair_id": record["pair_id"],
         "record": record["record_path"],
-        "truth": (record["extractor"] or {}).get("truth", {}).get("p1_class"),
-        "render": (record["extractor"] or {}).get("render", {}).get("p1_class"),
+        "render": ((record.get("render") or {}).get("png") or {}).get("path"),
+        "truth_class": (record["extractor"] or {}).get("truth", {}).get("p1_class"),
+        "render_class": (record["extractor"] or {}).get("render", {}).get("p1_class"),
+        "cell": score.get("cell"),
+        "boxes": {
+            name: {
+                "truth": box.get("observed_class"),
+                "render": box.get("forecast_class"),
+                "ratio_truth": box.get("ratio_truth"),
+                "ratio_render": box.get("ratio_render"),
+                "cell": box.get("cell"),
+            }
+            for name, box in (score.get("boxes") or {}).items()
+        },
         "s_rule": (record["s_rule"] or {}).get("value"),
         "excluded_by": (record["extractor"] or {}).get("excluded_by"),
+        "timings_s": record.get("timings_s"),
         "notes": record["notes"],
     }
     print(json.dumps(summary, indent=2))
@@ -191,12 +278,31 @@ def _ephem_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def _heldout(args: argparse.Namespace) -> int:
+    from .heldout import committed_split
+    from .leakage import frame_file_verdict
+
+    split = committed_split()
+    if not args.check:
+        print(json.dumps(split.summary(), indent=2))
+        return 0
+    from lookout_common.paths import data_dir
+
+    root = data_dir()
+    verdicts = [frame_file_verdict(p, data_root=root, design=args.design) for p in args.check]
+    report = {"split": split.to_record(), "design": args.design, "frames": verdicts}
+    print(json.dumps(report, indent=2))
+    return 0 if all(v["development"] for v in verdicts) else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point of the ``lookout-eval`` console script."""
     args = _parser().parse_args(argv)
     try:
         if args.command == "backtest-pair":
             return _backtest_pair(args)
+        if args.command == "heldout":
+            return _heldout(args)
         return _ephem_check(args)
     except (ValueError, FileNotFoundError, RuntimeError) as exc:
         print(f"lookout-eval {args.command}: {type(exc).__name__}: {exc}", file=sys.stderr)

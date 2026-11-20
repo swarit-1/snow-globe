@@ -28,7 +28,11 @@ written into ``meta.assumptions``):
 - Pose: the manifest's ``pose`` if present, else heading = view azimuth, pitch 0, roll 0,
   horizontal FOV 60°: TODO(M2), the pose solve (§8.5).
 
-TODO(M1.5): replace the band mapping with per-layer bases from the model levels.
+TODO(M1.5): replace the band mapping with per-layer bases from the model levels, and use
+``HGT:cloud base`` only where ``PRES:cloud base`` agrees with it. At the M0.5 pair's camera cell
+(Grand Canyon, run 2024011412 f31–f32) ``HGT:cloud base`` was 1.6–2.0 km MSL under a base that
+``PRES:cloud base`` put near 10 km (262–279 hPa); the low layer took the phantom base, which did
+nothing only because low cover was 0 %.
 """
 
 from __future__ import annotations

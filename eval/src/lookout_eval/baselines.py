@@ -316,7 +316,8 @@ def choose_persistence(
 ) -> PersistenceChoice:
     """Pick the stronger persistence variant by PSS on development cases only (PRD §13.6).
 
-    Raises :class:`LeakageError` if any case's issue or valid time is held out. Both variants
+    Raises :class:`LeakageError` if any case's issue or valid time is held out at its
+    viewpoint (the committed split, plus the store's extra periods). Both variants
     are scored on the same pairs: those where both forecast and the truth is known. Ties and
     undefined scores keep (a). Pass the cases of one lead at a time: the stronger variant can
     differ by lead. ``n_b_beyond_24h`` counts paired cases where (b) went back more than one
@@ -328,7 +329,7 @@ def choose_persistence(
     n_b_beyond_24h = 0
     for case in cases:
         for moment in (case.issue_time, case.valid_time):
-            if store.held_out.contains(moment):
+            if store.is_held_out(case.viewpoint_id, moment):
                 raise LeakageError(
                     "choose_persistence uses development data only; a case at "
                     f"{moment.isoformat()} is held out"
@@ -491,18 +492,21 @@ def climatology(
     usable: Collection[str] = USABLE_STATES,
     min_count: int = 10,
     threshold: float | Literal["base_rate"] = "base_rate",
+    design: str | None = None,
 ) -> Prediction:
     """Climatology (PRD §13.6): the visible frequency for that month and hour.
 
-    Fitted on development frames imaged and available by the issue time, and before any
-    held-out period, so it is valid on development pairs too. The yes/no forecast is
+    Fitted on development frames imaged and available by the issue time, and before the
+    viewpoint's fit bound (:meth:`.leakage.FrameStore.fit_bound`): the earliest held-out
+    period by default, or ``design``'s period for a fit of one design. So it is valid on
+    development pairs too. The yes/no forecast is
     ``p >= threshold``. The default threshold is the fitted overall base rate, the cut that
     maximises PSS for a calibrated probability (Manzato 2007, *Wea. Forecasting* 22:1076).
     At 0.5, a mostly-hidden winter summit would give "hidden" every hour and a PSS of
     exactly 0.
     """
     _check_times(issue_time, valid_time)
-    view = store.for_fit(purpose="climatology", until=issue_time)
+    view = store.for_fit(purpose="climatology", until=issue_time, design=design)
     table = fit_climatology(view, viewpoint_id, time_zone, label=label, usable=usable)
     p, level, n = table.probability(valid_time, min_count=min_count)
     cut = table.base_rate if threshold == "base_rate" else float(threshold)

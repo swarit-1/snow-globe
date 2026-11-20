@@ -1,0 +1,33 @@
+{
+  "kind": "lookout.landmark-boxes",
+  "version": "v-1",
+  "coordinates": "normalised image coordinates: x from the left edge and y from the top edge, both 0 to 1; a box is [x0, y0, x1, y1] with x1 > x0 and y1 > y0",
+  "note": "Drawn by eye on the plate frame for the M0.5 backtest pair (PRD §16 M0.5), as stand-ins for landmark projections. They are not surveyed and not in the viewpoint manifest. The M2 pose solve (PRD §8.5) projects surveyed landmarks and replaces them (TODO(M2)).",
+  "viewpoints": {
+    "grand-canyon.yavapai": {
+      "drawn_on": {
+        "key": "archive/grand-canyon.yavapai/2021-01-15/20210115T194500Z_57fb3725.jpg",
+        "sha256": "c331d6bba51c28507eb38ddfa0f48bdb5177d43dcae9aed3a092c244a0d39c9c",
+        "size": [999, 666],
+        "epoch": "3:2 frame, 999x666 hires (docs/research/nps-archive-check.md, D-024)"
+      },
+      "primary": "north-rim-cliffs",
+      "boxes": [
+        {
+          "name": "north-rim-cliffs",
+          "box": [0.06, 0.37, 0.44, 0.42],
+          "what": "The upper cliff band of the far (North) rim on the left half of the frame, just below its skyline. Distance not surveyed; the canyon is roughly 15-20 km rim to rim here."
+        },
+        {
+          "name": "mid-canyon",
+          "box": [0.30, 0.47, 0.90, 0.56],
+          "what": "Buttes and temples inside the canyon, below the far rim. Nearer than the far rim; distance not surveyed."
+        }
+      ],
+      "notes": [
+        "Each box lies inside one band of terrain, with no sky, so that it holds the same kind of terrain in a frame whose aim differs by a few per cent. The 2024-01-15 19:45Z hires is shifted by about +51 px (x) and -30 px (y) against this plate at the same scale (phase correlation of gradient images, lookout_eval.registration); both boxes stay inside their bands under that shift.",
+        "The far-rim skyline itself (sky above rock) is deliberately not boxed: a vertical shift of a few per cent changes how much sky such a box holds, and with it the edge energy."
+      ]
+    }
+  }
+}
