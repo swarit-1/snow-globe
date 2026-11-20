@@ -1,0 +1,7 @@
+clock	now	now_utc	machine_tz	what
+C1	2026-11-19T12:00:00-06:00	2026-11-19T18:00:00Z	America/Chicago	Main clock. Thu 19 Nov 2026, noon in Chicago (18:00Z): 10:00 PST at Rainier, Point Reyes and Yosemite, 11:00 MST at Grand Canyon and Grand Teton, 13:00 EST at Acadia and the Smokies, 12:00 CST at Big Bend. The PRD §7.3 example resolves to its exact JSON here.
+C2	2026-11-19T23:30:00-06:00	2026-11-20T05:30:00Z	America/Chicago	Late evening. Thu 19 Nov, 23:30 in Chicago (05:30Z Fri): 21:30 PST, 22:30 MST, and already Fri 00:30 EST at Acadia and the Smokies. Passed evening events, midnight, and a place whose date differs from the asker's.
+C3	2026-10-31T12:00:00-05:00	2026-10-31T17:00:00Z	America/Chicago	The day before the fall-back. Sat 31 Oct 2026, noon CDT (17:00Z): 10:00 PDT, 10:00 MST (Phoenix), 11:00 MDT, 13:00 EDT. Sun 1 Nov repeats 01:00-02:00 in every zone but Phoenix.
+C4	2026-11-01T01:15:00-08:00	2026-11-01T09:15:00Z	America/Chicago	Inside Los Angeles's repeated hour. Sun 1 Nov 2026, 01:15 PST, the second pass (09:15Z; 03:15 CST in Chicago).
+C5	2027-03-13T12:00:00-06:00	2027-03-13T18:00:00Z	America/Chicago	The day before the spring-forward. Sat 13 Mar 2027, noon CST (18:00Z): 10:00 PST, 11:00 MST, 13:00 EST. Sun 14 Mar skips 02:00-03:00 in every zone but Phoenix.
+C6	2027-06-21T12:00:00-05:00	2027-06-21T17:00:00Z	America/Chicago	Midsummer. Mon 21 Jun 2027, noon CDT (17:00Z): 10:00 PDT, 10:00 MST, 13:00 EDT. Sunset is late enough that 'tonight' becomes 1 h after sunset (PRD §7.4) at some places.
