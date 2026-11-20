@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import importlib.metadata
+import json
 import math
 import random
+import tomllib
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from conftest import HAS_OCULUS, needs_oculus
@@ -98,11 +103,109 @@ def test_noaa_backend_sun_position_fields() -> None:
     assert p.backend == "noaa-gml-spreadsheet" and p.refraction_model == "saemundsson"
 
 
+EVAL_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_pinned_rev_matches_pyproject_and_lock() -> None:
+    """D-025: the constant, the uv source pin and the locked commit are the same commit."""
+    project = tomllib.loads((EVAL_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    source = project["tool"]["uv"]["sources"][ephemeris.OCULUS_DISTRIBUTION]
+    assert source["rev"] == ephemeris.OCULUS_PINNED_REV
+    assert "oculus-core-py" in project["dependency-groups"]["oculus"]
+    lock = tomllib.loads((EVAL_ROOT / "uv.lock").read_text(encoding="utf-8"))
+    [locked] = [p for p in lock["package"] if p["name"] == ephemeris.OCULUS_DISTRIBUTION]
+    url, _, commit = locked["source"]["git"].partition("#")
+    assert commit == ephemeris.OCULUS_PINNED_REV
+    assert f"rev={ephemeris.OCULUS_PINNED_REV}" in url
+
+
+class _FakeDistribution:
+    """``direct_url.json`` and one module file, ``<site>/oculus_core/__init__.py``."""
+
+    def __init__(self, direct_url: str | None, site: Path) -> None:
+        self.direct_url = direct_url
+        self.site = site
+        self.files = [Path("oculus_core-0.1.0.dist-info/RECORD"), Path("oculus_core/__init__.py")]
+
+    def read_text(self, name: str) -> str | None:
+        return self.direct_url if name == "direct_url.json" else None
+
+    def locate_file(self, path: Path) -> Path:
+        return self.site / path
+
+
+FAKE_SITE = Path("/nonexistent/site-packages")
+
+
+def _fake_metadata(direct_url: str | None, *, installed: bool = True) -> SimpleNamespace:
+    def distribution(name: str) -> _FakeDistribution:
+        if not installed:
+            raise importlib.metadata.PackageNotFoundError(name)
+        return _FakeDistribution(direct_url, FAKE_SITE)
+
+    return SimpleNamespace(
+        distribution=distribution, PackageNotFoundError=importlib.metadata.PackageNotFoundError
+    )
+
+
+GIT_URL = "https://github.com/swarit-1/oculus"
+
+
+@pytest.mark.parametrize(
+    ("direct_url", "installed", "expected"),
+    [
+        (
+            json.dumps({"url": GIT_URL, "vcs_info": {"vcs": "git", "commit_id": "a" * 40}}),
+            True,
+            "a" * 40,
+        ),
+        (json.dumps({"url": "file:///x", "dir_info": {"editable": True}}), True, None),
+        (
+            json.dumps({"url": GIT_URL, "vcs_info": {"vcs": "git", "commit_id": "1b5410b"}}),
+            True,
+            None,
+        ),
+        ("{not json", True, None),
+        (None, True, None),
+        (None, False, None),
+    ],
+)
+def test_installed_rev_comes_from_direct_url(
+    monkeypatch: pytest.MonkeyPatch, direct_url: str | None, installed: bool, expected: str | None
+) -> None:
+    monkeypatch.setattr(ephemeris, "metadata", _fake_metadata(direct_url, installed=installed))
+    assert ephemeris.installed_oculus_rev() == expected
+
+
+def test_version_names_the_installed_build_else_the_unverified_pin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    own = str(FAKE_SITE / "oculus_core" / "__init__.py")
+    module = SimpleNamespace(version=lambda: "0.1.0", __file__=own)
+    built = json.dumps({"url": GIT_URL, "vcs_info": {"vcs": "git", "commit_id": "c" * 40}})
+    monkeypatch.setattr(ephemeris, "metadata", _fake_metadata(built))
+    assert ephemeris.OculusBackend(module).version == "0.1.0+ccccccc"
+    assert ephemeris.oculus_rev(own) == ("c" * 40, True)
+    # The same distribution, but the module was imported from another folder: unverified.
+    elsewhere = SimpleNamespace(
+        version=lambda: "0.1.0", __file__="/tmp/build/oculus_core/__init__.py"
+    )
+    assert ephemeris.OculusBackend(elsewhere).version == "0.1.0+1b5410b.pinned"
+    assert ephemeris.installed_oculus_rev(elsewhere.__file__) is None
+    monkeypatch.setattr(ephemeris, "metadata", _fake_metadata(None, installed=False))
+    assert ephemeris.OculusBackend(module).version == "0.1.0+1b5410b.pinned"
+    assert ephemeris.oculus_rev() == (ephemeris.OCULUS_PINNED_REV, False)
+
+
 @needs_oculus
-def test_default_backend_is_oculus_and_reports_pinned_rev() -> None:
+def test_default_backend_is_oculus_and_names_the_installed_build() -> None:
+    """This venv's build is the pinned commit, read from its direct_url.json (D-025)."""
+    import oculus_core
+
     backend = get_ephemeris()
     assert backend.name == "oculus-core"
-    assert backend.version.endswith("+06809e6")
+    assert ephemeris.installed_oculus_rev(oculus_core.__file__) == ephemeris.OCULUS_PINNED_REV
+    assert backend.version.endswith("+1b5410b")
 
 
 @needs_oculus

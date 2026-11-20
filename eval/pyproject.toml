@@ -21,6 +21,11 @@ dev = [
     "pytest>=8.3",
     "ruff>=0.9",
     "hypothesis>=6.120",
+    # ecCodes at the forecast worker's locked versions (workers/forecast/uv.lock, D-026), so that
+    # tests/test_pair_forecast.py can run lookout-forecast's real extractor offline against its
+    # fake bucket. That test puts ../workers/forecast/src on sys.path for itself only.
+    "eccodes==2.50.1",
+    "eccodeslib==2.50.0.34; sys_platform != 'win32'",
 ]
 # oculus-core's Python bindings, built from source with maturin (feature "python", crate in core/).
 # Needs a Rust toolchain and network on first sync. Opt out with `uv sync --no-group oculus`; the

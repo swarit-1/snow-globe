@@ -1,7 +1,7 @@
 //! Sun and Moon positions and solar events at a viewpoint (PRD §7.4 time rules, §8.4 ephemeris).
 //!
-//! Positions come from `oculus-core` (pinned at `06809e6`): JPL mean elements for the Sun and
-//! truncated ELP-2000/82 for the Moon, with aberration, precession, nutation and topocentric
+//! Positions come from `oculus-core` (pinned at `1b5410b`, D-025): JPL mean elements for the Sun
+//! and truncated ELP-2000/82 for the Moon, with aberration, precession, nutation and topocentric
 //! parallax, measured against JPL Horizons to 0.19′ for the Sun and 0.13′ for the Moon (PRD
 //! §8.4). [`moon_position`] and [`sun_and_moon`] give the Moon's altitude, azimuth and
 //! illuminated fraction for the caption (PRD §5.3 "Moon 41% lit, below horizon"). This module

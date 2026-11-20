@@ -338,6 +338,8 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "eccodes" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
     { name = "hypothesis" },
     { name = "pytest" },
     { name = "ruff" },
@@ -360,6 +362,8 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "eccodes", specifier = "==2.50.1" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'", specifier = "==2.50.0.34" },
     { name = "hypothesis", specifier = ">=6.120" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "ruff", specifier = ">=0.9" },
@@ -369,7 +373,7 @@ oculus = [{ name = "oculus-core-py", git = "https://github.com/swarit-1/oculus?s
 
 [[package]]
 name = "lookout-forecast"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "../workers/forecast" }
 dependencies = [
     { name = "eccodes" },

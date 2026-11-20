@@ -275,7 +275,11 @@ The pair id does not depend on the tag, so both runs share it.
 - **Software:**
   - eval 0.1.0, run from the working tree on top of commit 3ac98b3 (uncommitted changes, recorded as `dirty`);
   - lookout-forecast 0.1.0 from the snapshot `cfefa79`;
-  - renderer 0.2.0; oculus-core 0.1.0+06809e6;
+  - renderer 0.2.0; oculus-core 0.1.0 built from the public pin `1b5410b` (D-025). All four records' `versions.ephemeris` read `oculus-core 0.1.0+06809e6`, and they are left as written. That suffix was stale:
+    - it was eval's `OCULUS_PINNED_REV` constant, which the pin move in `1ba95d2` did not update; that commit changed only `pyproject.toml` and `uv.lock`;
+    - the build that ran was `1b5410b`: in `eval/.venv`, the `direct_url.json` of `oculus-core-py` names commit `1b5410b01f127514fa37656eff2b7d73be7ea8da`. That build was made at 12:31:59 UTC on 19 Nov (the uv cache entry, whose `oculus_core.abi3.so` has the same SHA-256 and whose times the venv's copies keep), and it has been in `eval/.venv` since 22:08 UTC at the latest (the copies' inode change time). Both are before run 1 (23:25 UTC);
+    - no number changes: between the two commits, `core/src/ephem.rs`, `core/bindings`, `core/Cargo.toml` and `core/Cargo.lock` are identical, and `core/src/python.rs` differs only by a `fly_m: 0.0` field in three functions other than `sun_moon` (checked on 20 Nov with `git diff` in the local oculus clone);
+    - eval now takes the suffix from the installed build's `direct_url.json` (`0.1.0+1b5410b`), so later records name the build that ran;
   - Python 3.13.13, NumPy 2.5.5, SciPy 1.18.1, Pillow 13.0.0, Node 24.13.0.
 
 ## 10. Leakage audit

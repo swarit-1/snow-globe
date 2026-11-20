@@ -5,6 +5,8 @@
   (see :mod:`.ephem_check`).
 - ``lookout-eval heldout``: the committed held-out split (PRD §13.2, :mod:`.heldout`), and
   with ``--check`` what it lets given frame files be used for (metadata only).
+- ``lookout-eval data-report``: the M0.5 gate's log evidence, per viewpoint, with outages,
+  exclusions and the 72 h clock (PRD §16 M0.5, :mod:`.data_report`); offline and read-only.
 
 None touches the network, except ``backtest-pair --forecast auto``, which backfills one
 HRRR run from NOAA's public bucket through lookout-forecast.
@@ -138,6 +140,41 @@ def _parser() -> argparse.ArgumentParser:
     )
     held.add_argument(
         "--design", choices=["P", "H"], help="fit bound of this design (default: the strictest)"
+    )
+
+    report = sub.add_parser(
+        "data-report",
+        help="the M0.5 gate's log evidence: per viewpoint, outages, exclusions, the 72 h clock",
+    )
+    report.add_argument(
+        "--since",
+        help="window start, ISO 8601 with Z or an offset (default 2026-11-19T12:24:23Z, when "
+        "the capture loop took over all 8 cameras)",
+    )
+    report.add_argument("--until", help="window end, ISO 8601 (default: now)")
+    report.add_argument(
+        "--json",
+        nargs="?",
+        const="-",
+        metavar="PATH",
+        help="print the JSON report instead of the table; with PATH, write the JSON there and "
+        "print the table",
+    )
+    report.add_argument(
+        "--capture-gap-s",
+        type=float,
+        default=540.0,
+        help="a gap between capture passes longer than this is an outage (default 540)",
+    )
+    report.add_argument(
+        "--forecast-gap-s",
+        type=float,
+        default=900.0,
+        help="a run whose first write finished this much after it was fetchable is late, and "
+        "a span this long with no live run written while one was due is an outage (default 900)",
+    )
+    report.add_argument(
+        "--clock-hours", type=float, default=72.0, help="hours the gate needs (default 72)"
     )
     return parser
 
@@ -295,6 +332,43 @@ def _heldout(args: argparse.Namespace) -> int:
     return 0 if all(v["development"] for v in verdicts) else 1
 
 
+def _manifest_ids() -> list[str] | None:
+    """The viewpoint ids of the manifests, so a camera with no record still gets a row."""
+    from lookout_common.manifest import load_manifests
+
+    try:
+        return sorted(load_manifests())
+    except (OSError, ValueError, RuntimeError):  # no manifests here: the data's ids are used
+        return None
+
+
+def _data_report(args: argparse.Namespace) -> int:
+    from lookout_common.paths import data_dir
+
+    from .data_report import DEFAULT_SINCE, ReportOptions, build_report, format_report
+
+    options = ReportOptions(
+        capture_gap_s=args.capture_gap_s,
+        forecast_gap_s=args.forecast_gap_s,
+        clock_hours=args.clock_hours,
+    )
+    report = build_report(
+        data_dir(),
+        since=parse_iso_utc(args.since) if args.since else DEFAULT_SINCE,
+        until=parse_iso_utc(args.until) if args.until else None,
+        viewpoint_ids=_manifest_ids(),
+        options=options,
+    )
+    text = json.dumps(report, indent=2)
+    if args.json == "-":
+        print(text)
+        return 0
+    if args.json is not None:
+        Path(args.json).expanduser().write_text(text + "\n", encoding="utf-8")
+    print(format_report(report), end="")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point of the ``lookout-eval`` console script."""
     args = _parser().parse_args(argv)
@@ -303,6 +377,8 @@ def main(argv: list[str] | None = None) -> int:
             return _backtest_pair(args)
         if args.command == "heldout":
             return _heldout(args)
+        if args.command == "data-report":
+            return _data_report(args)
         return _ephem_check(args)
     except (ValueError, FileNotFoundError, RuntimeError) as exc:
         print(f"lookout-eval {args.command}: {type(exc).__name__}: {exc}", file=sys.stderr)

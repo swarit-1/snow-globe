@@ -1,10 +1,20 @@
 """Sun and Moon positions for evaluation, from oculus-core (PRD §8.4).
 
 The app and evaluation run the same ephemeris: oculus-core pinned at
-``06809e6141432119d399cd22f29f6f517bf0226d``, built with maturin into this venv (the
+``1b5410b01f127514fa37656eff2b7d73be7ea8da`` (D-025), built with maturin into this venv (the
 ``oculus`` dependency group, crate ``core/``, feature ``python``). Its ``sun_moon`` returns
 the *apparent* topocentric position (aberration, nutation, parallax) **without refraction**:
 that is the geometric altitude here.
+
+**Provenance.** A record names the build that actually ran: :attr:`OculusBackend.version` is
+the crate version plus the commit the installed ``oculus-core-py`` was built from, read from
+its PEP 610 ``direct_url.json`` (``vcs_info.commit_id``, which uv writes for a git
+dependency), for example ``0.1.0+1b5410b``, once the imported ``oculus_core`` is checked to be
+that distribution's own file. A build with no such commit (a local ``maturin develop``, a wheel
+from elsewhere, a module imported from another folder) falls back to the pin, marked as
+unverified: ``0.1.0+1b5410b.pinned``. :data:`OCULUS_PINNED_REV` is the pin in ``pyproject.toml`` and
+``uv.lock``, and a test keeps the three equal. (Until 20 Nov the suffix was this constant
+alone, which still said ``06809e6`` after the pin moved, D-025.)
 
 **Refraction** is added on top, because oculus-core does not apply it (PRD §8.4
 "Additions"):
@@ -27,17 +37,21 @@ produced it.
 
 from __future__ import annotations
 
+import json
 import math
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import lru_cache
+from importlib import metadata
 from typing import Any, Literal, Protocol
 
 from . import noaa_solar
 
 __all__ = [
     "ENV_BACKEND",
+    "OCULUS_DISTRIBUTION",
     "OCULUS_PINNED_REV",
     "EphemerisBackend",
     "EphemerisUnavailableError",
@@ -48,15 +62,21 @@ __all__ = [
     "SunPosition",
     "apparent_altitude_deg",
     "get_ephemeris",
+    "installed_oculus_rev",
     "moon_position",
+    "oculus_rev",
     "refraction_deg",
     "sun_position",
     "sun_rate_deg_per_min",
 ]
 
 ENV_BACKEND = "LOOKOUT_EPHEMERIS"
-OCULUS_PINNED_REV = "06809e6141432119d399cd22f29f6f517bf0226d"
+#: The pin of the ``oculus`` group in pyproject.toml and uv.lock (D-025); a test keeps them equal.
+OCULUS_PINNED_REV = "1b5410b01f127514fa37656eff2b7d73be7ea8da"
+#: The distribution that provides the ``oculus_core`` module.
+OCULUS_DISTRIBUTION = "oculus-core-py"
 REFRACTION_MIN_ALT_DEG = -1.0
+_COMMIT = re.compile(r"[0-9a-f]{40}")
 
 type RefractionModel = Literal["saemundsson", "noaa", "none"]
 
@@ -70,6 +90,52 @@ _BUILD_HINT = (
 
 class EphemerisUnavailableError(RuntimeError):
     """The requested ephemeris backend (or body) is not available."""
+
+
+def _provides(dist: Any, module_file: str) -> bool:
+    """Whether ``module_file`` (an imported module's ``__file__``) is one of ``dist``'s files."""
+    target = os.path.realpath(module_file)
+    for item in dist.files or ():
+        if str(item).replace("\\", "/").endswith("oculus_core/__init__.py"):
+            return os.path.realpath(str(dist.locate_file(item))) == target
+    return False
+
+
+def installed_oculus_rev(
+    module_file: str | None = None, distribution: str = OCULUS_DISTRIBUTION
+) -> str | None:
+    """The git commit the installed oculus-core bindings were built from, or None.
+
+    Read from the distribution's PEP 610 ``direct_url.json`` (``vcs_info.commit_id``). None
+    when the distribution is not installed, has no ``direct_url.json``, or was not installed
+    from git; a value that is not a full 40-hex commit is ignored. With ``module_file`` (the
+    imported ``oculus_core.__file__``), also None unless that file is the distribution's own,
+    so a build imported from elsewhere is never given this distribution's commit.
+    """
+    try:
+        dist = metadata.distribution(distribution)
+    except metadata.PackageNotFoundError:
+        return None
+    text = dist.read_text("direct_url.json")
+    if not text or (module_file is not None and not _provides(dist, module_file)):
+        return None
+    try:
+        doc = json.loads(text)
+    except ValueError:
+        return None
+    vcs = doc.get("vcs_info") if isinstance(doc, dict) else None
+    commit = vcs.get("commit_id") if isinstance(vcs, dict) else None
+    return commit if isinstance(commit, str) and _COMMIT.fullmatch(commit) else None
+
+
+def oculus_rev(module_file: str | None = None) -> tuple[str, bool]:
+    """The oculus-core commit to name in records, and whether the installed build said so.
+
+    ``(installed commit, True)`` when :func:`installed_oculus_rev` finds one, else
+    ``(OCULUS_PINNED_REV, False)``: the pin, not verified against the build.
+    """
+    installed = installed_oculus_rev(module_file)
+    return (installed, True) if installed is not None else (OCULUS_PINNED_REV, False)
 
 
 def _utc_ms(moment: datetime) -> float:
@@ -175,8 +241,9 @@ class OculusBackend:
 
     @property
     def version(self) -> str:
-        """Crate version plus the pinned git revision."""
-        return f"{self._module.version()}+{OCULUS_PINNED_REV[:7]}"
+        """Crate version plus the commit of the build (``.pinned`` if only the pin is known)."""
+        rev, verified = oculus_rev(getattr(self._module, "__file__", None))
+        return f"{self._module.version()}+{rev[:7]}" + ("" if verified else ".pinned")
 
     def _call(self, moment: datetime, lat_deg: float, lon_deg: float, height_m: float) -> Any:
         return self._module.sun_moon(

@@ -10,7 +10,11 @@ uv run lookout-eval ephem-check            # oculus-core vs the NPS archive's So
 uv run lookout-eval backtest-pair --help   # one v-1 pair: SceneSpec -> headless render -> extractor
 uv run lookout-eval heldout                # the committed held-out split, with UTC instants
 uv run lookout-eval heldout --check FRAME  # may this frame be used for development or fits? (metadata only)
+uv run lookout-eval data-report            # the M0.5 gate's 72 h log evidence (offline, read-only); --json
 ```
+
+Outside pytest, iCloud's hidden `.pth` files mean the commands need `PYTHONPATH=src:../workers/common/src`
+(CLAUDE.md "Python").
 
 The default suite also runs the renderer's own `validateScene()` (`renderer/src/scene.ts`) on eval-built
 scenes under Node 24, without a browser; it skips with a reason when Node 24 is missing. The real headless
@@ -24,6 +28,12 @@ pinned to the public commit `1b5410b01f127514fa37656eff2b7d73be7ea8da` (`origin/
 which `uv.lock` and the installed `direct_url.json` name. The build needs a Rust toolchain and takes about
 20 s on an M4. The earlier pin, `06809e6`, exists only on a local branch. Between the two commits the
 `sun_moon` path, `core/bindings`, `core/Cargo.toml` and `core/Cargo.lock` are identical.
+
+Records name the build that ran: the ephemeris version is the crate version plus the commit in the
+installed `oculus-core-py`'s `direct_url.json` (`0.1.0+1b5410b`), or the pin marked `.pinned` when the
+build has no such commit. Until 20 Nov the suffix was a constant that still said `06809e6`, so the M0.5
+pair's four records say `0.1.0+06809e6` although they ran the `1b5410b` build
+([docs/evidence/m05-backtest-pair.md](../docs/evidence/m05-backtest-pair.md) §9).
 
 Without oculus-core, use `uv sync --no-group oculus` and set `LOOKOUT_EPHEMERIS=noaa` (Sun only); nothing
 falls back silently. The suite passes in such a venv, with the oculus-only tests skipped.
@@ -58,6 +68,7 @@ extract the same way (`pair_forecast.py`). The commands are in
 | `landmark_boxes.py`, `landmark_boxes_v1.json` | §13.3, §16 M0.5 | By-eye landmark boxes in normalised image coordinates, drawn on the plate; they fit any resolution of the drawn frame's aspect ratio only; not in the viewpoint manifest; replaced by the M2 pose solve |
 | `pair_score.py` | §13.4, §13.5 | One pair's P1 cell (event "visible"; partial masked; in-cloud excluded, hidden in the sensitivity) as a one-pair `Contingency`, plus the ratio error |
 | `registration.py` | §8.6 | How far a frame's aim differs from the plate's (phase correlation of gradient images): a diagnostic in the pair record; the Same view gate itself stays "not checked" |
+| `data_report/` | §16 M0.5, §15.3 | `lookout-eval data-report`: the M0.5 gate's log evidence from `$LOOKOUT_DATA_DIR`, read-only. Per viewpoint: polls, image GETs, frames and thumbnails by storage policy (checked against the disk), rate caps, errors, poll gaps on send times, the most GETs in a rolling hour, and the distinct live HRRR runs with their hours and fields; outages, restarts, exclusions and the 72 h clock. Never opens an image, `archive/` or `quarantine/` |
 
 ## Choices worth knowing
 
@@ -145,6 +156,42 @@ extract the same way (`pair_forecast.py`). The commands are in
 
   `--held-out FIRST:LAST` adds days to the split and never removes any. `--design P|H` picks the design
   whose period sets the fit bound (default: the strictest).
+
+## The data report (PLAN.md M0.5 gate 1)
+
+`lookout-eval data-report [--since ISO] [--until ISO] [--json [PATH]]` reads `capture_log/`,
+`forecast_log/` (and `forecast_log/lag_survey/`), the sidecars under `frames/` and `thumbs/`,
+`forecast/hrrr/` and `state/`, and writes nothing (only `--json PATH`, where you say). The window starts by
+default at 12:24:23 UTC on 19 Nov 2026, when the loop took over all 8 cameras, and ends now. The rules,
+in full in `data_report/__init__.py`:
+
+- **Counted:** capture records of the scheduled runners (`cli-loop`, `lambda`); live forecast `run`
+  records that were the first write of at least one viewpoint, `lag` records (each run and hour once) and
+  `error` records. Per viewpoint, a run counts when that viewpoint's first write of it falls in the
+  window; a later write is a re-extraction, never a run, even when the first write was before the window.
+  Runs due before the window and first written in it are counted and listed apart as catch-ups.
+- **Excluded, each with a reason and file:line examples:** records outside the window, archive events,
+  other runners (`cli-once`, the retired stopgap), archived forecast runs (`"live": false`, such as the
+  pair's run 2024011412 at line 475 of `forecast_log/2026-11-19.jsonl`), re-extractions, duplicate lags,
+  survey lags, damaged lines, and forecast files on disk whose run was not first written in the window.
+- **Capture outage:** more than 540 s between consecutive passes; it loses the gap minus one 300 s
+  interval, as PLAN.md's 8.2 h for 19 Nov does. No scheduled pass in the logs loses the whole window.
+- **Forecast outage:** the stand-in writes records only when it writes a run, about hourly, so a quiet
+  gap between its records is not an outage (such gaps are listed for information only). Instead, each
+  HRRR cycle is due when its extracted hours were all on S3 (`s3_lags_s`), and a run is late when its
+  first write finished (`fetch_finished_utc`, D-027) more than 900 s after that. The stand-in was down
+  from due + 300 s until it next finished writing a live run, any run (a fetch's start or an `error`
+  record does not end that), when that is more than 900 s after the due time. A cycle never written gets
+  an estimated due time from the median measured lag: of the window's complete runs, else of every
+  complete run read, else D-027's 120 min. Cycles due up to 6 h before the window lose the part inside
+  it, and no live run in the logs loses the whole window. With no per-tick record, these are lower bounds.
+- **Restarts:** a `capture_version` or runner change, a `loop_stopped` record, or two pass starts under
+  295 s apart (the 300 s interval less a 5 s tolerance); for the stand-in, a change of fields or hours.
+- **The 72 h clock:** as PLAN.md states it, covered = elapsed − the capture loop's lost time. Beside it the
+  report gives a proposed both-jobs figure (the union of both jobs' lost time, for PRD §16's "worker and
+  capture logs"), which PLAN.md and DECISIONS.md do not record yet, and each job's own figure.
+- **State files** (`state/capture/<id>.json`, the fetcher lock) are read as they are when the report runs
+  (`state_now`), not as of `--until`. The home directory is printed as `~`.
 
 ## Measured (this machine, MacBook Air M4, 19 Nov 2026)
 
@@ -243,5 +290,8 @@ all (renderer timing, three runs, SwiftShader).
 - **Ran for real:** the M0.5 pair (Grand Canyon, 15 Jan 2024 19:45Z, 24 h lead) on 19 Nov 2026, three
   times, and a fourth time on 20 Nov (00:16 UTC) after the review fixes, with the same scene, render and
   scores; see [docs/evidence/m05-backtest-pair.md](../docs/evidence/m05-backtest-pair.md).
-  `backtest-pair --forecast auto` itself has still not reached NOAA (the eval venv has no ecCodes);
-  `pair_forecast.py` did, from lookout-forecast's environment.
+  `backtest-pair --forecast auto` itself has still not reached NOAA: it needs `uv sync --group forecast`
+  (the dev group now brings ecCodes, at the forecast worker's locked versions, so that
+  `tests/test_pair_forecast.py` runs the real extractor offline in `make test`; lookout-forecast itself
+  comes only with the `forecast` group). `pair_forecast.py` did reach NOAA, from lookout-forecast's
+  environment.

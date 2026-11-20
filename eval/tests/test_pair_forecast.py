@@ -1,9 +1,12 @@
 """The pair's forecast run: lookout-forecast's choice, only the needed fields and hours.
 
-Most tests use small stand-ins for lookout-forecast's modules, so they run in eval's own
-environment (no ecCodes). The last test runs the real extractor offline against
-lookout-forecast's fake bucket (synthetic GRIB2) and skips where ecCodes is missing; run it
-inside workers/forecast's environment to exercise it.
+Most tests use small stand-ins for lookout-forecast's modules, so they need neither ecCodes
+nor lookout-forecast. The last test runs the real extractor offline against lookout-forecast's
+fake bucket (synthetic GRIB2). eval's dev group installs ecCodes for it, and it puts
+``workers/forecast/src`` on ``sys.path`` for itself only (the ``real_forecast`` fixture), so it
+runs in ``make test``. It skips only where ecCodes is missing, or where the checkout has no
+``workers/forecast``; with both present, a lookout-forecast or fake bucket that does not import
+fails it, so the test cannot drop out of ``make test`` unseen.
 """
 
 from __future__ import annotations
@@ -12,8 +15,10 @@ import importlib.util
 import json
 import sys
 import types
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 from lookout_common.storage import LocalStorage
@@ -371,26 +376,59 @@ def test_no_run_is_an_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
 # --- the real extractor, offline (needs ecCodes) -------------------------------------------
 
 
-def _real_forecast_or_skip():
+FORECAST_SRC = FORECAST_TESTS.parent / "src"
+FAKEBUCKET = "lookout_forecast_fakebucket"
+
+
+def _is_forecast_module(name: str) -> bool:
+    return name == FAKEBUCKET or name.split(".", 1)[0] == "lookout_forecast"
+
+
+@pytest.fixture
+def real_forecast(monkeypatch: pytest.MonkeyPatch) -> Iterator[types.ModuleType]:
+    """lookout-forecast's fake bucket module, with the real lookout-forecast importable.
+
+    eval's dev group installs ecCodes at the forecast worker's versions. Where lookout-forecast
+    is not installed (the default), its source goes on ``sys.path`` for this test only, and
+    every ``lookout_forecast`` module it imported is dropped afterwards, so tests that check
+    eval without lookout-forecast (``backtest-pair --forecast auto``) still see it missing.
+    With ecCodes and the checkout's ``workers/forecast`` both present, an import failure is a
+    test failure, not a skip (module docstring).
+    """
     if importlib.util.find_spec("eccodes") is None:
-        pytest.skip("ecCodes is not installed here (run inside workers/forecast's environment)")
+        pytest.skip("ecCodes is not installed here (uv sync installs it with eval's dev group)")
+    in_checkout = FORECAST_SRC.is_dir()
+
+    def missing(reason: str) -> NoReturn:
+        if in_checkout:
+            pytest.fail(f"{reason}, although ecCodes and {FORECAST_SRC} are present")
+        pytest.skip(reason)
+
+    before = {name for name in sys.modules if _is_forecast_module(name)}
+    if importlib.util.find_spec("lookout_forecast") is None and in_checkout:
+        monkeypatch.syspath_prepend(str(FORECAST_SRC))
     try:
-        from lookout_forecast.extract import Extractor  # noqa: F401
-    except ImportError as exc:
-        pytest.skip(f"lookout-forecast is not importable here: {exc}")
-    spec = importlib.util.spec_from_file_location(
-        "lookout_forecast_fakebucket", FORECAST_TESTS / "fakebucket.py"
-    )
-    if spec is None or spec.loader is None:
-        pytest.skip("workers/forecast/tests/fakebucket.py not found")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module  # dataclasses look their module up while it executes
-    spec.loader.exec_module(module)
-    return module
+        try:
+            from lookout_forecast.extract import Extractor  # noqa: F401
+        except ImportError as exc:
+            missing(f"lookout-forecast does not import here: {exc}")
+        source = FORECAST_TESTS / "fakebucket.py"
+        spec = importlib.util.spec_from_file_location(FAKEBUCKET, source)
+        if not source.is_file() or spec is None or spec.loader is None:
+            missing(f"{source} not found")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module  # dataclasses look their module up while it executes
+        spec.loader.exec_module(module)
+        yield module
+    finally:
+        for name in [n for n in sys.modules if _is_forecast_module(n) and n not in before]:
+            del sys.modules[name]
 
 
-def test_the_real_extractor_fetches_only_the_two_hours(tmp_path: Path) -> None:
-    fakebucket = _real_forecast_or_skip()
+def test_the_real_extractor_fetches_only_the_two_hours(
+    tmp_path: Path, real_forecast: types.ModuleType
+) -> None:
+    fakebucket = real_forecast
     from lookout_common.manifest import load_manifests
     from lookout_forecast.bucket import HrrrBucket
     from lookout_forecast.grid import HRRR_CONUS
