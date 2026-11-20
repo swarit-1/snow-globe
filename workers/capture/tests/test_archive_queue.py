@@ -7,12 +7,15 @@ from __future__ import annotations
 import itertools
 import json
 import threading
+import uuid
 from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from lookout_common.manifest import load_manifests
 from lookout_common.storage import LocalStorage
 
+from lookout_capture.archive import api_code
 from lookout_capture.archive_queue import (
     STEP_MARGIN_S,
     STEP_MAX_S,
@@ -23,6 +26,7 @@ from lookout_capture.archive_queue import (
     queue_summary,
 )
 from lookout_capture.cli import build_parser, main
+from lookout_capture.heldout import HELD_OUT_FROM
 
 from .conftest import FakeNPS, fixture_json, make_jpeg
 from .test_archive import _client
@@ -186,6 +190,156 @@ def test_held_out_or_hand_edited_entries_are_refused_without_a_request(
     assert run.step() == "refused" and fake_nps.requests == []
     assert queue.read()["entries"][0]["status"] == "refused"
     assert "held-out guard" in queue.read()["entries"][0]["reason"]
+
+
+def test_a_31_may_2026_entry_downloads_only_the_assets_before_the_summer_edge(
+    data_root, fake_nps, clock, tmp_path
+):
+    """The queue is the only backfill path (D-029), and 31 May 2026 is the last day it may
+    take (D-019, D-038). Each asset is dated by its LocalTimeString, its ImageCreateDateTime,
+    that time read as local standard time, and the UTC date of each of those and of the
+    instant behind its key (the lead's reading of 20 Nov 2026), and refused if any of them is
+    1 June or later. At Point Reyes 31 May turns into 1 June UTC at 17:00 PDT, so the
+    local-evening asset stamped 10:45 PM, 31 May in both its strings is refused, without a
+    request, and only the 3:45 PM asset is fetched.
+    """
+    storage = LocalStorage(data_root)
+    stamps = [
+        ("05/31/2026 03:45:00 PM", "5/31/2026 4:45 PM Pacific Daylight Time"),  # 23:45 UTC
+        ("05/31/2026 04:00:00 PM", "5/31/2026 5:00 PM Pacific Daylight Time"),  # 00:00 UTC
+        ("05/31/2026 10:45:00 PM", "5/31/2026 11:45 PM Pacific Daylight Time"),  # 06:45 UTC
+        ("05/31/2026 11:15:00 PM", None),  # standard time: 12:15 AM PDT on 1 June
+        ("05/31/2026 11:30:00 PM", "6/1/2026 12:30 AM Pacific Daylight Time"),
+        ("05/31/2026 11:45:00 PM", "garbage"),  # standard time: 12:45 AM PDT on 1 June
+    ]
+    results = []
+    for i, (created, local) in enumerate(stamps):
+        asset_id = f"{i + 1:08d}-aaaa-4bbb-8ccc-0000000000{i + 1:02d}"
+        asset = {
+            "LocationCode": "pore",
+            "TimeOfDay": "night",
+            "SolarElevationAngle": -20.0,
+            "AssetID": asset_id,
+            "ImageCreateDateTime": created,
+            **({"LocalTimeString": local} if local is not None else {}),
+        }
+        results.append({"ItemNumber": i + 1, "Asset": asset})
+        fake_nps.assets[f"{asset_id}:hires"] = make_jpeg(600, 400, pattern=i)
+    fake_nps.search_pages[("pore", "05/31/2026")] = [
+        {"Page": 1, "PageSize": 300, "ResultCount": 6, "PageCount": 1, "Results": results}
+    ]
+    queue = queue_with(tmp_path, make_entry(PORE, date(2026, 5, 31), pick="all"))
+    run = queue_runner(storage, queue, fake_nps, clock, tmp_path)
+    steps = []
+    for _ in range(10):
+        steps.append(run.step())
+        if steps[-1] == "done":
+            break
+    assert steps[-1] == "done", steps
+    gets = [r["url"] for r in archive_requests(fake_nps) if "/GetAsset/" in r["url"]]
+    assert gets == [
+        f"https://www.nps.gov/airwebcams/GetAsset/{results[0]['Asset']['AssetID']}/proxy/hires"
+    ]
+    entry = queue.read()["entries"][0]
+    assert entry["progress"]["outcome_counts"] == {"stored": 1, "refused_held_out": 5}
+
+
+#: The zone names NPS writes in LocalTimeString (cached searches of 15 Jul 2025).
+ZONE_NAMES = {
+    "America/Los_Angeles": ("Pacific Standard Time", "Pacific Daylight Time"),
+    "America/Phoenix": ("US Mountain Standard Time", "US Mountain Standard Time"),
+    "America/New_York": ("Eastern Standard Time", "Eastern Daylight Time"),
+}
+
+
+def serve_whole_day(fake: FakeNPS, viewpoint_id: str, day: date) -> list[str]:
+    """All 96 frames of ``day`` as the archive lists them (ImageCreateDateTime on standard
+    time, LocalTimeString on civil time); returns their asset ids in order."""
+    vp = VPS[viewpoint_id]
+    tz = ZoneInfo(vp.time_zone)
+    probe = datetime(day.year, 1, 15, 12, tzinfo=tz)
+    standard = (probe.utcoffset() or timedelta(0)) - (probe.dst() or timedelta(0))
+    code = vp.truth_camera.archive_code
+    results, ids = [], []
+    for i in range(96):
+        wall = datetime(day.year, day.month, day.day) + timedelta(minutes=15 * i)
+        civil = (wall - standard).replace(tzinfo=UTC).astimezone(tz)
+        name = ZONE_NAMES[vp.time_zone][1 if civil.dst() else 0]
+        label = (
+            f"{civil.month}/{civil.day}/{civil.year} {civil.hour % 12 or 12}:{civil.minute:02d} "
+            f"{'PM' if civil.hour >= 12 else 'AM'} {name}"
+        )
+        asset_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{code}/{wall:%Y%m%dT%H%M}"))
+        ids.append(asset_id)
+        results.append(
+            {
+                "ItemNumber": i + 1,
+                "Asset": {
+                    "AssetID": asset_id,
+                    "LocationCode": code,
+                    "ImageCreateDateTime": wall.strftime("%m/%d/%Y %I:%M:%S %p"),
+                    "LocalTimeString": label,
+                    "SolarElevationAngle": 10.0,  # 'pick all' with no Sun limit ignores it
+                    "TimeOfDay": "day",
+                },
+            }
+        )
+        fake.assets[f"{asset_id}:hires"] = make_jpeg(999, 562, pattern=i)
+    page = {"Results": results, "ResultCount": 96, "PageCount": 1, "Page": 1, "PageSize": 300}
+    fake.search_pages[(api_code(code), day.strftime("%m/%d/%Y"))] = [page]
+    return ids
+
+
+def test_31_may_at_the_guard_end_to_end_through_the_queue(data_root, fake_nps, clock, tmp_path):
+    """Backfill plan review (20 Nov 2026), whole days at three cameras, with the UTC reading
+    (the lead, 20 Nov 2026, pending the owner's D-038): every frame from UTC midnight on is
+    refused without a request. That is 16:00 standard (17:00 PDT) at Point Reyes, 32 of 96
+    frames; 19:00 EST (20:00 EDT) at Acadia, 20; 17:00 MST at Grand Canyon (Arizona keeps
+    standard time), 28. Every stored frame is on 31 May in its camera's civil time and in UTC
+    (D-019, D-022, D-038)."""
+    storage = LocalStorage(data_root)
+    day = HELD_OUT_FROM - timedelta(days=1)
+    expected = {"point-reyes.beach": 64, "acadia.mcfarland": 76, "grand-canyon.yavapai": 68}
+    ids = {vid: serve_whole_day(fake_nps, vid, day) for vid in expected}
+    queue = ArchiveQueue(tmp_path / "q.json")
+    queue.add([make_entry(VPS[vid], day, pick="all", min_sun_deg=None) for vid in expected])
+    run = queue_runner(storage, queue, fake_nps, clock, tmp_path)
+    for _ in range(400):
+        if run.step() == "idle":
+            break
+    entries = {e["viewpoint_id"]: e for e in queue.read()["entries"]}
+    gets = [r["url"] for r in archive_requests(fake_nps) if "/GetAsset/" in r["url"]]
+    for vid, stored in expected.items():
+        entry = entries[vid]
+        counts = entry["progress"]["outcome_counts"]
+        assert entry["status"] == "done"
+        assert counts == {"stored": stored, "refused_held_out": 96 - stored}
+        fetched = [u for u in gets if any(a in u for a in ids[vid])]
+        assert len(fetched) == stored  # a refused frame never costs a request
+        refused = ids[vid][stored:]  # the evening: every frame from UTC midnight on
+        assert not any(a in u for u in gets for a in refused)
+    sidecars = [json.loads(p.read_text()) for p in (data_root / "archive").glob("*/*/*.json")]
+    assert len(sidecars) == sum(expected.values())
+    for side in sidecars:
+        utc = datetime.fromisoformat(side["image_time_utc"].replace("Z", "+00:00"))
+        assert utc.astimezone(ZoneInfo(VPS[side["viewpoint_id"]].time_zone)).date() == day
+        assert utc.date() == day
+
+
+@pytest.mark.parametrize(
+    "spelling", ["2026-06-01", "2026-07-15", "9999-12-31", "20260601", "2026-W23-1"]
+)
+def test_every_iso_spelling_of_a_held_out_day_is_refused(spelling, data_root, tmp_path):
+    """Backfill plan review (20 Nov 2026): the guard holds for every ISO 8601 spelling Python
+    reads, at make_entry and at ``archive queue add``, and a refused add writes no file."""
+    day = date.fromisoformat(spelling)
+    assert day >= HELD_OUT_FROM
+    with pytest.raises(ValueError, match="held-out guard"):
+        make_entry(VPS["point-reyes.beach"], day)
+    queue_file = tmp_path / "q.json"
+    with pytest.raises(SystemExit, match="held-out guard"):
+        main(["archive", "queue", "add", "point-reyes.beach", spelling, "--queue", str(queue_file)])
+    assert not queue_file.exists()
 
 
 def test_the_daily_budget_pauses_the_queue_until_the_next_utc_day(

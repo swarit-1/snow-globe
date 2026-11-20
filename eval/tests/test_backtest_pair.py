@@ -444,7 +444,11 @@ def test_an_archived_truth_frame_past_the_guard_is_refused_before_it_is_read(
 
 
 def test_the_summer_standard_time_edge_decides_an_archived_reference(world) -> None:
-    """ImageCreateDateTime stays on standard time in summer; the latest local date counts."""
+    """ImageCreateDateTime stays on standard time in summer; the latest local date counts.
+
+    Since the lead's held-out reading of 20 Nov (pending the owner's D-038), "dated 1 Jun 2026
+    or later" is the camera's local date OR the UTC date, so a 31 May evening frame stamped
+    1 Jun UTC is held out too; only a frame dated 31 May both ways may be read."""
     nps = {"source": "nps-archive", "location_code": "mora"}
     edge = _frame(
         world["root"],
@@ -458,8 +462,8 @@ def test_the_summer_standard_time_edge_decides_an_archived_reference(world) -> N
     )
     with pytest.raises(LeakageError, match=r"archive guard \(D-019\): local date 2026-06-01"):
         _run(world, reference_paths=(edge, *world["refs"]))
-    # 23:45 PDT on 31 May is still May locally, though its UTC date (and folder) is 1 Jun.
-    may = _frame(
+    # 23:45 PDT on 31 May is still May locally, but its UTC date (and folder) is 1 Jun.
+    utc_june = _frame(
         world["root"],
         "archive",
         datetime(2026, 6, 1, 6, 45, tzinfo=UTC),
@@ -469,10 +473,23 @@ def test_the_summer_standard_time_edge_decides_an_archived_reference(world) -> N
         local_time_string="5/31/2026 11:45 PM Pacific Daylight Time",
         **nps,
     )
+    with pytest.raises(LeakageError, match=r"archive guard \(D-019\): UTC date 2026-06-01"):
+        _run(world, reference_paths=(utc_june, *world["refs"]), scene_only=True)
+    # 16:45 PDT on 31 May is 23:45 UTC on 31 May: dated 31 May both ways, so it may be read.
+    may = _frame(
+        world["root"],
+        "archive",
+        datetime(2026, 5, 31, 23, 45, tzinfo=UTC),
+        "e3e3e3e3",
+        to_rgb(landscape(13)),
+        image_create_datetime_raw="05/31/2026 03:45:00 PM",
+        local_time_string="5/31/2026 4:45 PM Pacific Daylight Time",
+        **nps,
+    )
     record, _ = _run(world, reference_paths=(may, *world["refs"]), scene_only=True)
     first = record["leakage_checks"]["references"][0]
     assert (
-        first["passed"] and first["archive"] and first["image_time_utc"] == "2026-06-01T06:45:00Z"
+        first["passed"] and first["archive"] and first["image_time_utc"] == "2026-05-31T23:45:00Z"
     )
 
 

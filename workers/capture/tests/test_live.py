@@ -17,6 +17,7 @@ from lookout_common.images import exif_summary
 from lookout_common.jsonl import read_jsonl
 from lookout_common.manifest import load_manifests
 from lookout_common.storage import LocalStorage, S3Storage
+from lookout_common.timeutil import isoformat_z
 
 from lookout_capture import lambda_handler
 from lookout_capture.live import (
@@ -30,6 +31,7 @@ from lookout_capture.live import (
 from lookout_capture.state import CameraState, camera_state_key
 
 from .conftest import FakeClock, FakeNPS, fixture_text, make_jpeg
+from .receipts import Latency, run_schedule, server_violations
 
 VPS = load_manifests()
 RAINIER = VPS["rainier.paradise-mountain"]
@@ -564,7 +566,9 @@ def test_first_pass_seeds_from_stopgap_and_does_not_redownload(data_root, clock,
     set_rainier(fake_nps, clock.now(), etag='"new-1"', pattern=9)
     out = runner(storage, fake_nps, clock).run_pass([RAINIER])["outcomes"][RAINIER.id]
     assert out["event"] == "rate_capped" and out["reason"] == "hourly_cap"
-    assert out["next_allowed_at"] == "2026-11-19T08:30:36Z"
+    # The stopgap's fetch time (read after its full response) + 1 ms for its truncation, + 1 h,
+    # shown rounded up to the second: 08:30:36.001 is shown as 08:30:37.
+    assert out["next_allowed_at"] == "2026-11-19T08:30:37Z"
     # After 07:30:36 + 1 h one slot frees and the change is fetched.
     clock.current = datetime(2026, 11, 19, 8, 30, 40, tzinfo=UTC)
     set_rainier(fake_nps, clock.now() - timedelta(seconds=40), etag='"new-2"', pattern=10)
@@ -706,7 +710,9 @@ def test_lambda_handler_runs_one_pass_on_s3(s3_bucket, monkeypatch, fake_nps, da
 
     real = live.polite_client
     monkeypatch.setattr(
-        live, "polite_client", lambda transport=None: real(transport=fake_nps.transport())
+        live,
+        "polite_client",
+        lambda transport=None, **kw: real(transport=fake_nps.transport(), **kw),
     )
     now = datetime.now(UTC)
     fake_nps.clock = None
@@ -740,6 +746,26 @@ def test_loop_runs_passes_and_stops_cleanly(data_root, clock, fake_nps):
     assert run2.loop([RAINIER], max_passes=5, install_signals=False) == 0
     with pytest.raises(KeyboardInterrupt):
         run2._on_signal(2, None)
+
+
+def test_the_archive_queue_starts_no_sooner_than_one_request_gap_after_a_live_request(
+    data_root, clock, fake_nps
+):
+    """Review finding (20 Nov 2026): between passes the loop handed over to the archive queue
+    at once, so its first www.nps.gov request could follow the pass's last live answer by
+    milliseconds (5 ms in the real 20 Nov log), while live requests keep 1 s apart. The idle
+    hook now starts no sooner than the request gap after the last live request."""
+    storage = LocalStorage(data_root)
+    set_rainier(fake_nps, clock.now(), etag='"q1"')
+    run = runner(storage, fake_nps, clock)
+    handed_over: list[tuple[float, float]] = []
+
+    def idle(time_left, stopping) -> None:
+        handed_over.append((clock.monotonic(), run._last_request))
+
+    run.loop([RAINIER], interval_s=300, jitter_s=0, max_passes=2, install_signals=False, idle=idle)
+    ((at, last_live),) = handed_over
+    assert at - last_live >= run.options.request_gap_s - 1e-6, (at, last_live)
 
 
 def test_status_report_summarises_state_and_log(data_root, clock, fake_nps):
@@ -943,3 +969,223 @@ def test_poll_spacing_is_measured_from_the_send_and_never_under_300_s(data_root,
     # The scenario really had one camera waiting behind the other in the first pass.
     (t_a, _), (t_b, _) = sorted(first_pass_order)
     assert (t_b - t_a).total_seconds() >= 7.0
+
+
+# --- the schedules at the server (the capture Lambda's rate(5 minutes), the CLI loop) -------------
+
+#: (schedule, invocation jitter, the pass's wait for a slot): lambda_handler waits 45 s,
+#: ``loop`` 60 s; the loop's default jitter is 30 s.
+SCHEDULES = [
+    ("lambda", 0.0, 45.0),
+    ("lambda", 2.0, 45.0),
+    ("loop", 30.0, 60.0),
+    ("loop", 0.0, 60.0),
+]
+#: Requests take 20-150 ms each way, a cold connection 30-600 ms more before the request goes,
+#: and 2 % of requests a 2-8 s spike on one leg.
+SPIKY = Latency(spike_p=0.02)
+
+
+def _utc(text: str) -> datetime:
+    return datetime.fromisoformat(text.replace("Z", "+00:00"))
+
+
+def capture_log_records(data_root) -> list[dict]:
+    return [
+        json.loads(line)
+        for path in sorted((data_root / "capture_log").glob("*.jsonl"))
+        for line in path.read_text().splitlines()
+        if line.strip()
+    ]
+
+
+def assert_log_proves_the_rules(data_root, run, vps) -> None:
+    """The request log alone proves both rules at nps.gov, to the millisecond.
+
+    nps.gov receives a request no later than the ``answered_at`` of its record and the next
+    no earlier than that one's ``sent_at``. So, per camera, each poll's ``sent_at`` is at least
+    300.002 s after the previous poll's ``answered_at``, and each image GET's ``sent_at`` at
+    least 3600 s after the ``answered_at`` of the GET four before it. The log matches the fake
+    server request by request (``sent_at`` is the server's send instant, truncated to the
+    millisecond; ``answered_at`` is never before the receipt), and the state holds the same
+    strings as the last records.
+    """
+    requests = [r for r in capture_log_records(data_root) if r["event"] == "request"]
+    assert len(requests) == len(run.nps.received)
+    for record, seen in zip(requests, run.nps.received, strict=True):
+        assert (record["method"], record["url"]) == (seen.method, seen.url)
+        assert record["sent_at"] == isoformat_z(seen.sent, "milliseconds"), (record, seen)
+        assert _utc(record["answered_at"]) >= seen.received, (record, seen)
+    for vp in vps:
+        stage = "json" if vp.truth_camera.kind == "ard-aircam" else "head"
+        polls = [r for r in requests if r["viewpoint_id"] == vp.id and r["stage"] == stage]
+        for a, b in itertools.pairwise(polls):
+            gap = (_utc(b["sent_at"]) - _utc(a["answered_at"])).total_seconds()
+            assert gap >= MIN_POLL_INTERVAL_S + POLL_MARGIN_S - 1e-9, (vp.id, a, b)
+        gets = [r for r in requests if r["viewpoint_id"] == vp.id and r["stage"] == "image"]
+        for i in range(len(gets) - 4):
+            span = (_utc(gets[i + 4]["sent_at"]) - _utc(gets[i]["answered_at"])).total_seconds()
+            assert span >= 3600.0, (vp.id, gets[i], gets[i + 4])
+        state = CameraState.from_dict(json.loads((data_root / camera_state_key(vp.id)).read_text()))
+        assert (state.last_poll_at, state.last_answer_at) == (
+            polls[-1]["sent_at"],
+            polls[-1]["answered_at"],
+        )
+        assert state.poll_reserved_at is None and state.last_answer_bound is None
+        answered = {g["answered_at"] for g in state.gets}
+        assert answered and answered <= {r["answered_at"] for r in gets}, vp.id
+
+
+def assert_schedule_kept(run, vps, *, wait_s: float) -> None:
+    """Both rules hold at nps.gov, and the schedule loses little.
+
+    On a schedule that fires exactly every 300 s each poll lands its own elapsed time (plus
+    POLL_MARGIN_S) later in its pass than the one before, until its slot falls past the pass's
+    wait and that pass skips the camera; the next pass polls it near its start. So: a camera is
+    never skipped twice running (every gap at the server under two intervals plus the wait),
+    skips stay rare (at most one per 60 passes a camera, + 1), no pass runs into Lambda's 25 s
+    reserve, and passes stay inside the window (p99 under the wait + 10 s, max under the wait
+    + 40 s).
+
+    Measured on these very runs (SPIKY latency, 20 Nov 2026): 1 skip per 82 passes a camera
+    (Lambda, 2 cameras, 48 h), 1 per 66.5 (Lambda, 8 cameras, 72 h: 13 of 864), 1 per 96-115
+    (loop, --jitter 0), none with the loop's 30 s jitter; so a bound of 1 per 100 would fail
+    the 8-camera run, and 1 per 60 + 1 is the measured rate with a small margin. Pass p99
+    45.6-50.5 s on the Lambda (wait 45 s), 61.0-61.8 s on the loop at --jitter 0 (wait 60 s),
+    9.9-16.9 s with its jitter; max 48.4-54.7 s and 64.1-65.3 s. Counting the window from
+    each camera's visit instead of the pass's start gave a p99 of 74 s (builder, 10 days).
+    """
+    assert server_violations(run.nps, vps) == []
+    for vp in vps:
+        polls = run.nps.receipts(vp.id, "poll")
+        assert len(polls) >= 0.9 * len(run.summaries), vp.id
+        longest = max((b - a).total_seconds() for a, b in itertools.pairwise(polls))
+        assert longest < 2 * MIN_POLL_INTERVAL_S + wait_s + 35.0, (vp.id, longest)
+    skips = run.not_due()
+    assert all(n <= len(run.summaries) / 60 + 1 for n in skips.values()), skips
+    outcomes = [o for s in run.summaries for o in s["outcomes"].values()]
+    assert not [o for o in outcomes if o.get("reason") in ("time_left", "stopping")]
+    durations = sorted(s["duration_s"] for s in run.summaries)
+    assert durations[-1] < wait_s + 40.0, durations[-5:]
+    p99 = durations[min(len(durations) - 1, int(0.99 * len(durations)))]
+    assert p99 < wait_s + 10.0, (p99, durations[-5:])
+
+
+@pytest.mark.parametrize(("schedule", "jitter", "wait"), SCHEDULES)
+def test_two_days_of_each_schedule_keep_both_rules_at_the_server(data_root, schedule, jitter, wait):
+    """The lead's decision (20 Nov 2026): polls 300 s + POLL_MARGIN_S after the last *answer*,
+    and the image cap on answers, so the rules hold where they matter, at nps.gov, whatever the
+    network does. Two days of each schedule, with spikes and cold connections. On capture 0.2.1
+    before answer times (300.002 s send to send) a poll that arrives late followed by one that
+    arrives at once is under 300 s apart at the server, in every one of these runs."""
+    vps = [RAINIER, GRCA]  # a HEAD camera whose image cap binds, and a JSON feed
+    run = run_schedule(
+        data_root, vps, hours=48, schedule=schedule, jitter_s=jitter, latency=SPIKY, seed=5
+    )
+    assert len(run.summaries) >= (576 if jitter == 0.0 else 540)
+    assert_schedule_kept(run, vps, wait_s=wait)
+    assert_log_proves_the_rules(data_root, run, vps)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(("schedule", "jitter", "wait"), SCHEDULES)
+def test_three_days_of_each_schedule(data_root, schedule, jitter, wait):
+    """The multi-day variant of the test above (-m slow): all 8 cameras on the Lambda schedule
+    (about 40 s each); 4 on the loop's (about 30 s each: the loop on local storage lists each
+    camera's folders every pass, which is most of its run time)."""
+    vps = list(VPS.values()) if schedule == "lambda" else [RAINIER, PORE, GRCA, ACAD]
+    run = run_schedule(
+        data_root, vps, hours=72, schedule=schedule, jitter_s=jitter, latency=SPIKY, seed=9
+    )
+    assert len(run.summaries) >= (864 if jitter == 0.0 else 800)
+    assert_schedule_kept(run, vps, wait_s=wait)
+    assert_log_proves_the_rules(data_root, run, vps)
+
+
+def test_the_hourly_cap_counts_send_times_when_the_wait_before_each_send_differs(
+    data_root, clock, fake_nps
+):
+    """Critic finding (20 Nov 2026): GETs were stamped at the reservation, ~1 s (the request
+    gap) before the send. Here the 1st GET waits 1 s after its reservation and the 5th waits
+    none, exactly 3600 s of reservation time later: stamped at the reservation, the 5th went
+    out 3599 s after the 1st. The cap now counts each GET's answer (after its send), so the
+    5th is capped."""
+    storage = LocalStorage(data_root)
+    t0 = clock.now()
+    for k in range(5):
+        clock.current = t0 + timedelta(seconds=900 * k)
+        set_rainier(fake_nps, clock.now() - timedelta(seconds=20), etag=f'"cap{k}"', pattern=k)
+        gap = 1.0 if k == 0 else 0.0  # the wait after the HEAD, before the image GET
+        out = runner(storage, fake_nps, clock, request_gap_s=gap).run_pass([RAINIER])
+        assert out["outcomes"][RAINIER.id]["event"] == ("rate_capped" if k == 4 else "stored")
+    gets = image_gets(fake_nps, RAINIER.truth_camera.image_url)
+    assert len(gets) == 4 and (gets[0] - t0).total_seconds() == pytest.approx(1.0)
+    state = CameraState.from_dict(
+        json.loads((data_root / camera_state_key(RAINIER.id)).read_text())
+    )
+    first = state.gets[0]
+    assert first["t"].startswith("2026-11-19T08:00:31.000") and first["reserved_at"].startswith(
+        "2026-11-19T08:00:30.000"
+    )
+
+
+def test_status_shows_the_next_poll_as_the_scheduler_allows_it(data_root, clock, fake_nps):
+    """Critic finding: ``status`` left out POLL_MARGIN_S and truncated to whole seconds, so it
+    showed each camera's next poll up to ~2 s early. It now uses the scheduler's rule and
+    rounds up."""
+    storage = LocalStorage(data_root)
+    clock.current += timedelta(milliseconds=510)
+    set_rainier(fake_nps, clock.now(), etag='"st2"')
+    runner(storage, fake_nps, clock).run_pass([RAINIER])
+    state = CameraState.from_dict(
+        json.loads((data_root / camera_state_key(RAINIER.id)).read_text())
+    )
+    sent = datetime.fromisoformat(state.last_poll_at.replace("Z", "+00:00"))
+    due = sent + timedelta(seconds=MIN_POLL_INTERVAL_S + POLL_MARGIN_S)
+    row = status_report(storage, [RAINIER], now=clock.now())["cameras"][0]
+    shown = datetime.fromisoformat(row["next_poll_at"].replace("Z", "+00:00"))
+    assert due <= shown < due + timedelta(seconds=1)
+    clock.current = due - timedelta(milliseconds=1)
+    assert (
+        runner(storage, fake_nps, clock).run_pass([RAINIER])["outcomes"][RAINIER.id]["event"]
+        == "not_due"
+    )
+    clock.current = shown
+    assert (
+        runner(storage, fake_nps, clock).run_pass([RAINIER])["outcomes"][RAINIER.id]["event"]
+        == "unchanged"
+    )
+
+
+def test_waiting_for_a_slot_ends_at_the_slot_and_gives_up_if_the_wall_clock_stalls(
+    data_root, fake_nps
+):
+    """The in-pass wait sleeps again until the wall clock reaches the slot (no fixed
+    overshoot), and is bounded by monotonic time if the wall clock does not move."""
+    lagging = FakeClock(datetime(2026, 11, 19, 8, 0, tzinfo=UTC))
+    mono = [0.0]
+
+    def sleep(seconds: float) -> None:  # the wall clock advances only 90 % of each sleep
+        mono[0] += seconds
+        lagging.current += timedelta(seconds=0.9 * seconds) + timedelta(microseconds=1)
+
+    run = CaptureRunner(
+        LocalStorage(data_root),
+        polite_client(transport=fake_nps.transport()),
+        clock=lagging.now,
+        sleep=sleep,
+        monotonic=lambda: mono[0],
+    )
+    slot = lagging.now() + timedelta(seconds=10)
+    assert run._wait_until(slot, 30.0) and slot <= lagging.now() < slot + timedelta(milliseconds=5)
+    assert not run._wait_until(lagging.now() + timedelta(seconds=31), 30.0)  # too far: no wait
+    stalled = CaptureRunner(
+        LocalStorage(data_root),
+        polite_client(transport=fake_nps.transport()),
+        clock=lambda: datetime(2026, 11, 19, 8, 0, tzinfo=UTC),
+        sleep=lambda s: mono.__setitem__(0, mono[0] + s),
+        monotonic=lambda: mono[0],
+    )
+    before = mono[0]
+    assert not stalled._wait_until(datetime(2026, 11, 19, 8, 0, 5, tzinfo=UTC), 5.0)
+    assert mono[0] - before <= 5.0 + 1.0 + 5.0

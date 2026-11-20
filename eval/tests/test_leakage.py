@@ -375,8 +375,14 @@ def test_the_committed_split_holds_out_what_d019_d022_d024_say() -> None:
     by_key = {r.key: r for r in frames}
     # Counted by hand from _committed_world, independently of the code under test:
     # Rainier, the 2 sealed-window days; Point Reyes, the edge frame + 2 summer days + 1 day
-    # of Sep archive; Grand Teton, 1 Jun (MDT) only.
-    assert {vp: len(keys) for vp, keys in held.items()} == {VP: 192, PR: 1 + 192 + 96, GT: 96}
+    # of Sep archive; Grand Teton, 1 Jun (MDT). Since the lead's reading of 20 Nov (pending
+    # the owner's D-038), a UTC date of 1 Jun is held out too: Point Reyes's 28 frames of
+    # 31 May 17:00-23:45 PDT and Grand Teton's 24 of 31 May 18:00-23:45 MDT (00:00 UTC on).
+    assert {vp: len(keys) for vp, keys in held.items()} == {
+        VP: 192,
+        PR: 1 + 28 + 192 + 96,
+        GT: 24 + 96,
+    }
     edge = next(
         r for r in frames if r.nps_local_time_string and r.nps_local_time_string.startswith("6/1")
     )
@@ -384,9 +390,11 @@ def test_the_committed_split_holds_out_what_d019_d022_d024_say() -> None:
     assert all(by_key[k].image_time >= datetime(2026, 12, 15, 8, tzinfo=UTC) for k in held[VP])
     assert any(by_key[k].image_time.month == 9 for k in held[PR])  # past the guard, no period
     assert not any(by_key[k].source == "live" for k in held[PR])  # Nov 2026 is development
-    assert held[GT] and all(
-        by_key[k].image_time >= datetime(2026, 6, 1, 6, tzinfo=UTC) for k in held[GT]
-    )
+    may_pr = {k for k in held[PR] if by_key[k].image_time < datetime(2026, 6, 1, 7, tzinfo=UTC)}
+    assert len(may_pr - {edge.key}) == 28  # 1 Jun UTC, 31 May PDT
+    june_utc, june_mdt = datetime(2026, 6, 1, tzinfo=UTC), datetime(2026, 6, 1, 6, tzinfo=UTC)
+    assert held[GT] and all(by_key[k].image_time >= june_utc for k in held[GT])
+    assert sum(1 for k in held[GT] if by_key[k].image_time < june_mdt) == 24  # 31 May MDT
 
 
 def test_audit_every_baseline_under_the_committed_split() -> None:

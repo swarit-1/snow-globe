@@ -8,12 +8,20 @@ from datetime import UTC, datetime, timedelta
 from lookout_common.images import exif_summary
 from PIL import Image
 
+from lookout_capture.fetch import UNANSWERED_REQUEST_BOUND_S
 from lookout_capture.frames import (
     TINY_FILE_BYTES,
     choose_image_time,
     process_image,
 )
-from lookout_capture.state import CameraState, cap_decision
+from lookout_capture.state import (
+    STAMP_RESOLUTION_S,
+    UNCONFIRMED_SEND_SLACK_S,
+    CameraState,
+    cap_decision,
+    get_answer_bound,
+    iso_ms_up,
+)
 from lookout_capture.sun import solar_elevation_deg
 
 from .conftest import make_jpeg
@@ -153,11 +161,68 @@ def test_fallbacks_and_conflict_flags():
 # --- the cap ---------------------------------------------------------------------------------
 
 
-def _gets(*times: datetime) -> list[dict]:
-    return [{"t": t.isoformat(), "status": "ok"} for t in times]
+def _gets(*answers: datetime) -> list[dict]:
+    """GET records as live capture leaves them once answered: ``answered_at`` is the answer."""
+    return [
+        {
+            "t": (t - timedelta(seconds=0.25)).isoformat(),
+            "reserved_at": (t - timedelta(seconds=1.25)).isoformat(),
+            "answered_at": t.isoformat(),
+            "status": "ok",
+            "source": "self",
+        }
+        for t in answers
+    ]
 
 
-def test_cap_allows_four_per_rolling_hour_and_names_the_next_slot():
+def test_cap_counts_records_without_an_answer_from_their_upper_bound():
+    """The lead's decision (20 Nov 2026): the cap counts answer times. A record with none counts
+    from the latest moment nps.gov can have received it:
+    - reserved and never answered (a crash between the send and the save), or sent by 0.2.1
+      before answer times: the later of its reservation and its send + the bound;
+    - written by code before 0.2.1 (``t`` is the reservation): t + 2 s + the bound;
+    - folded in from a sidecar (the fetch time, read after the full response): t + 1 ms."""
+    t0 = utc(2026, 11, 19, 7, 30)
+    times = [t0 + timedelta(minutes=15 * i) for i in range(4)]
+    hour = t0 + timedelta(hours=1)
+    reserved = [
+        {"t": t.isoformat(), "reserved_at": t.isoformat(), "status": "reserved", "source": "self"}
+        for t in times
+    ]
+    sent_only = [
+        {
+            "t": t.isoformat(),
+            "reserved_at": (t - timedelta(seconds=1)).isoformat(),
+            "status": "ok",
+            "source": "self",
+        }
+        for t in times
+    ]
+    old_code = [{"t": t.isoformat(), "status": "ok", "source": "self"} for t in times]
+    folded = [{"t": t.isoformat(), "status": "ok", "source": "sidecar:x"} for t in times]
+    expected = {
+        "reserved": UNANSWERED_REQUEST_BOUND_S,
+        "sent_only": UNANSWERED_REQUEST_BOUND_S,
+        "old_code": UNCONFIRMED_SEND_SLACK_S + UNANSWERED_REQUEST_BOUND_S,
+        "folded": STAMP_RESOLUTION_S,
+    }
+    for name, gets in (
+        ("reserved", reserved),
+        ("sent_only", sent_only),
+        ("old_code", old_code),
+        ("folded", folded),
+    ):
+        at_hour = cap_decision(gets, hour, max_per_hour=4, min_spacing_s=0)
+        assert not at_hour.allowed and at_hour.reason == "hourly_cap", name
+        assert at_hour.next_allowed_at == hour + timedelta(seconds=expected[name]), name
+        assert get_answer_bound(gets[0]) == t0 + timedelta(seconds=expected[name]), name
+    assert UNANSWERED_REQUEST_BOUND_S == 60.0  # the 30 s send deadline + the 30 s write timeout
+    assert cap_decision(_gets(*times), hour, max_per_hour=4, min_spacing_s=0).allowed
+
+
+def test_cap_allows_four_per_rolling_hour_of_answers_and_names_the_next_slot():
+    """A GET may be sent only while fewer than 4 of the camera's GETs were answered in the last
+    3600 s, so the 5th is sent no earlier than the 1st's answer + 3600 s."""
     t0 = utc(2026, 11, 19, 7, 30)
     gets = _gets(
         t0, t0 + timedelta(minutes=15), t0 + timedelta(minutes=30), t0 + timedelta(minutes=45)
@@ -165,10 +230,26 @@ def test_cap_allows_four_per_rolling_hour_and_names_the_next_slot():
     blocked = cap_decision(gets, t0 + timedelta(minutes=59), max_per_hour=4, min_spacing_s=0)
     assert not blocked.allowed and blocked.reason == "hourly_cap"
     assert blocked.next_allowed_at == t0 + timedelta(hours=1) and blocked.gets_last_hour == 4
-    assert cap_decision(gets, t0 + timedelta(hours=1), max_per_hour=4, min_spacing_s=0).allowed
+    edge = t0 + timedelta(hours=1)
+    assert not cap_decision(
+        gets, edge - timedelta(microseconds=1), max_per_hour=4, min_spacing_s=0
+    ).allowed
+    assert cap_decision(gets, edge, max_per_hour=4, min_spacing_s=0).allowed
+    # A bound in the future (a GET reserved 10 s ago, never answered) counts in the window.
+    pending = [
+        *gets[1:],
+        {
+            "t": edge.isoformat(),
+            "reserved_at": edge.isoformat(),
+            "status": "reserved",
+            "source": "self",
+        },
+    ]
+    later = cap_decision(pending, edge + timedelta(seconds=10), max_per_hour=4, min_spacing_s=0)
+    assert not later.allowed and later.gets_last_hour == 4
 
 
-def test_pacing_spreads_gets_and_never_loosens_the_cap():
+def test_pacing_counts_from_the_last_answer_and_never_loosens_the_cap():
     t0 = utc(2026, 11, 19, 7, 30)
     spaced = cap_decision(_gets(t0), t0 + timedelta(minutes=5), max_per_hour=4, min_spacing_s=720)
     assert not spaced.allowed and spaced.reason == "spacing"
@@ -176,6 +257,69 @@ def test_pacing_spreads_gets_and_never_loosens_the_cap():
     assert cap_decision(
         _gets(t0), t0 + timedelta(minutes=12), max_per_hour=4, min_spacing_s=720
     ).allowed
+
+
+def test_answer_and_reservation_stamps_round_up_and_send_stamps_down():
+    """Stamps that bound a receipt from above (answers, reservations) never read earlier than
+    the clock; the send stamp (a lower bound) is truncated."""
+    moment = utc(2026, 11, 19, 7, 30) + timedelta(microseconds=123_401)
+    assert iso_ms_up(moment) == "2026-11-19T07:30:00.124Z"
+    assert iso_ms_up(moment.replace(microsecond=123_000)) == "2026-11-19T07:30:00.123Z"
+    state = CameraState(viewpoint_id="x")
+    record = state.add_get(moment, status="reserved", reserved=True)
+    assert record["t"] == "2026-11-19T07:30:00.123Z"
+    assert record["reserved_at"] == "2026-11-19T07:30:00.124Z"
+
+
+def test_an_unanswered_poll_reservation_counts_as_answered_at_its_bound():
+    """A process killed between a poll's send and the state save leaves its reservation; the
+    next run counts that poll as answered UNANSWERED_REQUEST_BOUND_S after it, logs it, and
+    leaves no reservation behind (state written by this code before the kill)."""
+    now = utc(2026, 11, 19, 8, 0, 3)
+    state = CameraState(
+        viewpoint_id="x",
+        last_poll_at="2026-11-19T07:55:00.010Z",
+        last_answer_at="2026-11-19T07:55:00.120Z",
+        poll_reserved_at="2026-11-19T08:00:00.500Z",
+    )
+    assert state.poll_basis() == utc(2026, 11, 19, 8, 1, 0, 500_000)  # the reservation's bound
+    changes = state.settle_unanswered(now)
+    assert changes == [
+        {
+            "what": "poll",
+            "kind": "unanswered_reservation",
+            "reserved_at": "2026-11-19T08:00:00.500Z",
+            "answer_bound_at": "2026-11-19T08:01:00.500Z",
+        }
+    ]
+    assert state.poll_reserved_at is None and state.last_answer_bound == "unanswered_reservation"
+    assert state.poll_due_at(300.002) == utc(2026, 11, 19, 8, 6, 0, 502_000)
+    assert state.settle_unanswered(now) == []  # settled once
+
+
+def test_state_from_code_without_answer_times_is_bounded_from_its_send_and_when_it_is_read():
+    """0.2.0 (or 0.2.1 before answer times) stamped only the send. Its poll ended before it saved
+    and before this run read the state, so the answer is bounded by the send + the bound and
+    by the moment this run reads it, whichever is later. Its GET records (``t`` is the
+    reservation) get t + 2 s + the bound, not the read time (that would hold images back)."""
+    sent = utc(2026, 11, 19, 7, 55, 0, 10_000)
+    soon = CameraState(viewpoint_id="x", last_poll_at="2026-11-19T07:55:00.010Z")
+    assert soon.poll_basis() == sent + timedelta(seconds=UNANSWERED_REQUEST_BOUND_S)
+    soon.settle_unanswered(sent + timedelta(seconds=20))  # restarted 20 s after the send
+    assert soon.last_answer_at == "2026-11-19T07:56:00.010Z"
+    assert soon.last_answer_bound == "legacy_state"
+    late = CameraState(
+        viewpoint_id="x",
+        last_poll_at="2026-11-19T07:55:00.010Z",
+        gets=[{"t": "2026-11-19T07:55:01.000Z", "status": "ok", "source": "self"}],
+    )
+    read_at = utc(2026, 11, 19, 7, 58, 0, 1)  # restarted 3 min later: the read bounds it
+    assert late.poll_basis(now=read_at) == read_at
+    changes = late.settle_unanswered(read_at)
+    assert late.last_answer_at == "2026-11-19T07:58:00.001Z"
+    assert late.gets[0]["answered_at"] == "2026-11-19T07:56:03.000Z"
+    assert late.gets[0]["answer_bound"] == "legacy_record"
+    assert [c["what"] for c in changes] == ["poll", "image_get"]
 
 
 def test_state_roundtrip_ignores_unknown_keys_and_prunes():

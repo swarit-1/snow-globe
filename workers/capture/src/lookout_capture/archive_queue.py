@@ -366,15 +366,20 @@ def queue_summary(queue: ArchiveQueue) -> dict[str, Any]:
 # --- working the queue ------------------------------------------------------------------
 
 
-def _queue_client(storage: Storage) -> ArchiveClient:
-    """The production archive client of the queue: polite UA, short timeouts, a body deadline."""
+def _queue_client(storage: Storage, runner: str = "cli-loop") -> ArchiveClient:
+    """The production archive client of the queue: polite UA, short timeouts, a body deadline,
+    and no redirect followed (a 3xx is an error: :meth:`.archive.ArchiveClient._send`)."""
     from lookout_common.http import polite_client
 
     return ArchiveClient(
-        client=polite_client(timeout=httpx.Timeout(READ_TIMEOUT_S, connect=CONNECT_TIMEOUT_S)),
+        client=polite_client(
+            timeout=httpx.Timeout(READ_TIMEOUT_S, connect=CONNECT_TIMEOUT_S),
+            follow_redirects=False,
+        ),
         limiter=archive_limiter(),
         storage=storage,
         request_deadline_s=REQUEST_DEADLINE_S,
+        runner=runner,
     )
 
 
@@ -393,6 +398,7 @@ class QueueRunner:
         clock: Callable[[], datetime] = utcnow,
         step_max_s: float = STEP_MAX_S,
         margin_s: float = STEP_MARGIN_S,
+        runner: str = "cli-loop",
     ) -> None:
         self.storage = storage
         self.viewpoints = viewpoints
@@ -408,12 +414,14 @@ class QueueRunner:
         #: Bytes the last step downloaded (bad bodies included), for the total cap.
         self.last_step_bytes = 0
         self._cap_logged = False
+        #: Written into the queue's records and its archive client's, as live capture's is.
+        self.runner = runner
 
     @property
     def archive(self) -> ArchiveClient:
         """The archive client, made on first use (a queue with no work never makes one)."""
         if self._archive is None:
-            self._archive = _queue_client(self.storage)
+            self._archive = _queue_client(self.storage, self.runner)
         return self._archive
 
     def close(self) -> None:
@@ -571,6 +579,7 @@ class QueueRunner:
                     "status": entry.get("status"),
                     "outcomes": _counts(entry.get("progress") or {}),
                     "reason": entry.get("reason"),
+                    "runner": self.runner,
                     "capture_version": CAPTURE_VERSION,
                 },
             )

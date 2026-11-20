@@ -1,6 +1,6 @@
 [project]
 name = "lookout-capture"
-version = "0.2.0"
+version = "0.2.1"
 description = "NPS webcam capture for Lookout: polite live capture, archive backfill and the archive check (PRD §8.6, §11.2, §13.2, §15.3)."
 readme = "README.md"
 license = "MIT"
@@ -32,9 +32,10 @@ build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not network' --strict-markers"
+addopts = "-m 'not network and not slow' --strict-markers"
 markers = [
     "network: touches the network; excluded by default (run with -m network)",
+    "slow: multi-day fake-clock schedule runs, no network; excluded by default (run with -m slow)",
 ]
 
 [tool.ruff]

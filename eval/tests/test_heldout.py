@@ -22,6 +22,7 @@ import pytest
 from conftest import FIXTURES
 from lookout_common.manifest import load_manifest
 from lookout_common.storage import LocalStorage
+from lookout_common.timeutil import parse_nps_archive_time
 
 from lookout_eval.frames import (
     FrameRecord,
@@ -40,7 +41,9 @@ from lookout_eval.heldout import (
     committed_split,
     key_quarantine_reason,
     load_split,
+    nps_dates,
     nps_local_dates,
+    nps_utc_dates,
     path_quarantine_reason,
     split_from_dict,
 )
@@ -207,19 +210,18 @@ def test_local_dates_read_all_three_sources() -> None:
         "05/31/2026 11:30:00 PM", "6/1/2026 12:30 AM Pacific Daylight Time", LA
     ) == [date(2026, 5, 31), date(2026, 6, 1)]
     assert nps_local_dates("garbage", "", LA) == []
-    # Arizona keeps MST: 23:30 on 31 May is 06:30 UTC on 1 Jun, still 31 May locally.
+    # Arizona keeps MST: 23:30 on 31 May is 06:30 UTC on 1 Jun, still 31 May locally. The UTC
+    # reading (the lead, 20 Nov 2026, pending D-038) now holds it out.
     phoenix = nps_local_dates(
         "05/31/2026 11:30:00 PM", "5/31/2026 11:30 PM US Mountain Standard Time", "America/Phoenix"
     )
     assert phoenix == [date(2026, 5, 31)]
-    assert (
-        archive_guard_reason(
-            "05/31/2026 11:30:00 PM",
-            "5/31/2026 11:30 PM US Mountain Standard Time",
-            "America/Phoenix",
-        )
-        is None
+    held = archive_guard_reason(
+        "05/31/2026 11:30:00 PM",
+        "5/31/2026 11:30 PM US Mountain Standard Time",
+        "America/Phoenix",
     )
+    assert held is not None and "UTC date 2026-06-01" in held
     eastern = archive_guard_reason(
         "05/31/2026 11:30:00 PM", "6/1/2026 12:30 AM Eastern Daylight Time", "America/New_York"
     )
@@ -239,7 +241,10 @@ def test_each_nps_string_can_decide_alone() -> None:
     # With the frame's own UTC time as a fourth date (eval's records carry one).
     late_utc = datetime(2026, 6, 1, 7, 30, tzinfo=UTC)
     assert archive_guard_reason("", "", LA, utc_time=late_utc) is not None
-    assert archive_guard_reason("", "", LA, utc_time=late_utc - timedelta(hours=1)) is None
+    # Its UTC date counts as well as its local one: 00:00 UTC on 1 Jun (17:00 PDT) is held out.
+    midnight = datetime(2026, 6, 1, tzinfo=UTC)
+    assert "UTC date" in (archive_guard_reason("", "", LA, utc_time=midnight) or "")
+    assert archive_guard_reason("", "", LA, utc_time=midnight - timedelta(seconds=1)) is None
 
 
 def test_the_summer_edge_fails_closed_without_local_time_string() -> None:
@@ -251,17 +256,76 @@ def test_the_summer_edge_fails_closed_without_local_time_string() -> None:
         assert "2026-06-01" in (archive_guard_reason(edge, local, LA) or ""), local
     as_civil = datetime(2026, 6, 1, 6, 30, tzinfo=UTC)  # the UTC time if read as 23:30 PDT
     assert "2026-06-01" in (archive_guard_reason(edge, "", LA, utc_time=as_civil) or "")
-    # The hour boundary: 10:59:59 PM PST is 23:59:59 PDT on 31 May; 11:00 PM PST is midnight.
-    assert archive_guard_reason("05/31/2026 10:59:59 PM", "", LA) is None
-    assert archive_guard_reason("05/31/2026 11:00:00 PM", "", LA) is not None
+    # The local readings turn at local midnight: 10:59:59 PM PST is 23:59:59 PDT on 31 May;
+    # 11:00 PM PST is midnight. The guard turns earlier, at UTC midnight (the UTC reading):
+    # 03:59:59 PM PST (23:59:59 UTC) is allowed, 04:00:00 PM PST is refused.
+    assert nps_local_dates("05/31/2026 10:59:59 PM", "", LA) == [date(2026, 5, 31)]
+    assert date(2026, 6, 1) in nps_local_dates("05/31/2026 11:00:00 PM", "", LA)
+    assert archive_guard_reason("05/31/2026 03:59:59 PM", "", LA) is None
+    assert "UTC date" in (archive_guard_reason("05/31/2026 04:00:00 PM", "", LA) or "")
     assert archive_guard_reason("05/31/2026 12:00:00 PM", "", LA) is None  # noon, not midnight
-    # No daylight time (Arizona), or winter: the stamp's own date.
+    # No daylight time (Arizona), or winter: the stamp's own date locally.
     assert nps_local_dates(edge, "", "America/Phoenix") == [date(2026, 5, 31)]
-    assert archive_guard_reason(edge, "", "America/Phoenix") is None
     assert nps_local_dates("11/30/2025 11:30:00 PM", "", LA) == [date(2025, 11, 30)]
     # Eastern and Central: the same edge in their own zones.
     for zone in ("America/New_York", "America/Chicago", "America/Denver"):
         assert archive_guard_reason(edge, "", zone) is not None, zone
+
+
+#: The last ImageCreateDateTime of 31 May 2026 (local standard time, NPS's convention) still
+#: before UTC midnight, per zone; the same table as lookout-capture's test_archive.py.
+UTC_EDGE = {
+    "America/Los_Angeles": ("03:59:59 PM", "04:00:00 PM", "Pacific"),
+    "America/Phoenix": ("04:59:59 PM", "05:00:00 PM", "US Mountain"),
+    "America/Denver": ("04:59:59 PM", "05:00:00 PM", "Mountain"),
+    "America/Chicago": ("05:59:59 PM", "06:00:00 PM", "Central"),
+    "America/New_York": ("06:59:59 PM", "07:00:00 PM", "Eastern"),
+}
+
+
+@pytest.mark.parametrize("zone", sorted(UTC_EDGE))
+def test_the_guard_also_reads_utc_so_31_may_local_evening_is_held_out(zone: str) -> None:
+    """The lead's reading of 20 Nov 2026 (pending the owner's D-038): an asset is held out if
+    any reading of its date, local or UTC, is on or after 1 Jun 2026. A 31 May local-evening
+    frame is already 1 Jun in UTC, so the guard turns at UTC midnight: one second earlier is
+    allowed, UTC midnight is refused, with or without a LocalTimeString. Same cases as
+    lookout-capture's test of ``held_out_reason``."""
+    last_ok, first_out, region = UTC_EDGE[zone]
+    daylight = zone != "America/Phoenix"
+    kind = "Daylight" if daylight else "Standard"
+
+    def label(stamp: str) -> str:  # NPS's civil-time label: an hour ahead in daylight time
+        wall = datetime.strptime(f"05/31/2026 {stamp}", "%m/%d/%Y %I:%M:%S %p")
+        civil = wall + timedelta(hours=1 if daylight else 0)
+        clock = f"{civil.hour % 12 or 12}:{civil:%M} {'PM' if civil.hour >= 12 else 'AM'}"
+        return f"{civil.month}/{civil.day}/{civil.year} {clock} {region} {kind} Time"
+
+    for with_label in (True, False):
+        ok = (f"05/31/2026 {last_ok}", label(last_ok) if with_label else "")
+        out = (f"05/31/2026 {first_out}", label(first_out) if with_label else "")
+        assert nps_local_dates(*out, zone) == [date(2026, 5, 31)]  # local readings: 31 May
+        assert archive_guard_reason(*ok, zone) is None, (zone, ok)
+        reason = archive_guard_reason(*out, zone)
+        assert reason is not None and "UTC date 2026-06-01" in reason, (zone, out, reason)
+        assert nps_utc_dates(*out, zone)[-1] == date(2026, 6, 1)
+
+
+def test_every_utc_reading_counts_and_a_date_without_a_clock_fails_closed() -> None:
+    """``nps_utc_dates``: the instant under both conventions, each local clock converted in the
+    camera's zone (both sides of a DST fold), and for a reading with a date but no readable
+    clock every UTC date its local day touches. Same cases as lookout-capture's."""
+    assert nps_utc_dates("", "5/31/2026 11:30 PM Pacific Daylight Time", LA) == [date(2026, 6, 1)]
+    assert nps_utc_dates("", "5/31/2026", LA) == [date(2026, 5, 31), date(2026, 6, 1)]
+    assert archive_guard_reason("", "5/31/2026", LA) is not None
+    assert date(2026, 6, 1) in nps_utc_dates("05/31/2026 25:61", "", LA)
+    assert nps_utc_dates("11/01/2026 01:30:00 AM", "", LA) == [date(2026, 11, 1)]
+    instant = datetime(2026, 6, 1, 0, 30, tzinfo=UTC)  # 17:30 PDT on 31 May
+    assert archive_guard_reason("01/15/2026 12:00:00 PM", "", LA, utc_time=instant) is not None
+    assert nps_dates("", "", LA, utc_time=instant) == [date(2026, 5, 31), date(2026, 6, 1)]
+    with pytest.raises(ValueError, match="aware"):
+        nps_dates("", "", LA, utc_time=datetime(2026, 6, 1))
+    assert archive_guard_reason("01/15/2026 11:30:00 PM", "", LA) is None
+    assert archive_guard_reason("05/30/2026 11:45:00 PM", "", LA) is None
 
 
 def _load_capture_rule(monkeypatch: pytest.MonkeyPatch):
@@ -331,34 +395,42 @@ def _nps_case(rng: random.Random) -> tuple[str, str, str]:
     return create, label, zone_name
 
 
-def test_the_guard_is_never_looser_than_lookout_captures(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_guard_is_in_parity_with_lookout_captures(monkeypatch: pytest.MonkeyPatch) -> None:
     """Fuzz against capture's own rule (its source file, loaded in this test only).
 
-    Eval finds every date capture finds, so whatever capture refuses eval refuses. Eval's
-    only extra date is ImageCreateDateTime read as local standard time, and every frame
-    stamped 31 May whose standard-time reading is 1 Jun (the summer edge) is refused,
-    whatever its label says. All of this still holds if capture adopts the same reading.
+    The two read exactly the same dates, local and UTC, and refuse exactly the same assets,
+    with and without the instant behind an archive key (eval's ``utc_time``, capture's
+    ``instant``). Since D-047 capture also reads the standard-time date; since the lead's UTC
+    reading (20 Nov 2026) both read the UTC dates. Every case stamped 31 May whose civil time
+    or UTC date is 1 Jun (the summer edge) is refused, whatever its label says.
     """
     capture = _load_capture_rule(monkeypatch)
     guard = committed_split().archive_guard.from_day
-    rng = random.Random(20261119)
-    edge = 0
-    for _ in range(4000):
+    rng = random.Random(20261120)
+    edge = utc_only = 0
+    for _ in range(6000):
         create, label, zone = _nps_case(rng)
         case = (create, label, zone)
-        ours = set(nps_local_dates(create, label, zone))
-        theirs = set(capture.asset_local_dates(create, label, zone))
-        assert theirs <= ours, case
+        local = nps_local_dates(create, label, zone)
+        utc = nps_utc_dates(create, label, zone)
+        assert local == capture.asset_local_dates(create, label, zone), case
+        assert utc == capture.asset_utc_dates(create, label, zone), case
+        instant = None
+        if rng.random() < 0.3:
+            instant = datetime(2026, 6, 1, tzinfo=UTC) + timedelta(minutes=rng.randrange(-900, 900))
+        ours = nps_dates(create, label, zone, utc_time=instant)
+        assert ours == capture.asset_dates(create, label, zone, instant=instant), case
+        refused = archive_guard_reason(create, label, zone, utc_time=instant) is not None
+        theirs = capture.held_out_reason(create, label, zone, instant=instant) is not None
+        assert refused == theirs, (case, instant)
         standard = _standard_time_date(create, zone)
-        assert ours - theirs <= {standard}, case
-        refused = archive_guard_reason(create, label, zone) is not None
-        if capture.held_out_reason(create, label, zone) is not None:
-            assert refused, case
         if standard is not None and standard >= guard:
             assert refused, case
             stamped = datetime.strptime(create.split(" ", 1)[0], "%m/%d/%Y").date()
             edge += stamped < guard  # stamped 31 May, civil time 1 Jun
-    assert edge > 20  # the fuzz reaches the edge
+        if refused and local and max(local) < guard and instant is None:
+            utc_only += 1  # refused only by a UTC reading: 31 May local evening
+    assert edge > 20 and utc_only > 50  # the fuzz reaches both edges
 
 
 def test_any_archive_sign_brings_the_archive_guard() -> None:
@@ -396,15 +468,17 @@ def test_the_guard_date_agrees_with_lookout_capture() -> None:
 
 def test_the_guard_on_real_nps_strings() -> None:
     """The recorded Point Reyes search of 17 Nov 2026 (metadata): every asset is past the guard,
-    dated 17 Nov by all three sources."""
+    dated 17 Nov locally by all three sources; from 16:00 PST on it is 18 Nov in UTC."""
     results = json.loads((FIXTURES / "nps_search_pore_20261117_subset.json").read_text())
     assets = [r["Asset"] for r in results["Results"]]
     assert len(assets) == 26
     for asset in assets:
-        dates = nps_local_dates(asset["ImageCreateDateTime"], asset["LocalTimeString"], LA)
-        assert dates == [date(2026, 11, 17)], asset
-        reason = archive_guard_reason(asset["ImageCreateDateTime"], asset["LocalTimeString"], LA)
-        assert reason is not None and "2026-11-17" in reason
+        create, label = asset["ImageCreateDateTime"], asset["LocalTimeString"]
+        assert nps_local_dates(create, label, LA) == [date(2026, 11, 17)], asset
+        instant = parse_nps_archive_time(create, label, LA)
+        assert nps_utc_dates(create, label, LA) == [instant.date()], asset
+        reason = archive_guard_reason(create, label, LA)
+        assert reason is not None and max(date(2026, 11, 17), instant.date()).isoformat() in reason
 
 
 def test_the_guard_on_records() -> None:
@@ -417,8 +491,10 @@ def test_the_guard_on_records() -> None:
         "6/1/2026 12:30 AM Pacific Daylight Time",
     )
     assert "2026-06-01" in (split.archive_reason(edge) or "")
-    # The same instant without NPS strings is 31 May locally: allowed.
-    assert split.archive_reason(_archive(PORE, edge.image_time, None, None)) is None
+    # The same instant without NPS strings is 31 May locally but 1 Jun in UTC: held out now.
+    assert "UTC date" in (split.archive_reason(_archive(PORE, edge.image_time, None, None)) or "")
+    evening = datetime(2026, 5, 31, 23, 59, 59, tzinfo=UTC)  # 16:59:59 PDT
+    assert split.archive_reason(_archive(PORE, evening, None, None)) is None
     # NPS strings that do not parse fail closed, even with a usable UTC time.
     broken = _archive(PORE, datetime(2026, 1, 15, 20, tzinfo=UTC), "garbage", "")
     assert "no readable date" in (split.archive_reason(broken) or "")

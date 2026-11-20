@@ -4,14 +4,33 @@ Rules (PRD §15.3, CLAUDE.md "Polite collection"), all enforced with state persi
 storage under a per-camera lock, so they survive restarts and concurrent invocations:
 
 - **Poll** the camera's JSON feed (ARD air cams) or ``HEAD`` its image (Rainier park
-  camera) at most once per ``poll_interval_s`` (never under 300 s).
+  camera) at most once per ``poll_interval_s`` (never under 300 s), measured from the last
+  poll's *answer* to the next poll's *send*: the next poll may be sent only once the clock has
+  reached the last answer time + 300 s + :data:`POLL_MARGIN_S` (:func:`poll_spacing_s`).
+  nps.gov receives a request no later than it answers it and the next one no earlier than we
+  send it, so the 5 minutes hold at nps.gov whatever the network does. A slot a pass waits for
+  is waited for right before the poll and only until the clock reaches it. Each poll is
+  reserved and saved before its send, so a crash between the send and the save still counts
+  it (:meth:`.state.CameraState.settle_unanswered`). A request that failed after it may have
+  left, before any response head came back, counts as answered 300 s after the failure
+  (:data:`.fetch.FAILED_AFTER_SEND_BOUND_S`): nps.gov can still receive it after we gave up.
+- **One request per logged request.** The live client never follows a redirect (a 3xx is
+  logged with its ``Location`` and backed off like any other error), so every request
+  nps.gov receives is one ``request`` record, one poll or one GET against the caps.
 - **Fetch on change only.** ARD: GET the image only if the JSON ``imagedate`` changed
   (a 304 on the conditional JSON GET also means unchanged). Park camera: GET only if
   ``Last-Modified``/``ETag`` changed. The image GET is itself conditional on the last ETag.
 - **At most 4 image GETs per camera in any rolling hour** (the manifest's
-  ``max_images_per_hour``). Each GET is written to state *before* it is sent. A pacing
-  rule keeps GETs at least 0.8 x 3600/N s apart, so a camera that changes at every poll
-  (Rainier updates about once a minute) yields frames spread through the hour.
+  ``max_images_per_hour``), counted on answer times: a GET may be sent only while fewer than
+  4 of the camera's GETs were answered in the last 3600 s. Each GET is written to state
+  *before* it is sent (``reserved_at``), then given its send (``t``) and answer
+  (``answered_at``). A pacing rule keeps each GET at least 0.8 x 3600/N s after the last one's
+  answer, so a camera that changes at every poll (Rainier updates about once a minute)
+  yields frames spread through the hour.
+- **Wall-clock steps.** The rules compare wall-clock stamps, which survive restarts. Within
+  a process every answer is also read on a monotonic clock that keeps counting while the
+  machine sleeps (:data:`.fetch.steady_clock`), and a rule uses the later of the two
+  readings, so a forward step of the wall clock cannot bring a poll or a GET early.
 - **Back off** on errors, exponentially (5 min doubling to 1 h), per camera, with separate
   counters for the feed, the image GET and the store; HTTP 429/503 also holds every request
   to www.nps.gov, live and archive alike, honouring ``Retry-After`` (:mod:`.host_backoff`).
@@ -46,6 +65,7 @@ appended at once.
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 import signal
@@ -70,7 +90,19 @@ from lookout_common.storage import KeyNotFoundError, LocalStorage, LockTimeoutEr
 from lookout_common.timeutil import isoformat_z, parse_nps_imagedate, utcnow
 
 from . import CAPTURE_VERSION
-from .fetch import Fetched, ResponseTooLarge, fetch
+from .fetch import (
+    FAILED_AFTER_SEND_BOUND_S,
+    LIVE_IMAGE_DEADLINE_S,
+    LIVE_POLL_DEADLINE_S,
+    LIVE_SEND_DEADLINE_S,
+    UNANSWERED_REQUEST_BOUND_S,
+    Fetched,
+    Progress,
+    ResponseTooLarge,
+    fetch,
+    may_arrive_after_failure,
+    steady_clock,
+)
 from .frames import (
     THUMB_WIDTH,
     choose_image_time,
@@ -95,30 +127,45 @@ from .retention import (
     thumb_sidecar,
 )
 from .state import (
+    BOUND_FAILED_AFTER_SEND,
+    BOUND_LEGACY_STATE,
     GET_HISTORY_S,
     RECENT_SHA_LIMIT,
+    Adjust,
     CameraState,
+    answer_times,
     camera_state_key,
     cap_decision,
     get_times,
+    iso_ms_up,
     parse_time,
 )
 
 __all__ = [
     "MIN_POLL_INTERVAL_S",
+    "POLL_MARGIN_S",
     "CaptureOptions",
     "CaptureRunner",
     "parse_feed",
+    "poll_spacing_s",
     "status_report",
 ]
 
 #: CLAUDE.md: poll the camera JSON or headers at most every 5 minutes.
 MIN_POLL_INTERVAL_S = 300.0
-#: Added to the poll spacing when deciding a camera is due, so a send-to-send gap measured
-#: from the request log never falls under MIN_POLL_INTERVAL_S. The critic found 8 of 504
-#: gaps at 299.06-299.7 s on 19-20 Nov 2026: the poll was stamped before its request's
-#: spacing wait. The stamp now moves to the send (``_request(poll_state=...)``) as well.
-POLL_MARGIN_S = 1.0
+#: Added to the poll spacing (:func:`poll_spacing_s`): the next poll may be sent once the clock
+#: reaches the last poll's answer time + 300 s + this. Stamps are written to the millisecond
+#: (answers rounded up, sends truncated), so 2 ms keeps every gap a reader takes from the
+#: request log, ``sent_at`` of one poll minus ``answered_at`` of the one before, at or above
+#: 300.002 s. It is kept this small because, on a schedule that fires exactly every 300 s
+#: (the capture Lambda's rate(5 minutes), ``loop --jitter 0``), each poll lands later in its
+#: pass than the one before by this plus the poll's own elapsed time, until it falls outside
+#: the pass's wait and that pass skips the camera (one ~600 s gap).
+POLL_MARGIN_S = 0.002
+#: A camera waited for is checked for a host hold again, and its poll reserved (one state
+#: write), this long before its slot, so neither storage call (tens of ms on S3) pushes the
+#: poll past the slot and adds to the drift.
+HOLD_RECHECK_LEAD_S = 0.5
 #: An image older than this at fetch time means the feed has stalled.
 STALE_IMAGE_AFTER = timedelta(hours=2)
 #: Live sidecars. 2 (19 Nov 2026, additive over 1): ``frame_policy`` and ``thumb``; in a
@@ -131,6 +178,10 @@ THUMB_REPAIRS_PER_PASS = 2
 THUMB_REPAIR_ATTEMPTS = 3
 #: Batched log records whose write failed, kept for the next pass at most (oldest dropped).
 LOG_CARRY_LIMIT = 2000
+#: Set by the AWS Lambda runtime: the log stream of the execution environment this invocation
+#: runs in. Logged with each request, so poll pairs whose answer and next send were stamped by
+#: different environments (and so maybe different hosts' clocks) can be told apart.
+ENV_LAMBDA_LOG_STREAM = "AWS_LAMBDA_LOG_STREAM_NAME"
 _IMAGEDATE_RE = re.compile(r'"imagedate"\s*:\s*"([^"]*)"')
 _IMAGEFILE_RE = re.compile(r'"imagefilelarge"\s*:\s*"([^"]*)"')
 
@@ -155,6 +206,18 @@ class CaptureOptions:
     staging_scan_every_s: float = STAGING_SCAN_EVERY_S
     #: "auto" batches a pass's log records into one write when storage is not local (S3).
     batch_logs: str = "auto"  # "auto" | "always" | "never"
+
+
+def poll_spacing_s(viewpoint: Viewpoint) -> float:
+    """Seconds from one poll's answer to the earliest send of a camera's next poll (PRD §15.3).
+
+    The manifest's ``poll_interval_s``, never under MIN_POLL_INTERVAL_S (CLAUDE.md: at most
+    every 5 minutes), plus POLL_MARGIN_S, counted from the answer time (or its bound,
+    :meth:`.state.CameraState.poll_basis`). The due check, the pass order and ``status`` all
+    use this one rule, so ``status`` never shows a poll as due before the scheduler allows it.
+    """
+    caps = viewpoint.truth_camera.polite_caps
+    return max(MIN_POLL_INTERVAL_S, float(caps.poll_interval_s)) + POLL_MARGIN_S
 
 
 def parse_feed(text: str) -> dict[str, Any]:
@@ -187,6 +250,13 @@ def _is_local(storage: Storage) -> bool:
     return isinstance(storage, LocalStorage)
 
 
+def _iso_ceil_s(when: datetime) -> str:
+    """``when`` as ISO 8601 UTC, rounded *up* to the second (a due time is never shown early)."""
+    if when.microsecond:
+        when = when.replace(microsecond=0) + timedelta(seconds=1)
+    return isoformat_z(when, "seconds")
+
+
 def _json_bytes(doc: Mapping[str, Any]) -> bytes:
     return (json.dumps(doc, indent=2, ensure_ascii=False) + "\n").encode()
 
@@ -213,7 +283,7 @@ class CaptureRunner:
         *,
         clock: Callable[[], datetime] = utcnow,
         sleep: Callable[[float], None] = time.sleep,
-        monotonic: Callable[[], float] = time.monotonic,
+        monotonic: Callable[[], float] = steady_clock,
         options: CaptureOptions | None = None,
         rng: random.Random | None = None,
     ) -> None:
@@ -236,15 +306,23 @@ class CaptureRunner:
         self.last_log_error: str | None = None
         #: Unwritten records dropped from the carry (they were printed to stderr).
         self.log_records_dropped = 0
+        #: The monotonic reading behind each answer this process recorded, by (camera, answer
+        #: stamp): the in-process guard against wall-clock steps (:meth:`_adjuster`).
+        self._steady: dict[tuple[str, str], float] = {}
+        #: The Lambda execution environment's log stream (None outside Lambda).
+        self.lambda_log_stream = (os.environ.get(ENV_LAMBDA_LOG_STREAM) or "").strip() or None
 
     @classmethod
     def default(
         cls, storage: Storage, *, runner: str = "cli", transport: httpx.BaseTransport | None = None
     ) -> CaptureRunner:
-        """A runner on :func:`lookout_common.http.polite_client` (project UA, no cookies)."""
-        return cls(
-            storage, polite_client(transport=transport), options=CaptureOptions(runner=runner)
-        )
+        """A runner on :func:`lookout_common.http.polite_client` (project UA, no cookies).
+
+        Redirects are not followed: httpx would send each hop as a further request that
+        neither the log nor the caps see. A 3xx is an error, logged with its ``Location``.
+        """
+        client = polite_client(transport=transport, follow_redirects=False)
+        return cls(storage, client, options=CaptureOptions(runner=runner))
 
     def __enter__(self) -> CaptureRunner:
         return self
@@ -259,17 +337,22 @@ class CaptureRunner:
 
     # -- logging --------------------------------------------------------------------
     def _log(self, viewpoint_id: str | None, event: str, **fields: Any) -> dict[str, Any]:
-        """Write one ``capture_log`` record now, or queue it for the pass's single write."""
+        """Write one ``capture_log`` record now, or queue it for the pass's single write.
+
+        ``t`` is always the moment the record is made, and no field passed in can replace it
+        or the other keys every record carries (worker, viewpoint, event, runner, version):
+        they are set again after the fields, so a reader can rely on ``t`` being write time.
+        """
         now = self.clock()
-        record = {
+        own = {
             "t": isoformat_z(now, "milliseconds"),
             "worker": "capture",
             "viewpoint_id": viewpoint_id,
             "event": event,
-            **fields,
-            "runner": self.options.runner,
-            "capture_version": CAPTURE_VERSION,
         }
+        tail = {"runner": self.options.runner, "capture_version": CAPTURE_VERSION}
+        record = {**own, **fields, **tail}
+        record.update(own)  # keeps the key order, and the record's own values win
         key = capture_log_key(now)
         if self._log_buffer is not None:
             self._log_buffer.append((key, record))
@@ -330,6 +413,38 @@ class CaptureRunner:
                 self.sleep(wait)
         self._last_request = self.monotonic()
 
+    def _wait_until(
+        self, when: datetime | Callable[[], datetime | None], max_wait_s: float
+    ) -> bool:
+        """Sleep until the clock reaches ``when`` if that is at most ``max_wait_s`` away.
+
+        ``when`` may be a function, read again after every sleep: a camera's slot read through
+        the monotonic guard (:meth:`_adjuster`) moves later if the wall clock steps forward
+        meanwhile, and the wait follows it (None: no slot, go now). It sleeps again until
+        ``clock() >= when`` instead of adding a fixed overshoot, which would accumulate on an
+        exact 300 s schedule (PRD §11.2 "Capture"). It gives up after ``max_wait_s`` + 1 s of
+        monotonic time in case the wall clock stalls, or when the slot moves further off than
+        ``max_wait_s``. Returns True once ``when`` is reached.
+        """
+
+        def target() -> datetime | None:
+            return when() if callable(when) else when
+
+        slot = target()
+        wait = 0.0 if slot is None else (slot - self.clock()).total_seconds()
+        if wait <= 0:
+            return True
+        if wait > max_wait_s:
+            return False
+        give_up = self.monotonic() + max_wait_s + 1.0
+        while wait > 0:
+            if self.monotonic() >= give_up or wait > max_wait_s:
+                return False
+            self.sleep(wait)
+            slot = target()
+            wait = 0.0 if slot is None else (slot - self.clock()).total_seconds()
+        return True
+
     def _request(
         self,
         method: str,
@@ -340,42 +455,187 @@ class CaptureRunner:
         viewpoint_id: str,
         stage: str,
         poll_state: CameraState | None = None,
+        get_record: dict[str, Any] | None = None,
+        reserved_mono: float | None = None,
+        total_s: float | None = None,
     ) -> Fetched:
         """Send one live request, spaced from the last, and log it as a ``request`` event.
 
         Every nps.gov request of a pass is in ``capture_log`` (method, stage, status, bytes,
-        time), so the request count of a measured run can be checked line by line.
-        ``poll_state`` (the poll's first request: the JSON GET or the HEAD) gets its
-        ``last_poll_at`` stamped after the spacing wait, at the send, so the 5-minute poll
-        spacing (CLAUDE.md, PRD §15.3) is measured from when the request really went out.
+        time), so the request count of a measured run can be checked line by line (the client
+        follows no redirect: :meth:`default`). Each record carries ``sent_at``, the send (one
+        clock reading right before the request, truncated to the millisecond), and
+        ``answered_at``, the answer time: one clock reading right after the response was read
+        in full or the request failed, rounded up to the millisecond. ``t`` is when the record
+        was written.
+
+        - ``poll_state`` (the poll's first request: the JSON GET or the HEAD) gets
+          ``last_poll_at`` = ``sent_at`` and ``last_answer_at`` = ``answered_at``, and its
+          reservation cleared. The next poll is due 300 s + POLL_MARGIN_S after that answer
+          (CLAUDE.md, PRD §15.3).
+        - ``get_record`` (an image GET's record, reserved and saved before this call for crash
+          safety) gets ``t`` = ``sent_at`` and ``answered_at``; the rolling-hour cap and the
+          pacing count its answer.
+        - ``reserved_mono`` (the monotonic reading at the reservation) sets the send deadline
+          (:data:`~lookout_capture.fetch.LIVE_SEND_DEADLINE_S`) on the monotonic clock and,
+          from the reservation's stamp, on the wall clock: a request not on its way by then on
+          either clock is abandoned unsent, which is what bounds an answer a crash kept from
+          the state. ``total_s`` is the request's total deadline (:func:`.fetch.fetch`).
+        - **A failure that may reach nps.gov later** (it may have left this machine and no
+          response head came back: :func:`.fetch.may_arrive_after_failure`) counts as
+          answered :data:`~lookout_capture.fetch.FAILED_AFTER_SEND_BOUND_S` after the
+          failure: the state gets that bound (``last_answer_bound`` / ``answer_bound``
+          ``"failed_after_send"``), the record keeps the reading in ``answered_at`` and adds
+          the bound as ``answer_bound_at``.
+
+        The state stamps and the log fields are the same strings, so the gaps a reader takes
+        from the log (``sent_at`` of one poll minus ``answer_bound_at``, else ``answered_at``,
+        of the one before) are the ones the scheduler kept, to the millisecond.
         """
         self._space()
+        sent_at = isoformat_z(self.clock(), "milliseconds")
+        reserved_wall = None
         if poll_state is not None:
-            poll_state.last_poll_at = isoformat_z(self.clock(), "milliseconds")
+            reserved_wall = parse_time(poll_state.poll_reserved_at)
+            poll_state.last_poll_at = sent_at
+        if get_record is not None:
+            get_record.setdefault("reserved_at", get_record.get("t"))
+            reserved_wall = parse_time(get_record.get("reserved_at"))
+            get_record["t"] = sent_at
         started = self.monotonic()
+        send_by = send_by_wall = None
+        if reserved_mono is not None:
+            send_by = reserved_mono + LIVE_SEND_DEADLINE_S
+            if reserved_wall is not None:
+                send_by_wall = reserved_wall + timedelta(seconds=LIVE_SEND_DEADLINE_S)
+        progress = Progress()
         status: int | None = None
         size = 0
         error: str | None = None
+        location: str | None = None  # a 3xx's Location: logged, never followed
+        failure: BaseException | None = None
         try:
-            response = fetch(self.client, method, url, headers=headers, max_bytes=max_bytes)
+            response = fetch(
+                self.client,
+                method,
+                url,
+                headers=headers,
+                max_bytes=max_bytes,
+                send_by=send_by,
+                monotonic=self.monotonic,
+                send_by_wall=send_by_wall,
+                wall=self.clock,
+                total_s=total_s,
+                progress=progress,
+            )
             status, size = response.status_code, len(response.content)
+            if 300 <= status < 400:
+                location = response.headers.get("Location")
             return response
-        except Exception as exc:
-            error = f"{type(exc).__name__}: {exc}"[:200]
+        except BaseException as exc:  # an interrupt too: the answer is still recorded
+            failure = exc
+            if isinstance(exc, Exception):
+                error = f"{type(exc).__name__}: {exc}"[:200]
             raise
         finally:
+            answered = self.clock()  # the answer time: the one reading every rule counts from
             self._last_request = self.monotonic()
+            answered_at = iso_ms_up(answered)
+            late = failure is not None and may_arrive_after_failure(failure, progress)
+            counted_at, steady = answered_at, self._last_request
+            if late:
+                counted_at = iso_ms_up(answered + timedelta(seconds=FAILED_AFTER_SEND_BOUND_S))
+                steady = self._last_request + FAILED_AFTER_SEND_BOUND_S
+            if poll_state is not None:
+                poll_state.last_answer_at = counted_at
+                poll_state.last_answer_bound = BOUND_FAILED_AFTER_SEND if late else None
+                poll_state.poll_reserved_at = None
+                self._steady[(viewpoint_id, counted_at)] = steady
+            if get_record is not None:
+                get_record["answered_at"] = counted_at
+                if late:
+                    get_record["answer_bound"] = BOUND_FAILED_AFTER_SEND
+                self._steady[(viewpoint_id, counted_at)] = steady
             self._log(
                 viewpoint_id,
                 "request",
                 stage=stage,
                 method=method,
                 url=url,
+                sent_at=sent_at,
+                answered_at=answered_at,
                 status=status,
                 bytes=size,
                 elapsed_ms=round((self._last_request - started) * 1000.0, 1),
                 **({"error": error} if error else {}),
+                **(
+                    {"answer_bound": BOUND_FAILED_AFTER_SEND, "answer_bound_at": counted_at}
+                    if late
+                    else {}
+                ),
+                **({"location": location} if location else {}),
+                **({"lambda_log_stream": self.lambda_log_stream} if self.lambda_log_stream else {}),
             )
+
+    # -- the in-process guard against wall-clock steps -----------------------------------
+    def _adjuster(self, viewpoint_id: str) -> Adjust:
+        """Read the answers this process recorded on the monotonic clock as well (PRD §15.3).
+
+        An answer stamp ``A`` read at monotonic ``m`` is used as the later of ``A`` and
+        ``now - (monotonic() - m)``: if the wall clock has stepped (or been slewed) forward
+        since, the rule still counts the full 300 s (or 3600 s) of monotonic time; if it has
+        stepped back, the wall clock's later reading stands. Stamps from other processes (a
+        restart, another Lambda invocation) are used as stored.
+        """
+        now = self.clock()
+        mono = self.monotonic()
+
+        def adjust(stamp: str, when: datetime) -> datetime:
+            seen = self._steady.get((viewpoint_id, stamp))
+            if seen is None:
+                return when
+            return max(when, now - timedelta(seconds=mono - seen))
+
+        return adjust
+
+    def _forget_answers(self, viewpoint_id: str, state: CameraState) -> None:
+        """Drop monotonic readings of answers the camera's state no longer holds."""
+        kept = {state.last_answer_at} | {str(g.get("answered_at")) for g in state.gets}
+        for key in [k for k in self._steady if k[0] == viewpoint_id and k[1] not in kept]:
+            del self._steady[key]
+
+    def _poll_slot(self, viewpoint: Viewpoint, state: CameraState) -> datetime | None:
+        """When this camera's next poll may be sent: its last answer + :func:`poll_spacing_s`.
+
+        Read through the monotonic guard, and without this run's own reservation (which waits
+        for this very slot), so it can be read again while the poll waits.
+        """
+        return state.poll_due_at(
+            poll_spacing_s(viewpoint),
+            include_reservation=False,
+            adjust=self._adjuster(viewpoint.id),
+        )
+
+    def _reserve_poll(self, state: CameraState) -> tuple[float, str | None]:
+        """Reserve the camera's poll and save it before the send.
+
+        Returns the monotonic reading (it sets the send deadline) and the ``last_poll_at`` the
+        reservation replaced (put back if the poll is given up before its send). A process
+        that dies between the send and the state save leaves the reservation, which the next
+        run counts as answered :data:`.fetch.UNANSWERED_REQUEST_BOUND_S` after it
+        (:meth:`.state.CameraState.settle_unanswered`). Code before 0.2.1 knows nothing of the
+        reservation and schedules from ``last_poll_at`` alone, so until the send overwrites it
+        ``last_poll_at`` holds that same bound: rolled back after such a crash, the older code
+        still waits 301 s from the latest moment the reserved poll can have reached nps.gov.
+        """
+        mono = self.monotonic()
+        now = self.clock()
+        previous = state.last_poll_at
+        state.poll_reserved_at = iso_ms_up(now)
+        # Rounded up the same way, so exactly the reservation stamp + the bound.
+        state.last_poll_at = iso_ms_up(now + timedelta(seconds=UNANSWERED_REQUEST_BOUND_S))
+        self._save_state(state)
+        return mono, previous
 
     # -- state ------------------------------------------------------------------------
     def _load_state(self, viewpoint_id: str) -> CameraState:
@@ -493,13 +753,24 @@ class CaptureRunner:
         """``"every"`` or ``"hourly-nearest"`` for this camera (PRD §8.7, :mod:`.retention`)."""
         return frame_policy(viewpoint.id, self.options.every_frame)
 
-    def capture_camera(self, viewpoint: Viewpoint) -> dict[str, Any]:
+    def capture_camera(
+        self, viewpoint: Viewpoint, *, wait_for_due_s: float = 0.0
+    ) -> dict[str, Any]:
         """Poll one camera if its slot is due, fetch its image if changed and allowed, store it.
 
-        An hourly-retention camera first has its ready hours decided, and any camera has its
+        Under the camera's lock, first anything an earlier writer left unanswered is bounded
+        (:meth:`.state.CameraState.settle_unanswered`, logged as ``answer_bound``). An
+        hourly-retention camera then has its ready hours decided, and any camera has its
         missing thumbnails made (no network), also when it is not due or the host is in
-        back-off. Once a poll has started the state is saved however it ends, so what it
-        learnt (poll time, validators, a reserved or completed GET) is never lost.
+        back-off. A slot (the last answer + :func:`poll_spacing_s`) at most ``wait_for_due_s``
+        away is waited for after that work, inside the camera's lock and right before the
+        poll, so the poll goes out at its slot and not a pass's bookkeeping later (on an exact
+        300 s schedule any lateness accumulates). :data:`HOLD_RECHECK_LEAD_S` before a slot
+        waited for, the host hold is read again and the poll is reserved (saved), so neither
+        storage call delays the send; an overdue camera reserves right before its send. Once
+        a poll has been reserved the state is saved however it ends, so what it learnt (poll
+        and answer times, validators, a reserved or completed GET) is never lost, and a crash
+        before that save leaves the reservation to bound it.
         """
         now = self.clock()
         hold = self._host_hold(now)
@@ -513,6 +784,8 @@ class CaptureRunner:
                 ttl_s=self.options.lock_ttl_s,
             ):
                 state = self._load_state(viewpoint.id)
+                for change in state.settle_unanswered(self.clock()):
+                    self._log(viewpoint.id, "answer_bound", **change)
                 first_run = state.created_at is None
                 if first_run:
                     state.created_at = isoformat_z(now, "seconds")
@@ -525,27 +798,68 @@ class CaptureRunner:
                 if state.thumbs_pending:
                     self._repair_thumbs(viewpoint, state)
                 if hold is not None:
-                    self._save_state(state)
-                    return {
-                        "event": "skipped",
-                        "reason": "host_backoff",
-                        "until": isoformat_z(hold),
-                    }
-                due = state.poll_due_at(self.poll_interval_s(viewpoint) + POLL_MARGIN_S)
-                if due is not None and due > now:
-                    self._save_state(state)
-                    return {"event": "not_due", "due_at": isoformat_z(due, "seconds")}
+                    return self._unpolled(
+                        viewpoint,
+                        state,
+                        {"event": "skipped", "reason": "host_backoff", "until": isoformat_z(hold)},
+                    )
+                due = self._poll_slot(viewpoint, state)
+                waited = due is not None and due > self.clock()
+                if due is not None and waited:
+                    if (due - self.clock()).total_seconds() > wait_for_due_s:
+                        return self._unpolled(
+                            viewpoint, state, {"event": "not_due", "due_at": _iso_ceil_s(due)}
+                        )
+                    # Another run may set the host hold while we wait: read it again shortly
+                    # before the slot, early enough that the read (and the reservation's
+                    # write) do not delay the poll.
+                    lead = timedelta(seconds=HOLD_RECHECK_LEAD_S)
+
+                    def before_slot() -> datetime | None:
+                        slot = self._poll_slot(viewpoint, state)
+                        return None if slot is None else slot - lead
+
+                    self._wait_until(before_slot, wait_for_due_s)
+                    hold = self._host_hold(self.clock())
+                    if hold is not None:
+                        return self._unpolled(
+                            viewpoint,
+                            state,
+                            {
+                                "event": "skipped",
+                                "reason": "host_backoff",
+                                "until": isoformat_z(hold),
+                            },
+                        )
+                reserved_mono, previous_poll_at = self._reserve_poll(state)
                 try:
+                    if waited and not self._wait_until(
+                        lambda: self._poll_slot(viewpoint, state), wait_for_due_s
+                    ):
+                        # Given up before the send: nothing to bound.
+                        state.poll_reserved_at = None
+                        state.last_poll_at = previous_poll_at
+                        slot = self._poll_slot(viewpoint, state) or self.clock()
+                        return {"event": "not_due", "due_at": _iso_ceil_s(slot)}
                     if viewpoint.truth_camera.kind == "ard-aircam":
-                        outcome = self._poll_ard(viewpoint, state)
+                        outcome = self._poll_ard(viewpoint, state, reserved_mono)
                     else:
-                        outcome = self._poll_park(viewpoint, state)
+                        outcome = self._poll_park(viewpoint, state, reserved_mono)
                 finally:
                     state.prune(self.clock())
                     self._save_state(state)
+                    self._forget_answers(viewpoint.id, state)
                 return outcome
         except LockTimeoutError:
             return {"event": "skipped", "reason": "locked"}
+
+    def _unpolled(
+        self, viewpoint: Viewpoint, state: CameraState, outcome: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Save the state of a camera left unpolled this pass and return why."""
+        self._save_state(state)
+        self._forget_answers(viewpoint.id, state)
+        return outcome
 
     def _promote(
         self, viewpoint: Viewpoint, state: CameraState, now: datetime, *, scan: bool
@@ -595,11 +909,9 @@ class CaptureRunner:
             state.bump(name)
             self._log(viewpoint.id, name, **fields)
 
-    def _start_poll(self, state: CameraState) -> datetime:
-        now = self.clock()
-        state.last_poll_at = isoformat_z(now, "milliseconds")
+    def _start_poll(self, state: CameraState) -> None:
+        """Count the poll; ``_request`` stamps its send and its answer."""
         state.polls += 1
-        return now
 
     def _ok(self, state: CameraState) -> None:
         """The feed (JSON or HEAD) answered: reset its error count, lift the poll back-off."""
@@ -641,6 +953,13 @@ class CaptureRunner:
         asked = retry_after_s(response) if response is not None else None  # type: ignore[arg-type]
         if asked:
             delay = max(delay, min(asked, 6 * 3600.0))
+        # A redirect is never followed (:meth:`default`); where it pointed is kept.
+        location = (
+            response.headers.get("Location")
+            if response is not None and status is not None and 300 <= status < 400
+            else None
+        )
+        moved = {"location": location} if location else {}
         until = now + timedelta(seconds=delay)
         state.not_before = isoformat_z(until, "seconds")
         state.last_error = {
@@ -648,9 +967,18 @@ class CaptureRunner:
             "stage": stage,
             "status": status,
             "error": error,
+            **moved,
         }
         state.bump("error")
-        self._log(viewpoint.id, "error", stage=stage, status=status, error=error, failures=failures)
+        self._log(
+            viewpoint.id,
+            "error",
+            stage=stage,
+            status=status,
+            error=error,
+            failures=failures,
+            **moved,
+        )
         self._log(
             viewpoint.id,
             "backoff",
@@ -740,7 +1068,9 @@ class CaptureRunner:
             "backoff_s": delay,
         }
 
-    def _poll_ard(self, viewpoint: Viewpoint, state: CameraState) -> dict[str, Any]:
+    def _poll_ard(
+        self, viewpoint: Viewpoint, state: CameraState, reserved_mono: float | None = None
+    ) -> dict[str, Any]:
         tc = viewpoint.truth_camera
         assert tc.json_url is not None
         self._start_poll(state)
@@ -758,6 +1088,8 @@ class CaptureRunner:
                 viewpoint_id=viewpoint.id,
                 stage="json",
                 poll_state=state,
+                reserved_mono=reserved_mono,
+                total_s=LIVE_POLL_DEADLINE_S,
             )
         except httpx.HTTPError as exc:
             return self._error(viewpoint, state, "json", error=f"{type(exc).__name__}: {exc}"[:200])
@@ -832,7 +1164,9 @@ class CaptureRunner:
             viewpoint, state, context=context, imagedate_utc=imagedate_utc, flags=flags
         )
 
-    def _poll_park(self, viewpoint: Viewpoint, state: CameraState) -> dict[str, Any]:
+    def _poll_park(
+        self, viewpoint: Viewpoint, state: CameraState, reserved_mono: float | None = None
+    ) -> dict[str, Any]:
         tc = viewpoint.truth_camera
         self._start_poll(state)
         try:
@@ -844,6 +1178,8 @@ class CaptureRunner:
                 viewpoint_id=viewpoint.id,
                 stage="head",
                 poll_state=state,
+                reserved_mono=reserved_mono,
+                total_s=LIVE_POLL_DEADLINE_S,
             )
         except httpx.HTTPError as exc:
             return self._error(viewpoint, state, "head", error=f"{type(exc).__name__}: {exc}"[:200])
@@ -898,16 +1234,16 @@ class CaptureRunner:
         now = self.clock()
         spacing = self.options.pacing_fraction * 3600.0 / max(1, caps.max_images_per_hour)
         decision = cap_decision(
-            state.gets, now, max_per_hour=caps.max_images_per_hour, min_spacing_s=spacing
+            state.gets,
+            now,
+            max_per_hour=caps.max_images_per_hour,
+            min_spacing_s=spacing,
+            adjust=self._adjuster(viewpoint.id),
         )
         is_ard = tc.kind == "ard-aircam"
         if not decision.allowed:
             state.bump("rate_capped")
-            next_at = (
-                isoformat_z(decision.next_allowed_at, "seconds")
-                if decision.next_allowed_at
-                else None
-            )
+            next_at = _iso_ceil_s(decision.next_allowed_at) if decision.next_allowed_at else None
             self._log(
                 viewpoint.id,
                 "rate_capped",
@@ -925,7 +1261,10 @@ class CaptureRunner:
                 "next_allowed_at": next_at,
             }
 
-        record = state.add_get(now, status="reserved")
+        # The monotonic reading (the send deadline) comes first, the reservation's wall stamp
+        # after it, so the stamp + UNANSWERED_REQUEST_BOUND_S bounds the send from above.
+        reserved_mono = self.monotonic()
+        record = state.add_get(self.clock(), status="reserved", reserved=True)
         self._save_state(state)  # the GET counts against the cap even if we crash mid-download
         last = state.last_image or {}
         settled = state.settled_etag or last.get("etag")
@@ -938,6 +1277,9 @@ class CaptureRunner:
                 self.options.max_image_bytes,
                 viewpoint_id=viewpoint.id,
                 stage="image",
+                get_record=record,
+                reserved_mono=reserved_mono,
+                total_s=LIVE_IMAGE_DEADLINE_S,
             )
         except (httpx.HTTPError, ResponseTooLarge) as exc:
             record["status"] = "error"
@@ -1357,9 +1699,16 @@ class CaptureRunner:
         time_left: Callable[[], float] | None = None,
         min_time_left_s: float = 25.0,
     ) -> dict[str, Any]:
-        """Visit every camera once, earliest-due first, waiting up to ``wait_for_due_s`` for a slot.
+        """Visit every camera once, earliest-due first, waiting for slots up to ``wait_for_due_s``.
 
-        ``time_left`` (Lambda's remaining time) stops the pass before the deadline. When logs
+        ``wait_for_due_s`` is the pass's own window, counted from the pass's start: a camera
+        whose slot comes later is left for the next pass (``not_due``), so a pass never waits
+        past it, however the cameras' slots are spread. The wait happens in
+        :meth:`capture_camera`, right before the poll, and ends when the clock reaches the
+        slot (no fixed overshoot), so no lateness but the poll's own is added pass after pass
+        on an exact 300 s schedule (PRD §11.2 "Capture"). ``time_left`` (Lambda's remaining
+        time) stops the pass before the deadline, and a camera is never waited for past
+        ``min_time_left_s`` before it. When logs
         are batched (S3), every record of the pass, the ``pass`` record included, goes out in
         one ``append_jsonl_many`` per log file when the pass ends, also if it fails; records an
         earlier pass could not write go first. Once less than ``2 x min_time_left_s`` is left,
@@ -1387,13 +1736,13 @@ class CaptureRunner:
         for vp in viewpoints:
             try:
                 state = self._load_state(vp.id)
-                due = state.poll_due_at(self.poll_interval_s(vp) + POLL_MARGIN_S) or started
+                due = state.poll_due_at(poll_spacing_s(vp)) or started
             except Exception:  # an unreadable state file: let the camera's own try report it
                 due = started
             order.append((due, vp))
         order.sort(key=lambda item: (item[0], item[1].id))
         outcomes: dict[str, dict[str, Any]] = {}
-        for due, vp in order:
+        for _due, vp in order:
             if self._stop:
                 outcomes[vp.id] = {"event": "skipped", "reason": "stopping"}
                 continue
@@ -1402,11 +1751,14 @@ class CaptureRunner:
                 continue
             if self._log_buffer and time_left is not None and time_left() < 2 * min_time_left_s:
                 self._flush_logs(keep_batching=True)  # close to the deadline: write what we have
-            wait = (due - self.clock()).total_seconds()
-            if 0 < wait <= wait_for_due_s:
-                self.sleep(wait + 0.05)
+            # The pass's window: no wait past its start + wait_for_due_s (a camera visited late
+            # in the pass is not given a window of its own), and on Lambda never into the time
+            # the poll itself needs.
+            max_wait = t0 + wait_for_due_s - self.monotonic()
+            if time_left is not None:
+                max_wait = min(max_wait, time_left() - min_time_left_s)
             try:
-                outcomes[vp.id] = self.capture_camera(vp)
+                outcomes[vp.id] = self.capture_camera(vp, wait_for_due_s=max(0.0, max_wait))
             except Exception as exc:  # one broken camera must not stop the others
                 outcomes[vp.id] = {
                     "event": "error",
@@ -1433,6 +1785,18 @@ class CaptureRunner:
             outcomes={k: v.get("event") for k, v in outcomes.items()},
         )
         return summary
+
+    def _space_before_idle(self, target: float) -> None:
+        """Wait until the request gap has passed since the last live request (never past
+        ``target``, the next pass), so the idle hook's first archive request is spaced from it."""
+        if self._last_request is None or self.options.request_gap_s <= 0:
+            return
+        wait = min(
+            self._last_request + self.options.request_gap_s - self.monotonic(),
+            target - self.monotonic(),
+        )
+        if wait > 0:
+            self.sleep(wait)
 
     def request_stop(self) -> None:
         """Ask a running loop to stop after the camera it is on."""
@@ -1465,8 +1829,10 @@ class CaptureRunner:
         ``idle(time_left, stopping)`` runs between passes, in this process and so inside the
         host-wide NPS-fetcher lock (the CLI passes the archive queue, D-023). ``time_left()``
         is the seconds until the next pass is due; ``idle`` must return before then, which
-        is how queued archive work never delays a live poll. An exception it raises is
-        logged (``idle_error``) and never stops live capture.
+        is how queued archive work never delays a live poll. It starts no earlier than the
+        request gap (1 s) after the pass's last live request, so the archive's first request
+        keeps the same courtesy spacing from it. An exception it raises is logged
+        (``idle_error``) and never stops live capture.
         """
         previous: dict[int, Any] = {}
         if install_signals:
@@ -1488,6 +1854,7 @@ class CaptureRunner:
                     break
                 target = start + interval_s + self.rng.uniform(0.0, max(0.0, jitter_s))
                 if idle is not None and not self._stop:
+                    self._space_before_idle(target)
                     try:
                         idle(lambda t=target: t - self.monotonic(), lambda: self._stop)
                     except Exception as exc:  # archive work must never stop live capture
@@ -1519,7 +1886,15 @@ def status_report(
     staged awaiting their hour's decision, and the last decision. ``frame_policy`` is what
     this code would do; ``frame_policy_recorded`` is what the writer of the newest frame did
     (from the state; code older than PRD §8.7 storage kept every frame), which differs while
-    an older snapshot is still the one running.
+    an older snapshot is still the one running. ``next_poll_at`` is the scheduler's rule
+    (the last answer, or its bound, + :func:`poll_spacing_s`, as a run starting at ``now``
+    would read it) and ``gets_last_hour`` counts answer times, as the cap does.
+    ``next_poll_basis`` says what ``next_poll_at`` is counted from: ``"answer"`` (a recorded
+    answer), ``"bound:<why>"`` (an answer bound already in the state), ``"reservation"`` (a
+    poll reserved and not answered: being sent now, or a crash) or ``"legacy_state:now"``
+    (state from code that recorded no answer: the later of its send + 60 s and ``now``, i.e.
+    what this code would do if it took over at ``now``; the running older code polls about
+    301 s after its own send, earlier than shown).
     """
     every = set(every_frame)
     cameras = []
@@ -1531,14 +1906,23 @@ def status_report(
         state = CameraState.from_dict(doc)
         last = state.last_image or {}
         image_time = parse_time(last.get("image_time_utc"))
-        due = state.poll_due_at(
-            max(MIN_POLL_INTERVAL_S, float(vp.truth_camera.polite_caps.poll_interval_s))
-        )
-        recent = [t for t in get_times(state.gets) if (now - t).total_seconds() < 3600]
+        due = state.poll_due_at(poll_spacing_s(vp), now=now)  # the scheduler's own rule
+        recent = [t for t in answer_times(state.gets) if (now - t).total_seconds() < 3600]
+        if state.poll_reserved_at:
+            basis = "reservation"
+        elif state.last_answer_at:
+            basis = f"bound:{state.last_answer_bound}" if state.last_answer_bound else "answer"
+        elif state.last_poll_at:
+            basis = f"{BOUND_LEGACY_STATE}:now"
+        else:
+            basis = None
         cameras.append(
             {
                 "viewpoint_id": vp.id,
                 "last_poll_at": state.last_poll_at[:19] if state.last_poll_at else None,
+                "last_answer_at": state.last_answer_at,
+                "last_answer_bound": state.last_answer_bound,
+                "poll_reserved_at": state.poll_reserved_at,
                 "last_image_key": last.get("key"),
                 "last_image_time_utc": last.get("image_time_utc"),
                 "last_image_age_min": round((now - image_time).total_seconds() / 60.0, 1)
@@ -1548,7 +1932,8 @@ def status_report(
                 "failures": state.failures,
                 "image_failures": state.image_failures,
                 "not_before": state.not_before,
-                "next_poll_at": isoformat_z(due, "seconds") if due and due > now else None,
+                "next_poll_at": _iso_ceil_s(due) if due and due > now else None,
+                "next_poll_basis": basis,
                 "counters": state.counters,
                 "seeded": state.seeded,
                 "last_error": state.last_error,

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import copy
 import itertools
-from datetime import UTC, date, datetime
+import json
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -33,7 +34,13 @@ from lookout_capture.archive import (
     search_body,
     search_cache_key,
 )
-from lookout_capture.heldout import HeldOutOverride, asset_local_dates, held_out_reason
+from lookout_capture.heldout import (
+    HeldOutOverride,
+    asset_dates,
+    asset_local_dates,
+    asset_utc_dates,
+    held_out_reason,
+)
 
 from .conftest import FakeClock, FakeNPS, fixture_json, make_jpeg
 
@@ -151,6 +158,30 @@ def test_pick_assets_midday_hourly_and_sun_filter():
     )
 
 
+def test_hourly_pick_leaves_a_frame_after_2330_to_the_next_day():
+    """Backfill plan review (20 Nov 2026): a frame after 23:30 is nearest the *next* day's
+    00:00, so it is none of this day's hours. It used to be filed under this day's 00:00 and,
+    with that day's own 00:00 and 00:15 frames missing, stood in for them 23 h away."""
+
+    def at(clock: str, i: int) -> ArchiveAsset:
+        return ArchiveAsset(
+            asset_id=f"asset-{i}",
+            location_code="pore",
+            image_create_datetime=f"05/30/2026 {clock}",
+            local_time_string="",
+            solar_elevation_deg=None,
+            time_of_day=None,
+        )
+
+    clocks = ["12:45:00 AM", "1:00:00 AM", "10:45:00 PM", "11:00:00 PM", "11:30:00 PM"]
+    day = [at(c, i) for i, c in enumerate([*clocks, "11:45:00 PM"])]
+    picked = [a.image_create_datetime.split(" ", 1)[1] for a in pick_assets(day, pick="hourly")]
+    assert picked == ["1:00:00 AM", "11:00:00 PM"]
+    # 23:30 itself is still hour 23's (30 min either way: the earlier hour, as before).
+    late = [at("11:30:00 PM", 0), at("11:45:00 PM", 1)]
+    assert [a.asset_id for a in pick_assets(late, pick="hourly")] == ["asset-0"]
+
+
 def test_archive_keys_differ_for_thumbs_and_hires():
     when = datetime(2026, 11, 17, 20, 0, tzinfo=UTC)
     hires = archive_asset_key(PORE.id, when, "41af76bd-a3c7-4c0e-9888-750c6c041ff7", "hires")
@@ -217,6 +248,31 @@ def test_requests_are_at_least_5_s_apart_across_clients(fake_nps, clock, tmp_pat
     gaps = [(b - a).total_seconds() for a, b in itertools.pairwise(times)]
     assert len(times) == 5 and min(gaps) >= 5.0
     assert one.stats.waited_s >= 10.0
+
+
+def test_archive_records_name_their_runner_as_live_records_do(fake_nps, clock, tmp_path, data_root):
+    """Lead's request (20 Nov 2026): ``archive_request`` records (worker "archive") carry the
+    ``runner`` field live ``request`` records have: ``cli-loop`` for the queue inside the loop,
+    ``cli-archive`` and ``cli-archive-check`` for the standalone commands, ``cli`` by default."""
+    from lookout_capture.archive_queue import _queue_client
+
+    storage = LocalStorage(data_root)
+    fake_nps.days["pore"] = fixture_json("days_pore.json")
+    archive = _client(fake_nps, clock, tmp_path, storage=storage)
+    assert archive.runner == "cli"
+    archive.runner = "cli-archive"
+    archive.available_days("pore")
+    lines = [
+        json.loads(line)
+        for path in (data_root / "capture_log").glob("*.jsonl")
+        for line in path.read_text().splitlines()
+    ]
+    (record,) = [r for r in lines if r["event"] == "archive_request"]
+    assert record["worker"] == "archive" and record["runner"] == "cli-archive"
+    assert _queue_client(storage).runner == "cli-loop"
+    assert default_archive_client(storage, runner="cli-archive-check").runner == (
+        "cli-archive-check"
+    )
 
 
 def test_503_defers_every_client_and_counts_the_error(fake_nps, clock, tmp_path):
@@ -476,6 +532,38 @@ def test_a_404_is_not_retried(fake_nps, clock, tmp_path, data_root):
     assert result.failed == 1 and result.attempts == 1 and fake_nps.count("GET", "GetAsset") == 1
 
 
+def test_an_archive_redirect_is_never_followed_or_retried(fake_nps, clock, tmp_path, data_root):
+    """Review finding (20 Nov 2026): the production archive clients followed redirects, so one
+    logged request could be several at www.nps.gov, outside the 5 s limiter, the budget and
+    the log. They now follow none: a 302 is one request, logged with where it pointed, and
+    (like a 404) not retried. Without the fix the 302 below is followed and the asset fetched
+    from its new address: two requests at nps.gov for one logged."""
+    from lookout_capture.archive_queue import _queue_client
+
+    storage = LocalStorage(data_root)
+    asset = pick_assets(_pre_guard_assets(), pick="midday")[0]
+    fake_nps.assets[f"{asset.asset_id}:thumbmedium"] = make_jpeg()  # what backfill asks for
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/GetAsset/" in str(request.url) and "moved" not in str(request.url):
+            return httpx.Response(302, headers={"Location": f"{request.url}?moved=1"})
+        return fake_nps.handler(request)
+
+    archive = default_archive_client(storage, transport=httpx.MockTransport(handler))
+    archive.limiter = _client(fake_nps, clock, tmp_path).limiter  # the fake clock's 5 s limiter
+    result = backfill_assets(storage=storage, archive=archive, viewpoint=PORE, assets=[asset])
+    assert result.failed == 1 and result.attempts == 1 and result.downloaded == 0
+    assert fake_nps.count("GET", "GetAsset") == 0  # the redirect's target was never asked for
+    logged = [
+        json.loads(line)
+        for path in (data_root / "capture_log").glob("*.jsonl")
+        for line in path.read_text().splitlines()
+    ]
+    (request,) = [r for r in logged if r["event"] == "archive_request"]
+    assert request["status"] == 302 and "moved=1 not followed" in request["error"]
+    assert _queue_client(storage).client.follow_redirects is False
+
+
 # --- the held-out guard (D-019) ----------------------------------------------------------------
 
 
@@ -519,22 +607,85 @@ def test_held_out_reason_reads_every_local_date_and_fails_closed():
 def test_summer_edge_without_local_time_string_is_refused():
     """Critic finding (20 Nov): ImageCreateDateTime stays on standard time in summer, so with
     no LocalTimeString "05/31/2026 11:30:00 PM" (00:30 PDT on 1 Jun) used to pass. Same
-    cases as lookout-eval's test of nps_local_dates (D-038)."""
+    cases as lookout-eval's test of nps_local_dates (D-038, D-047). The local readings still
+    turn at local midnight; the guard itself now turns earlier, at UTC midnight (next test)."""
     la = PORE.time_zone
     assert la == "America/Los_Angeles"
     edge = held_out_reason("05/31/2026 11:30:00 PM", "", la)
     assert edge is not None and "2026-06-01" in edge
     assert date(2026, 6, 1) in asset_local_dates("05/31/2026 11:30:00 PM", "", la)
-    # 23:00 standard is 00:00 PDT on 1 Jun: refused; one second earlier is still 31 May.
-    assert held_out_reason("05/31/2026 10:59:59 PM", "", la) is None
-    assert held_out_reason("05/31/2026 11:00:00 PM", "", la) is not None
+    # 23:00 standard is 00:00 PDT on 1 Jun; one second earlier is still 31 May locally.
+    assert asset_local_dates("05/31/2026 10:59:59 PM", "", la) == [date(2026, 5, 31)]
+    assert date(2026, 6, 1) in asset_local_dates("05/31/2026 11:00:00 PM", "", la)
     assert held_out_reason("05/31/2026 12:00:00 PM", "", la) is None  # noon, not midnight
-    # Arizona keeps no daylight time: 23:30 on 31 May is 31 May.
-    assert held_out_reason("05/31/2026 11:30:00 PM", "", "America/Phoenix") is None
+    # Arizona keeps no daylight time: 23:30 on 31 May is 31 May locally (06:30 UTC on 1 Jun).
+    assert asset_local_dates("05/31/2026 11:30:00 PM", "", "America/Phoenix") == [date(2026, 5, 31)]
     # Eastern zone, same edge.
     assert held_out_reason("05/31/2026 11:30:00 PM", "", "America/New_York") is not None
     # Winter: the standard-time reading is the stamp's own date.
     assert asset_local_dates("11/30/2025 11:30:00 PM", "", la) == [date(2025, 11, 30)]
+
+
+#: The last ImageCreateDateTime of 31 May 2026 (local standard time, NPS's convention) still
+#: before UTC midnight, per zone: standard offsets -8, -7 (Arizona: no daylight time), -7, -6, -5.
+UTC_EDGE = {
+    "America/Los_Angeles": ("03:59:59 PM", "04:00:00 PM", "Pacific"),
+    "America/Phoenix": ("04:59:59 PM", "05:00:00 PM", "US Mountain"),
+    "America/Denver": ("04:59:59 PM", "05:00:00 PM", "Mountain"),
+    "America/Chicago": ("05:59:59 PM", "06:00:00 PM", "Central"),
+    "America/New_York": ("06:59:59 PM", "07:00:00 PM", "Eastern"),
+}
+
+
+@pytest.mark.parametrize("zone", sorted(UTC_EDGE))
+def test_the_guard_also_reads_utc_so_31_may_local_evening_is_held_out(zone):
+    """The lead's reading of 20 Nov 2026 (pending the owner's D-038): an asset is held out if
+    any reading of its date, local or UTC, is on or after 1 Jun 2026. A 31 May local-evening
+    frame is already 1 Jun in UTC, so the guard now turns at UTC midnight: one second earlier
+    is allowed, UTC midnight is refused, with or without a LocalTimeString."""
+    last_ok, first_out, region = UTC_EDGE[zone]
+    daylight = zone != "America/Phoenix"
+    kind = "Daylight" if daylight else "Standard"
+
+    def label(stamp: str) -> str:  # NPS's civil-time label: an hour ahead in daylight time
+        wall = datetime.strptime(f"05/31/2026 {stamp}", "%m/%d/%Y %I:%M:%S %p")
+        civil = wall + timedelta(hours=1 if daylight else 0)
+        clock = f"{civil.hour % 12 or 12}:{civil:%M} {'PM' if civil.hour >= 12 else 'AM'}"
+        return f"{civil.month}/{civil.day}/{civil.year} {clock} {region} {kind} Time"
+
+    for with_label in (True, False):
+        ok = (f"05/31/2026 {last_ok}", label(last_ok) if with_label else "")
+        out = (f"05/31/2026 {first_out}", label(first_out) if with_label else "")
+        assert asset_local_dates(*out, zone) == [date(2026, 5, 31)]  # local readings: 31 May
+        assert held_out_reason(*ok, zone) is None, (zone, ok)
+        reason = held_out_reason(*out, zone)
+        assert reason is not None and "UTC date 2026-06-01" in reason, (zone, out, reason)
+        assert asset_utc_dates(*out, zone)[-1] == date(2026, 6, 1)
+
+
+def test_every_utc_reading_counts_and_a_date_without_a_clock_fails_closed():
+    """The UTC readings (``asset_utc_dates``): the instant under both of lookout-common's
+    conventions, each local clock converted in the camera's zone (both sides of a DST fold), and,
+    for a reading with a date but no readable clock, every UTC date its local day touches."""
+    la = PORE.time_zone
+    # LocalTimeString alone decides: its clock read in the zone is 06:30 UTC on 1 Jun.
+    assert asset_utc_dates("", "5/31/2026 11:30 PM Pacific Daylight Time", la) == [date(2026, 6, 1)]
+    # A label with no clock: 31 May local runs to 06:59:59 UTC on 1 Jun, so it is refused.
+    assert asset_utc_dates("", "5/31/2026", la) == [date(2026, 5, 31), date(2026, 6, 1)]
+    assert held_out_reason("", "5/31/2026", la) is not None
+    # A broken clock in ImageCreateDateTime: its date still counts, its whole day in UTC too.
+    assert date(2026, 6, 1) in asset_utc_dates("05/31/2026 25:61", "", la)
+    # The fall-back fold (1 Nov 2026, 01:30 happens twice): both sides are read.
+    assert asset_utc_dates("11/01/2026 01:30:00 AM", "", la) == [date(2026, 11, 1)]
+    # The instant behind an archive key is read too, local and UTC (backfill passes it).
+    instant = datetime(2026, 6, 1, 0, 30, tzinfo=UTC)  # 17:30 PDT on 31 May
+    assert held_out_reason("01/15/2026 12:00:00 PM", "", la, instant=instant) is not None
+    assert asset_dates("", "", la, instant=instant) == [date(2026, 5, 31), date(2026, 6, 1)]
+    with pytest.raises(ValueError, match="aware"):
+        asset_dates("", "", la, instant=datetime(2026, 6, 1))
+    # Winter and early summer days are untouched.
+    assert held_out_reason("01/15/2026 11:30:00 PM", "", la) is None
+    assert held_out_reason("05/30/2026 11:45:00 PM", "", la) is None
 
 
 def test_backfill_refuses_held_out_frames_unless_overridden(fake_nps, clock, tmp_path, data_root):

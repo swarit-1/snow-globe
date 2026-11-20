@@ -1,15 +1,21 @@
-"""Crash injection for PRD §8.7 storage at an hourly camera: the process dies before or after any
-write or delete of a frame, thumbnail, staged copy or camera state, and the staged index in the
-state is sometimes lost. Whatever the crashes, nothing under ``frames/`` or ``thumbs/`` is ever
-lost or overwritten, no hour keeps two frames, every decided hour keeps the frame nearest it of
-those staged when it was decided, and staging ends holding only the hours not yet decided.
+"""Crash injection.
 
-After the crashes the feed stalls for two hours on an image the crashes kept from being fetched
-(a stalled feed): it arrives after its hour was decided, and must not replace the kept frame."""
+**PRD §8.7 storage at an hourly camera:** the process dies before or after any write or delete
+of a frame, thumbnail, staged copy or camera state, and the staged index in the state is
+sometimes lost. Whatever the crashes, nothing under ``frames/`` or ``thumbs/`` is ever lost or
+overwritten, no hour keeps two frames, every decided hour keeps the frame nearest it of those
+staged when it was decided, and staging ends holding only the hours not yet decided. After the
+crashes the feed stalls for two hours on an image the crashes kept from being fetched (a stalled
+feed): it arrives after its hour was decided, and must not replace the kept frame.
+
+**The polite rules (PRD §15.3):** the process dies between a request's arrival at nps.gov and
+the state save, and is restarted; nps.gov still never sees two polls of a camera under 300 s
+apart or five of its image GETs within an hour."""
 
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
@@ -21,7 +27,8 @@ from lookout_capture.retention import hour_slot, key_stamp
 from lookout_capture.state import camera_state_key
 
 from .conftest import FakeClock
-from .test_live import runner
+from .receipts import Killer, Latency, run_schedule, server_violations
+from .test_live import RAINIER, runner
 from .test_live_retention import GRCA, ArdFeed, jpgs
 
 
@@ -129,3 +136,63 @@ def test_crashes_anywhere_never_lose_a_frame_or_keep_an_hour_twice(data_root, fa
     leftovers = jpgs(storage, "cache/staging/")
     assert all(clock.now() < hour_slot(key_stamp(k)) + timedelta(hours=1) for k in leftovers)
     assert storage.crashes > 0
+
+
+# --- kills between a request's send and the state save (the lead's decision, 20 Nov 2026) ------
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_kills_between_the_send_and_the_save_never_break_the_rules_at_the_server(data_root, seed):
+    """A poll is reserved and saved before its send, as an image GET is. Here the process is
+    killed at random right after a request reached nps.gov, while its answer is on its way
+    back (odd seeds) or right after it arrived (even seeds), so nothing of that request is
+    saved but its reservation; a supervisor restarts the loop 0.5-10 s later. nps.gov still
+    sees >= 300 s between a camera's polls and >= 3600 s across 5 of its GETs: the restarted
+    loop counts each unanswered reservation as answered UNANSWERED_REQUEST_BOUND_S after it
+    (logged as ``answer_bound``). Without the poll reservation (0.2.1 before answer times) the
+    restarted loop polled the camera again within seconds of the killed poll."""
+    rng = random.Random(1000 + seed)
+    killer = Killer(rng, rate=0.05)
+    vps = [RAINIER, GRCA]
+    run = run_schedule(
+        data_root,
+        vps,
+        hours=8,
+        schedule="loop",
+        jitter_s=30.0,
+        latency=Latency(spike_p=0.02),
+        seed=seed,
+        killer=killer,
+        kill_after="received" if seed % 2 else "answered",
+    )
+    assert killer.kills >= 3 and run.restarts == killer.kills
+    assert server_violations(run.nps, vps) == []
+    lines = [
+        json.loads(line)
+        for path in (data_root / "capture_log").glob("*.jsonl")
+        for line in path.read_text().splitlines()
+    ]
+    bounds = [r for r in lines if r["event"] == "answer_bound"]
+    assert bounds and {b["kind"] for b in bounds} <= {"unanswered_reservation"}
+    for vp in vps:  # each camera still polled at about its 5-minute rate
+        assert len(run.nps.receipts(vp.id, "poll")) >= 8 * 12 * 0.6, vp.id
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_kills_on_the_lambda_schedule_never_break_the_rules_at_the_server(data_root, seed):
+    """The same kills on the capture Lambda's schedule: a killed invocation is followed by the
+    next one, 300 s later, which bounds what the killed one left unanswered."""
+    killer = Killer(random.Random(2000 + seed), rate=0.05)
+    vps = [RAINIER, GRCA]
+    run = run_schedule(
+        data_root,
+        vps,
+        hours=8,
+        schedule="lambda",
+        latency=Latency(spike_p=0.02),
+        seed=seed,
+        killer=killer,
+        kill_after="received" if seed % 2 else "answered",
+    )
+    assert killer.kills >= 3
+    assert server_violations(run.nps, vps) == []

@@ -82,11 +82,19 @@ class Poll:
     failed: bool = False
     #: When the server answered the poll's HEAD or JSON GET (its ``request`` record), if known.
     answered_at: datetime | None = None
+    #: When that request was sent (``sent_at``; for records before 0.2.1, ``t`` minus
+    #: ``elapsed_ms``), if known.
+    sent_at: datetime | None = None
 
     @property
     def at(self) -> datetime:
         """The best time for the poll's value: the answer time, else the record's time."""
         return self.answered_at or self.t
+
+    @property
+    def sent(self) -> datetime:
+        """The best time for the poll's send: the request's send, else the record's time."""
+        return self.sent_at or self.t
 
 
 def quantile(values: Iterable[float], q: float) -> float | None:
@@ -175,6 +183,17 @@ def _sidecar_value(
     return _http_time(doc.get("head_last_modified") or doc.get("http_last_modified")), None
 
 
+def _request_sent(record: Mapping[str, Any], when: datetime) -> datetime | None:
+    """A ``request`` record's send: ``sent_at`` (0.2.1), else ``t`` minus ``elapsed_ms``."""
+    sent = parse_time(record.get("sent_at"))
+    if sent is not None:
+        return sent
+    elapsed = record.get("elapsed_ms")
+    if isinstance(elapsed, int | float) and not isinstance(elapsed, bool):
+        return when - timedelta(milliseconds=float(elapsed))
+    return None
+
+
 def _log_polls(
     records: Iterable[Mapping[str, Any]],
     viewpoint_id: str,
@@ -186,6 +205,7 @@ def _log_polls(
 ) -> list[Poll]:
     polls: list[Poll] = []
     asked: datetime | None = None  # the newest HEAD/JSON request record of this camera
+    asked_sent: datetime | None = None  # and when that request was sent
     for record in records:
         when = parse_time(record.get("t"))
         if when is None or not start <= when <= end:
@@ -207,20 +227,24 @@ def _log_polls(
         if event == "request":
             if stage in ("head", "json"):
                 asked = when
+                asked_sent = _request_sent(record, when)
             continue
         lag = (when - asked).total_seconds() if asked is not None else None
-        answered = asked if lag is not None and 0 <= lag <= _REQUEST_MATCH_S else None
+        matched = lag is not None and 0 <= lag <= _REQUEST_MATCH_S
+        answered = asked if matched else None
+        sent = asked_sent if matched else None
         if event == "error":
             if stage not in ("head", "json", "image", "store"):
                 continue
             if stage != "store":  # a store failure saw a new value: read it below
-                polls.append(Poll(when, "capture", event, failed=stage in ("head", "json")))
-                asked = None
+                failed = stage in ("head", "json")
+                polls.append(Poll(when, "capture", event, failed=failed, sent_at=sent))
+                asked = asked_sent = None
                 continue
         elif event not in _POLL_EVENTS:
             continue
-        poll = Poll(when, "capture", event, answered_at=answered)
-        asked = None
+        poll = Poll(when, "capture", event, answered_at=answered, sent_at=sent)
+        asked = asked_sent = None
         if isinstance(record.get("key"), str):  # stored, or a duplicate of a stored key
             stem = _name(record["key"])
             referenced.add(stem)
@@ -380,7 +404,9 @@ def camera_cadence(
         value, imagedate = _sidecar_value(doc, ard)
         polls.append(Poll(fetched, "sidecar", "stored", value=value, imagedate=imagedate))
     polls.sort(key=lambda p: p.t)
-    gaps = [(b.t - a.t).total_seconds() for a, b in itertools.pairwise(polls)]
+    # Spacing is measured between sends (each poll's request record), not between the outcome
+    # records, which come after a poll's answer and any image GET it led to.
+    gaps = [(b.sent - a.sent).total_seconds() for a, b in itertools.pairwise(polls)]
     series = {
         "last_modified": {
             "what": "JSON feed Last-Modified" if ard else "image HEAD Last-Modified",
@@ -405,8 +431,10 @@ def camera_cadence(
             "by_event": dict(sorted(Counter(p.event for p in polls).items())),
             "with_value": sum(1 for p in polls if p.value is not None or p.same_as_previous),
             "with_answer_time": sum(1 for p in polls if p.answered_at is not None),
+            "with_send_time": sum(1 for p in polls if p.sent_at is not None),
             "failed": sum(1 for p in polls if p.failed),
         },
+        # Send to send (the request records; a poll without one counts from its record).
         "poll_spacing_s": summarise(gaps),
         "max_gap_s": gap_limit,
         "gaps_over_max": sum(1 for g in gaps if g > gap_limit),

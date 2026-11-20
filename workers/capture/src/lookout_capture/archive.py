@@ -397,6 +397,7 @@ class ArchiveClient:
         log_requests: bool = True,
         request_deadline_s: float | None = None,
         share_host_backoff: bool = True,
+        runner: str = "cli",
     ) -> None:
         self.client = client
         self.limiter = limiter
@@ -414,6 +415,10 @@ class ArchiveClient:
         self.share_host_backoff = share_host_backoff and storage is not None
         self.stats = RequestStats()
         self.failures = 0
+        #: Which process sent the requests, written into every record as live capture's
+        #: ``runner`` is: ``cli-loop`` (the queue inside the loop), ``cli-archive``,
+        #: ``cli-archive-check`` or ``cli``.
+        self.runner = runner
 
     # -- the shared www.nps.gov hold --------------------------------------------------
     def _shares_hold(self, url: str) -> bool:
@@ -459,9 +464,12 @@ class ArchiveClient:
     ) -> Fetched:
         """Send one request under the budget, the limiter and the log.
 
-        ``validate`` checks a 2xx/3xx body; a problem it names is an error like an HTTP
-        5xx: it is logged, counted, deferred for every process and raised as
-        :class:`ArchiveBadBody`.
+        ``validate`` checks a 2xx body; a problem it names is an error like an HTTP 5xx: it
+        is logged, counted, deferred for every process and raised as :class:`ArchiveBadBody`.
+        A 3xx is never followed (the production clients are built with
+        ``follow_redirects=False``: each hop would be one more www.nps.gov request outside
+        the limiter, the budget and the log); it is logged with its ``Location`` and raised as
+        :class:`ArchiveHTTPError`, which is not retried.
 
         A www.nps.gov hold in force (:mod:`lookout_capture.host_backoff`, set by a live or an
         archive 429/503) is waited out first, through the limiter; an HTTP 429/503 here
@@ -478,6 +486,7 @@ class ArchiveClient:
             size = 0
             error: str | None = None
             bad_body = False
+            redirect: str | None = None
             try:
                 with self.client.stream(method, url, json=json_body) as response:
                     status = response.status_code
@@ -491,7 +500,10 @@ class ArchiveClient:
                             raise ArchiveError(f"{url} took longer than {deadline:g} s")
                         chunks.append(chunk)
                     result = Fetched(response.status_code, response.headers, b"".join(chunks), url)
-                if validate is not None and status is not None and status < 400:
+                if status is not None and 300 <= status < 400:
+                    redirect = str(result.headers.get("Location"))
+                    error = f"HTTP {status}: redirect to {redirect} not followed"[:200]
+                elif validate is not None and status is not None and status < 400:
                     problem = validate(result)
                     if problem is not None:
                         error, bad_body = f"bad body: {problem}"[:200], True
@@ -509,6 +521,9 @@ class ArchiveClient:
                 if error is not None or (status is not None and status >= 400):
                     self.stats.errors += 1
                 self._log(kind, method, url, status, size, waited, elapsed_ms, error, started_wall)
+            if redirect is not None and status is not None:
+                self.failures += 1
+                raise ArchiveHTTPError(status, url, f"redirect to {redirect} not followed")
             if status is not None and status >= 400:
                 self.failures += 1
                 wait = retry_after_s(result) if status in (429, 503) else None
@@ -551,6 +566,7 @@ class ArchiveClient:
             "bytes": size,
             "waited_s": round(waited, 3),
             "elapsed_ms": elapsed_ms,
+            "runner": self.runner,
             "capture_version": CAPTURE_VERSION,
         }
         if error:
@@ -680,15 +696,20 @@ def default_archive_client(
     *,
     budget: RequestBudget | None = None,
     transport: httpx.BaseTransport | None = None,
+    runner: str = "cli",
 ) -> ArchiveClient:
-    """An :class:`ArchiveClient` on :func:`polite_client` with the shared 5 s limiter."""
+    """An :class:`ArchiveClient` on :func:`polite_client` with the shared 5 s limiter.
+
+    Redirects are not followed (:meth:`ArchiveClient._send`).
+    """
     from lookout_common.http import polite_client
 
     return ArchiveClient(
-        client=polite_client(transport=transport),
+        client=polite_client(transport=transport, follow_redirects=False),
         limiter=archive_limiter(),
         storage=storage,
         budget=budget,
+        runner=runner,
     )
 
 
@@ -802,7 +823,10 @@ def pick_assets(
     - ``min_sun_deg``: keep frames whose NPS ``SolarElevationAngle`` is at least this
       (daylight is decided by the ephemeris, never by brightness: PRD §8.6).
     - ``midday``: the single frame with the highest Sun.
-    - ``hourly``: the frame nearest each full hour of local time (first on ties).
+    - ``hourly``: the frame nearest each full hour of local time (first on ties), for the
+      hours of this day. A frame after 23:30 is nearest the *next* day's 00:00, which that
+      day's own entry picks from its own frames, so it is left out here; it used to be filed
+      under this day's 00:00 and could stand in for a missing midnight frame 23 hours away.
     """
     chosen = [
         a
@@ -822,7 +846,12 @@ def pick_assets(
             hh, mm = parts[1].split(":")[:2]
             hour = (int(hh) % 12) + (12 if parts[2].upper() == "PM" else 0)
             minutes = int(mm)
-            slot_hour, dist = (hour, minutes) if minutes <= 30 else ((hour + 1) % 24, 60 - minutes)
+            if minutes <= 30:
+                slot_hour, dist = hour, minutes
+            elif hour < 23:
+                slot_hour, dist = hour + 1, 60 - minutes
+            else:  # nearest the next day's 00:00: not one of this day's hours
+                continue
             slot = f"{parts[0]} {slot_hour:02d}"
             if slot not in best or dist < best[slot][0]:
                 best[slot] = (dist, asset)
@@ -867,7 +896,8 @@ class BackfillResult:
 
 
 def _retryable(exc: ArchiveError) -> bool:
-    """Transport errors, HTTP 429/5xx and bad bodies are worth another try; a 404 is not."""
+    """Transport errors, HTTP 429/5xx and bad bodies are worth another try; a 404 or a
+    redirect (3xx, never followed) is not."""
     if isinstance(exc, ArchiveHTTPError):
         return exc.status_code == 429 or exc.status_code >= 500
     return True
@@ -928,8 +958,18 @@ def backfill_assets(
             storage.write_json(archive_state_key(viewpoint.id), state_doc)
 
         for asset in assets:
+            # The instant behind the asset's archive key, when it parses: its local and UTC
+            # dates are two more of the guard's readings (the guard reads both conventions too).
+            time_error: str | None = None
+            try:
+                key_time: datetime | None = asset.image_time_utc(viewpoint.time_zone, convention)
+            except ValueError as exc:
+                key_time, time_error = None, f"time: {exc}"[:160]
             guard_reason = held_out_reason(
-                asset.image_create_datetime, asset.local_time_string, viewpoint.time_zone
+                asset.image_create_datetime,
+                asset.local_time_string,
+                viewpoint.time_zone,
+                instant=key_time,
             )
             for kind in kinds:
                 if guard_reason is not None and held_out_override is None:
@@ -938,14 +978,13 @@ def backfill_assets(
                         {"asset_id": asset.asset_id, "kind": kind, "refused": guard_reason}
                     )
                     continue
-                try:
-                    image_time = asset.image_time_utc(viewpoint.time_zone, convention)
-                except ValueError as exc:
+                if key_time is None:
                     result.failed += 1
                     result.plan.append(
-                        {"asset_id": asset.asset_id, "kind": kind, "error": f"time: {exc}"[:160]}
+                        {"asset_id": asset.asset_id, "kind": kind, "error": time_error}
                     )
                     continue
+                image_time = key_time
                 key = archive_asset_key(viewpoint.id, image_time, asset.asset_id, kind)
                 result.planned += 1
                 done_key = completed.get(asset.asset_id, {}).get(kind)
@@ -980,6 +1019,7 @@ def backfill_assets(
                         asset,
                         kind,
                         {"guard": guard_reason, "reason": held_out_override.reason},
+                        runner=archive.runner,
                     )
                 response: Fetched | None = None
                 last_error: ArchiveError | None = None
@@ -1020,6 +1060,7 @@ def backfill_assets(
                         asset,
                         kind,
                         {"error": str(last_error)[:200] if last_error else result.stopped},
+                        runner=archive.runner,
                     )
                     save_state()
                     if result.stopped:
@@ -1061,6 +1102,7 @@ def _log_archive_event(
     asset: ArchiveAsset,
     kind: str,
     extra: Mapping[str, Any],
+    runner: str | None = None,
 ) -> None:
     storage.append_jsonl(
         capture_log_key(utcnow()),
@@ -1070,8 +1112,9 @@ def _log_archive_event(
             "event": event,
             "asset_id": asset.asset_id,
             "kind": kind,
-            "capture_version": CAPTURE_VERSION,
             **extra,
+            **({"runner": runner} if runner else {}),
+            "capture_version": CAPTURE_VERSION,
         },
     )
 
@@ -1156,6 +1199,7 @@ def _store_asset(
             "height": processed.original_height,
             "flags": flags,
         },
+        runner=archive.runner,
     )
     return {
         "key": key,

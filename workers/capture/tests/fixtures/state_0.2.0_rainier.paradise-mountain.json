@@ -1,0 +1,104 @@
+{
+  "viewpoint_id": "rainier.paradise-mountain",
+  "schema": 1,
+  "created_at": "2026-11-19T10:56:26Z",
+  "seeded": {
+    "at": "2026-11-19T10:56:26Z",
+    "sidecars_read": 16,
+    "latest_key": "frames/rainier.paradise-mountain/2026-11-19/20261119T095614Z_55c668fe762f.jpg",
+    "gets_last_hour": 1
+  },
+  "last_poll_at": "2026-11-20T13:01:58.317Z",
+  "polls": 166,
+  "json_etag": null,
+  "json_last_modified": null,
+  "imagedate_raw": null,
+  "handled_imagedate_raw": null,
+  "head_etag": "\"edc5be8475fc6c7215e3de60235b524f\"",
+  "head_last_modified": "Fri, 20 Nov 2026 13:01:15 GMT",
+  "settled_etag": "\"d7dc50004a56d507d9c50a0d47e641a1\"",
+  "settled_last_modified": "Fri, 20 Nov 2026 12:51:14 GMT",
+  "last_image": {
+    "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T125102Z_0aa536c06857.jpg",
+    "frame_key": "frames/rainier.paradise-mountain/2026-11-20/20261120T125102Z_0aa536c06857.jpg",
+    "thumb_key": "thumbs/rainier.paradise-mountain/2026-11-20/20261120T125102Z_0aa536c06857.jpg",
+    "frame_policy": "every",
+    "sha256": "0aa536c0685755020469faf96f6276251be06acf746b672bfc7d77c9ce55bc1b",
+    "etag": "\"d7dc50004a56d507d9c50a0d47e641a1\"",
+    "last_modified": "Fri, 20 Nov 2026 12:51:14 GMT",
+    "content_length": 551567,
+    "width": 1920,
+    "height": 1080,
+    "image_time_utc": "2026-11-20T12:51:02.079000Z",
+    "fetched_at_utc": "2026-11-20T12:51:57.531Z",
+    "json_imagedate_raw": null,
+    "dhash64": "5f9f8781e2c6c6e2",
+    "capture_version": "lookout-capture/0.2.0"
+  },
+  "gets": [
+    {
+      "t": "2026-11-20T11:16:48.526Z",
+      "status": "ok",
+      "source": "self"
+    },
+    {
+      "t": "2026-11-20T11:32:45.207Z",
+      "status": "ok",
+      "source": "self"
+    },
+    {
+      "t": "2026-11-20T11:48:33.499Z",
+      "status": "ok",
+      "source": "self"
+    },
+    {
+      "t": "2026-11-20T12:04:19.392Z",
+      "status": "ok",
+      "source": "self"
+    },
+    {
+      "t": "2026-11-20T12:20:26.357Z",
+      "status": "ok",
+      "source": "self"
+    },
+    {
+      "t": "2026-11-20T12:36:07.307Z",
+      "status": "ok",
+      "source": "self"
+    },
+    {
+      "t": "2026-11-20T12:51:56.335Z",
+      "status": "ok",
+      "source": "self"
+    }
+  ],
+  "recent_shas": {
+    "2439142d168679598fef261d80203274c7510c582f7bff680ad493c022509931": "frames/rainier.paradise-mountain/2026-11-20/20261120T122003Z_2439142d1686.jpg",
+    "99960a4cc8eeb0289689d01ebdaf54907a72f95788e4018ddd2725a5ba240492": "frames/rainier.paradise-mountain/2026-11-20/20261120T123559Z_99960a4cc8ee.jpg",
+    "0aa536c0685755020469faf96f6276251be06acf746b672bfc7d77c9ce55bc1b": "frames/rainier.paradise-mountain/2026-11-20/20261120T125102Z_0aa536c06857.jpg"
+  },
+  "known_sidecars": [
+    "thumbs/rainier.paradise-mountain/2026-11-20/20261120T123559Z_99960a4cc8ee.json",
+    "frames/rainier.paradise-mountain/2026-11-20/20261120T125102Z_0aa536c06857.json",
+    "thumbs/rainier.paradise-mountain/2026-11-20/20261120T125102Z_0aa536c06857.json"
+  ],
+  "failures": 0,
+  "image_failures": 0,
+  "store_failures": 0,
+  "not_before": null,
+  "last_error": {
+    "t": "2026-11-20T05:42:30Z",
+    "stage": "image",
+    "status": null,
+    "error": "ReadTimeout: The read operation timed out"
+  },
+  "counters": {
+    "stored": 57,
+    "rate_capped": 108,
+    "error": 1
+  },
+  "staged": [],
+  "staging_scan_at": null,
+  "last_promotion": null,
+  "thumbs_pending": []
+}

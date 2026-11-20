@@ -20,7 +20,7 @@ No network (never contact nps.gov, never take the fetcher lock, safe beside a ru
     lookout-capture archive queue list | remove <id>... [--finished] [--all]
     lookout-capture archive queue resume <id>... [--all] [--max-gb G]
     lookout-capture cadence <viewpoint_id> [--hours 24] [--json]
-    lookout-capture storage [--day YYYY-MM-DD] [--json]
+    lookout-capture storage [--day YYYY-MM-DD] [--json]      (alias: storage-report)
 
 Every network command runs inside the host-wide NPS-fetcher lock (:mod:`.fetcher_guard`): a
 second fetcher, or a running Rainier stopgap, makes it exit with status 3 before anything
@@ -184,6 +184,24 @@ def _cmd_status(
                 if r["viewpoint_id"] in switching
             )
         )
+    bounded = [
+        f"{r['viewpoint_id']} ({r['last_answer_bound']})"
+        for r in report["cameras"]
+        if r.get("last_answer_bound")
+    ]
+    if bounded:
+        print("next poll counted from an answer bound, not a recorded answer:", ", ".join(bounded))
+    legacy = [
+        r["viewpoint_id"]
+        for r in report["cameras"]
+        if str(r.get("next_poll_basis") or "").startswith("legacy_state")
+    ]
+    if legacy:
+        print(
+            "no answer time recorded (state from older code): next poll shown is what this code "
+            "would do if it took over now; the older code polls ~301 s after its own send:",
+            ", ".join(legacy),
+        )
     print("today's capture_log events:", json.dumps(report.get("events_today", {})))
     queue = report.get("archive_queue")
     if queue:
@@ -246,7 +264,7 @@ def _cmd_archive(
                 "D-019 held-out guard. Archived frames from then are viewed only at scoring, "
                 'with --held-out-override "<reason>" (logged). --dry-run reads metadata only.'
             )
-    archive = default_archive_client(storage)
+    archive = default_archive_client(storage, runner="cli-archive")
     try:
         if args.archive_cmd == "days":
             days, _raw = archive.available_days(code)
@@ -470,7 +488,7 @@ def _cmd_archive_check(
         if args.viewpoint
         else ([] if args.rainier_page else [v for v in viewpoints.values() if v.has_archive])
     )
-    archive = default_archive_client(storage, budget=budget)
+    archive = default_archive_client(storage, budget=budget, runner="cli-archive-check")
     try:
         for vp in selected:
             archive.stats.__init__()  # per-viewpoint request counts
@@ -543,7 +561,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.0,
         metavar="S",
-        help="wait up to S seconds for a camera whose 5-min poll slot is near",
+        help="wait for a camera whose poll slot (its last answer + 5 min) comes within S seconds "
+        "of the pass's start",
     )
     once.set_defaults(func=_cmd_once, nps_fetcher=True)
 
@@ -602,7 +621,9 @@ def build_parser() -> argparse.ArgumentParser:
     cadence.set_defaults(func=_cmd_cadence)
 
     store = sub.add_parser(
-        "storage", help="bytes per frame and per day, old policy against PRD §8.7 (no network)"
+        "storage",
+        aliases=["storage-report"],  # the name CLAUDE.md gives the offline command
+        help="bytes per frame and per day, old policy against PRD §8.7 (no network)",
     )
     store.add_argument("--day", default=None, help="UTC day whose daylight weights (today)")
     store.add_argument("--only", action="append", metavar="VIEWPOINT_ID")

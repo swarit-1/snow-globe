@@ -14,13 +14,15 @@ and the file's SHA-256 go into every record that depends on it (:meth:`HeldOutSp
     development use only.
 - **Scoring exclusions:** 15 Jul 2026 at the 7 ARD cameras (D-022).
 - **The archive guard** (D-019): archived NPS frames dated on or after 1 Jun 2026 are refused
-  for development at every viewpoint. A frame's date is the latest of ``ImageCreateDateTime``,
-  ``LocalTimeString`` and the civil date of its UTC time. This is the rule of
-  ``workers/capture/src/lookout_capture/heldout.py``, reproduced here (eval does not import
-  capture) and tested on the same cases (:func:`nps_local_dates`, :func:`archive_guard_reason`).
-  Eval adds two dates, so it is never looser than capture: ``ImageCreateDateTime`` read as
-  local standard time (NPS's summer convention), which decides the summer edge when
-  ``LocalTimeString`` is missing, and the record's own UTC time.
+  for development at every viewpoint. A frame is refused if *any* reading of its date, local
+  or UTC, is on or after that day (the lead's reading of 20 Nov 2026, pending the owner's
+  D-038): the dates of ``ImageCreateDateTime`` and ``LocalTimeString``, the civil date of its
+  UTC time, ``ImageCreateDateTime`` read as local standard time (NPS's summer convention), the
+  UTC date of each of those and of the instant itself, and the record's own UTC time, local and
+  UTC (:func:`nps_dates`). This is the rule of ``workers/capture/src/lookout_capture/heldout.py``
+  (which has read the standard-time date too since D-047), reproduced here (eval does not
+  import capture) and kept in parity with it by tests on both sides (:func:`nps_local_dates`,
+  :func:`nps_utc_dates`, :func:`archive_guard_reason`).
 - **The quarantine** (D-022): anything under ``$LOOKOUT_DATA_DIR/quarantine/`` is refused on
   every path (:func:`key_quarantine_reason`, :func:`path_quarantine_reason`,
   :class:`QuarantineGuard`). The folder is matched in any letter case and by identity
@@ -71,7 +73,9 @@ __all__ = [
     "committed_split",
     "key_quarantine_reason",
     "load_split",
+    "nps_dates",
     "nps_local_dates",
+    "nps_utc_dates",
     "path_quarantine_reason",
     "split_from_dict",
 ]
@@ -192,6 +196,40 @@ _NPS_CLOCK_RE = re.compile(
     r"^\s*(\d{1,2})/(\d{1,2})/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]m)\s*$",
     re.IGNORECASE,
 )
+# The head of LocalTimeString, e.g. "5/31/2026 11:30 PM" in "5/31/2026 11:30 PM Pacific ...".
+_LABEL_CLOCK_RE = re.compile(
+    r"^\s*(\d{1,2})/(\d{1,2})/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]m)(?:\s|$)",
+    re.IGNORECASE,
+)
+
+
+def _wall(match: re.Match[str] | None) -> datetime | None:
+    """The naive wall-clock time of a matched NPS clock, or None if it is not a real time."""
+    if match is None:
+        return None
+    month, day, year, hour, minute, second, meridiem = match.groups()
+    if not 1 <= int(hour) <= 12:
+        return None
+    hour24 = int(hour) % 12 + (12 if meridiem.lower() == "pm" else 0)
+    try:
+        return datetime(int(year), int(month), int(day), hour24, int(minute), int(second or 0))
+    except ValueError:
+        return None
+
+
+def _zone(tz_name: str) -> ZoneInfo | None:
+    try:
+        return ZoneInfo(tz_name)
+    except (ValueError, KeyError):  # ZoneInfoNotFoundError is a KeyError
+        return None
+
+
+def _standard_offset(wall: datetime, zone: ZoneInfo) -> timedelta | None:
+    probe = wall.replace(tzinfo=zone)
+    offset, daylight = probe.utcoffset(), probe.dst()
+    if offset is None:
+        return None
+    return offset - (daylight or timedelta(0))
 
 
 def _standard_time_date(image_create_datetime: str, tz_name: str) -> date | None:
@@ -202,43 +240,32 @@ def _standard_time_date(image_create_datetime: str, tz_name: str) -> date | None
     civil time is one hour later: "05/31/2026 11:30:00 PM" is 00:30 PDT on 1 Jun. Where the
     zone keeps no daylight time (Arizona), or in winter, this is the stamp's own date.
     """
-    match = _NPS_CLOCK_RE.match(image_create_datetime or "")
-    if match is None:
+    wall = _wall(_NPS_CLOCK_RE.match(image_create_datetime or ""))
+    zone = _zone(tz_name)
+    if wall is None or zone is None:
         return None
-    month, day, year, hour, minute, second, meridiem = match.groups()
-    if not 1 <= int(hour) <= 12:
+    standard = _standard_offset(wall, zone)
+    if standard is None:
         return None
-    hour24 = int(hour) % 12 + (12 if meridiem.lower() == "pm" else 0)
-    try:
-        wall = datetime(int(year), int(month), int(day), hour24, int(minute), int(second or 0))
-        zone = ZoneInfo(tz_name)
-    except (ValueError, KeyError):  # ZoneInfoNotFoundError is a KeyError
-        return None
-    probe = wall.replace(tzinfo=zone)
-    offset, daylight = probe.utcoffset(), probe.dst()
-    if offset is None:
-        return None
-    standard = offset - (daylight or timedelta(0))
     return (wall - standard).replace(tzinfo=UTC).astimezone(zone).date()
 
 
 def nps_local_dates(image_create_datetime: str, local_time_string: str, tz_name: str) -> list[date]:
     """Every local date an NPS archive asset could be said to fall on (empty if none parses).
 
-    Lookout-capture's ``asset_local_dates``, reproduced (D-019, D-022), plus one reading that
-    capture lacks. In summer ``ImageCreateDateTime`` stays on local standard time while
-    ``LocalTimeString`` gives civil time, so near midnight the two can name different days.
-    Read here:
+    Lookout-capture's ``asset_local_dates``, reproduced (D-019, D-022, D-038, D-047). In summer
+    ``ImageCreateDateTime`` stays on local standard time while ``LocalTimeString`` gives civil
+    time, so near midnight the two can name different days. Read here:
 
     - the date of ``ImageCreateDateTime`` and the date of ``LocalTimeString``;
     - the civil date of the UTC time (lookout-common's ``parse_nps_archive_time``) in
       ``tz_name``;
     - the civil date of ``ImageCreateDateTime`` read as local standard time
-      (:func:`_standard_time_date`). This one is eval's addition. Without it, a summer frame
-      stamped "05/31/2026 11:30:00 PM" whose ``LocalTimeString`` is missing would date only to
-      31 May, though its civil time is 00:30 on 1 Jun.
+      (:func:`_standard_time_date`). Capture has read it too since D-047. Without it, a summer
+      frame stamped "05/31/2026 11:30:00 PM" whose ``LocalTimeString`` is missing would date
+      only to 31 May, though its civil time is 00:30 on 1 Jun.
 
-    Every date capture's rule finds is found here too, so the guard is never looser.
+    The guard also reads UTC dates (:func:`nps_utc_dates`).
     """
     found: list[date] = []
     for text in (image_create_datetime, local_time_string):
@@ -257,6 +284,91 @@ def nps_local_dates(image_create_datetime: str, local_time_string: str, tz_name:
     return sorted(set(found))
 
 
+def _civil_utc_dates(wall: datetime, zone: ZoneInfo) -> set[date]:
+    """UTC dates of a local wall time read as civil time in ``zone``: both sides of a fold
+    or a gap, since NPS does not say which one it means."""
+    return {wall.replace(tzinfo=zone, fold=fold).astimezone(UTC).date() for fold in (0, 1)}
+
+
+def _day_utc_dates(day: date, zone: ZoneInfo) -> set[date]:
+    """UTC dates of the first and the last instant of a local day: a date read without a
+    clock, so the guard takes every UTC date the day touches (it fails closed)."""
+    first = datetime.combine(day, time(0), tzinfo=zone)
+    last = datetime.combine(day + timedelta(days=1), time(0), tzinfo=zone) - timedelta(
+        microseconds=1
+    )
+    return {first.astimezone(UTC).date(), last.astimezone(UTC).date()}
+
+
+def nps_utc_dates(image_create_datetime: str, local_time_string: str, tz_name: str) -> list[date]:
+    """Every UTC date an NPS archive asset could be said to fall on (the lead, 20 Nov 2026).
+
+    Lookout-capture's ``asset_utc_dates``, reproduced:
+
+    - the UTC date of the asset's instant, under both of lookout-common's conventions for
+      ``parse_nps_archive_time`` (``"label"`` and ``"wall"``);
+    - each local reading converted in the camera's zone: ``ImageCreateDateTime`` read as civil
+      time (both sides of a fold or gap) and as local standard time, and ``LocalTimeString``'s
+      clock read as civil time (both sides);
+    - a reading that gives a date but no readable clock: every UTC date its local day touches.
+    """
+    zone = _zone(tz_name)
+    if zone is None:
+        return []
+    found: set[date] = set()
+    for convention in ("label", "wall"):
+        try:
+            instant = parse_nps_archive_time(
+                image_create_datetime, local_time_string, tz_name, convention=convention
+            )
+        except (ValueError, KeyError):
+            continue
+        found.add(instant.astimezone(UTC).date())
+    for text, pattern in (
+        (image_create_datetime, _NPS_CLOCK_RE),
+        (local_time_string, _LABEL_CLOCK_RE),
+    ):
+        if not text:
+            continue
+        wall = _wall(pattern.match(text))
+        if wall is not None:
+            found |= _civil_utc_dates(wall, zone)
+            continue
+        day = _us_date(text)
+        if day is not None:
+            found |= _day_utc_dates(day, zone)
+    wall = _wall(_NPS_CLOCK_RE.match(image_create_datetime or ""))
+    if wall is not None:
+        standard = _standard_offset(wall, zone)
+        if standard is not None:
+            found.add((wall - standard).date())
+    return sorted(found)
+
+
+def nps_dates(
+    image_create_datetime: str,
+    local_time_string: str,
+    tz_name: str,
+    *,
+    utc_time: datetime | None = None,
+) -> list[date]:
+    """Every date, local or UTC, an NPS archive asset could be said to fall on (the guard's set).
+
+    :func:`nps_local_dates` and :func:`nps_utc_dates`, plus, when ``utc_time`` is given (the
+    record's own image time: the instant behind its archive key), its civil date in
+    ``tz_name`` and its UTC date. Lookout-capture's ``asset_dates`` (its ``instant``).
+    """
+    found = set(nps_local_dates(image_create_datetime, local_time_string, tz_name))
+    found |= set(nps_utc_dates(image_create_datetime, local_time_string, tz_name))
+    if utc_time is not None:
+        aware = _aware(utc_time, "utc_time")
+        zone = _zone(tz_name)
+        if zone is not None:
+            found.add(aware.astimezone(zone).date())
+        found.add(aware.astimezone(UTC).date())
+    return sorted(found)
+
+
 def archive_guard_reason(
     image_create_datetime: str,
     local_time_string: str,
@@ -267,32 +379,31 @@ def archive_guard_reason(
 ) -> str | None:
     """Why an archived frame may not be read for development, or None if it may (D-019).
 
-    The rule of lookout-capture's ``held_out_reason``: refused when the latest of its local
-    dates (:func:`nps_local_dates`, which finds every date capture's rule finds and one more)
-    is on or after ``guard`` (default: the committed split's ``archive_guard.from_local_day``,
-    1 Jun 2026), and when no date can be read at all (the guard fails closed).
-
-    ``utc_time``, when given, is the frame's own UTC image time (eval's records carry one);
-    its civil date in ``tz_name`` counts as one more date. NPS strings that are present but
-    yield no date are refused even then: they mean the metadata is broken.
+    The rule of lookout-capture's ``held_out_reason``: refused when any of its dates, local or
+    UTC (:func:`nps_dates`), is on or after ``guard`` (default: the committed split's
+    ``archive_guard.from_local_day``, 1 Jun 2026), and when no date can be read at all (the
+    guard fails closed). ``utc_time``, when given, is the frame's own UTC image time (eval's
+    records carry one); its local and UTC dates count too. NPS strings that are present but
+    yield no local date are refused even then: they mean the metadata is broken.
     """
     limit = guard if guard is not None else committed_split().archive_guard.from_day
-    dates = nps_local_dates(image_create_datetime, local_time_string, tz_name)
+    local = nps_local_dates(image_create_datetime, local_time_string, tz_name)
     raw_given = bool((image_create_datetime or "").strip() or (local_time_string or "").strip())
-    if raw_given and not dates:
+    if raw_given and not local:
         return (
             f"archive guard (D-019): no readable date in {image_create_datetime!r} / "
             f"{local_time_string!r}"
         )
-    if utc_time is not None:
-        civil = _aware(utc_time, "utc_time").astimezone(ZoneInfo(tz_name)).date()
-        dates = sorted({*dates, civil})
+    dates = nps_dates(image_create_datetime, local_time_string, tz_name, utc_time=utc_time)
     if not dates:
         return f"archive guard (D-019): no readable date in {image_create_datetime!r}"
     latest = dates[-1]
     if latest >= limit:
+        zone = _zone(tz_name)
+        civil = {utc_time.astimezone(zone).date()} if utc_time is not None and zone else set()
+        which = "local" if latest in {*local, *civil} else "UTC"
         return (
-            f"archive guard (D-019): local date {latest.isoformat()} is on or after "
+            f"archive guard (D-019): {which} date {latest.isoformat()} is on or after "
             f"{limit.isoformat()}"
         )
     return None

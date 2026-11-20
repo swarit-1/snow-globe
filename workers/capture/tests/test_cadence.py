@@ -344,3 +344,52 @@ def test_cadence_reads_the_validators_logged_by_this_version(data_root, fake_nps
     assert series["consecutive_pairs"] == {"changed": 5}  # stored and rate-capped polls alike
     assert series["age_at_poll_s"]["n"] == 6
     assert series["age_at_poll_s"]["min"] == pytest.approx(26.0, abs=1.0)
+
+
+def test_poll_spacing_is_measured_between_the_polls_sends(data_root):
+    """Review finding (20 Nov 2026): ``poll_spacing_s`` was taken between the poll *outcome*
+    records, which come after a poll's answer and after any image GET it led to, so its
+    minimum read under 300 s for polls nps.gov saw 300 s apart. It is now taken between the
+    sends in the polls' request records (``sent_at``; for a 0.2.0 record, ``t`` minus
+    ``elapsed_ms``)."""
+    storage = LocalStorage(data_root)
+    write_log(
+        data_root,
+        cap(
+            "2026-11-19T10:00:00.200Z",
+            "request",
+            stage="head",
+            sent_at="2026-11-19T10:00:00.100Z",
+            answered_at="2026-11-19T10:00:00.200Z",
+            elapsed_ms=100.0,
+        ),
+        cap("2026-11-19T10:00:05.900Z", "request", stage="image", elapsed_ms=5600.0),
+        cap("2026-11-19T10:00:06.000Z", "duplicate", reason="not_modified"),
+        cap(
+            "2026-11-19T10:05:00.300Z",
+            "request",
+            stage="head",
+            sent_at="2026-11-19T10:05:00.202Z",
+            answered_at="2026-11-19T10:05:00.300Z",
+            elapsed_ms=98.0,
+        ),
+        cap(
+            "2026-11-19T10:05:00.301Z",
+            "unchanged",
+            reason="validators_same",
+            head_last_modified="Thu, 19 Nov 2026 10:04:14 GMT",
+        ),
+        # A record of 0.2.0, which logged no send: t - elapsed_ms.
+        cap("2026-11-19T10:10:01.400Z", "request", stage="head", elapsed_ms=150.0),
+        cap(
+            "2026-11-19T10:10:01.401Z",
+            "unchanged",
+            reason="validators_same",
+            head_last_modified="Thu, 19 Nov 2026 10:09:14 GMT",
+        ),
+    )
+    out = camera_cadence(storage, RAINIER, now=NOW)
+    spacing = out["poll_spacing_s"]
+    assert spacing["n"] == 2 and spacing["min"] == 300.1  # 10:00:00.100 -> 10:05:00.202
+    assert spacing["max"] == 301.0  # 10:05:00.202 -> 10:10:01.250
+    assert out["polls"]["with_send_time"] == 3

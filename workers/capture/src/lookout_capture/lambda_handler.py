@@ -23,6 +23,15 @@ __all__ = ["handler"]
 
 #: Lambda's timeout is 120 s (infra/terraform/lambda.tf); keep headroom for the last camera.
 _MIN_TIME_LEFT_S = 25.0
+#: The pass's window, from its start: a camera whose slot comes within it is waited for, right
+#: before its poll, never into the last _MIN_TIME_LEFT_S. Under rate(5 minutes) each camera's
+#: slot comes back 300 s + POLL_MARGIN_S after its last poll's *answer*, so each poll lands its
+#: own elapsed time (about 0.1 s) later every invocation until it leaves the window; that pass
+#: skips the camera (a ~555-620 s gap there) and the next polls it near its start. Simulated
+#: (fake clock, 10 days, 8 cameras): 1.1-1.4 skips per camera per day and 36 s of billed waiting
+#: a pass at 45 s with 0.2.0's answered request times and 0-2 s of invocation jitter; 2.0-3.0
+#: with other latency models; 3.9 with 0-30 s of jitter and 36.6 with 0-60 s (EventBridge's
+#: real jitter is not measured yet). At 20 s: 3.3 and 18 s (workers/capture/README.md).
 _WAIT_FOR_DUE_S = 45.0
 
 

@@ -37,6 +37,17 @@ def test_parser_knows_every_command():
         parser.parse_args(["archive", "day", "point-reyes.beach"])  # the date is required
 
 
+def test_storage_report_is_an_alias_of_storage(data_root, capsys):
+    """CLAUDE.md lists the offline command as ``storage-report``; both names run it."""
+    parser = build_parser()
+    for name in ("storage", "storage-report"):
+        args = parser.parse_args([name, "--json"])
+        assert args.func.__name__ == "_cmd_storage" and args.json
+        assert not getattr(args, "nps_fetcher", False)  # no network, no fetcher lock
+    assert main(["storage-report", "--json"]) == 0
+    assert "frames_span_utc" in json.loads(capsys.readouterr().out)
+
+
 def test_status_runs_without_network(data_root, capsys):
     assert main(["status", "--json"]) == 0
     report = json.loads(capsys.readouterr().out)
