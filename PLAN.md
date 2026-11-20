@@ -10,7 +10,7 @@ Each milestone ends at a gate and stops for review. **A gate passes when its evi
   - **Committed:** the third workflow's packages, one commit each, at 12:35–12:36 UTC on 20 Nov, then its planning docs at 12:45 (`08a996c` to `8459e7e`, D-064). The second workflow's went in at 02:37–02:42 UTC (`4be0eca` to `8246a8b`, D-046).
   - **In the working tree, for the lead to commit:** capture 0.2.1 with the answer-time poll rule (D-065, D-066); eval's data report with the gate rule, its held-out UTC reading and the pair's stamp floor (D-069, D-070, D-073); the regenerated backfill plan (D-072); the build changes (D-075); and these docs.
   - **Two of the four gate items have evidence:** the archive report with H or P per viewpoint (D-019, D-022, D-024, D-042), and the backtest pair, scored and labelled v−1 ([docs/evidence/m05-backtest-pair.md](docs/evidence/m05-backtest-pair.md)).
-  - **The 72 h log clock** started at 12:24:23 UTC on 19 Nov for all 8 cameras (06:30 UTC for Rainier). The lead chose its rule (D-069): lost time is the union of both jobs' outages plus each capture restart's excess. By that rule 10.48 h were lost, and **the clock closes at 22:53:14 UTC on Sun 22 Nov at the earliest** (`lookout-eval data-report` to 13:15 UTC, and the same to 15:46 UTC). PLAN.md's capture-only figure, kept for comparison, gives 22:36:51 UTC. No outage since 06:29 UTC on 20 Nov.
+  - **The 72 h log clock** started at 12:24:23 UTC on 19 Nov for all 8 cameras (06:30 UTC for Rainier). The lead chose its rule (D-069): lost time is the union of both jobs' outages plus each capture restart's excess. By that rule 10.69 h were lost, and **the clock closes at 23:05:58 UTC on Sun 22 Nov at the earliest** (`lookout-eval data-report` to 20:01:58 UTC on 20 Nov). PLAN.md's capture-only figure, kept for comparison, gives 22:44:12 UTC. The only loss since 06:29 UTC on 20 Nov is the re-snapshot at 19:44–20:01 UTC, when the Mac slept (D-079).
   - **The emails** wait for the owner.
 - **Running on this laptop** until AWS is live (D-030), from a frozen snapshot of committed code with its own venvs (`~/lookout-data/cache/runtime/034c46b`, D-049):
   - capture 0.2.0 as `lookout-capture loop --archive-queue` for all 8 cameras, since 02:39:39 UTC on 20 Nov, under `caffeinate -s`, which keeps the Mac awake only on AC power;
@@ -189,9 +189,9 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
 - [ ] ≥ 72 h of worker and capture logs: runs and frames per viewpoint, plus exclusions.
   - **The table:** `lookout-eval data-report` builds it from the logs, state and disk, and writes nothing (D-061). The lead runs it at the close.
   - **Clock:** all 8 cameras from the loop's start at 12:24:23 UTC on 19 Nov; lost time extends it and is listed as exclusions. **The rule** (the lead, D-069): the union of both jobs' outages plus each capture restart's excess.
-    - By that rule 10.48 h were lost, so it closes at **22:53:14 UTC on Sun 22 Nov** at the earliest (the data report to 13:15 UTC; the same to 15:46 UTC, with 16.89 h covered of 27.37 h elapsed).
-    - PLAN.md's earlier rule, the capture loop's outages alone with the report's 540 s threshold, stays beside it for comparison: 10.21 h lost, a close at 22:36:51 UTC.
-    - A new outage, or the re-snapshot's restart (about 60–70 s of excess, D-065), moves the close later.
+    - By that rule 10.69 h were lost, so it closes at **23:05:58 UTC on Sun 22 Nov** at the earliest (the data report to 20:01:58 UTC on 20 Nov, with 20.93 h covered of 31.63 h elapsed).
+    - PLAN.md's earlier rule, the capture loop's outages alone with the report's 540 s threshold, stays beside it for comparison: 10.33 h lost, a close at 22:44:12 UTC.
+    - A new outage moves the close later. The re-snapshot to capture 0.2.1 cost 12.7 min, not the planned 60–70 s, because the Mac slept through it (D-079).
   - **Logs before the clock:** Rainier has logs from 06:30 UTC on 19 Nov (the stopgap), and the forecast stand-in from 12:18 UTC.
   - **Outages so far:**
     - the stopgap: about 28 polls in 4 sleeps (2.4 h), before the clock started;

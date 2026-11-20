@@ -705,6 +705,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   D-028's and D-029's "State" lines are out of date from here.
 - **The switch kept one far frame for one hour** (`workers/capture/README.md`). For hour 03:00 UTC, Acadia, Grand Canyon, Grand Teton and Yosemite kept 0.1.0's 02:30:00 frame, 1,800 s from the hour, as the hour's only full-size frame. Their 02:45, 03:00 and 03:15 frames survive only as thumbnails. A frame whose sidecar has no `hourly_selection` comes from the every-frame code, and eval should not read it as the frame nearest its hour.
 - **Amended 20 Nov (D-076):** the jobs this entry restarted are children of the lead's Claude Code session (parent pid 72719, through zsh), so ending that session can stop them. The lead's supervisor, written but not started, would restart them in their own session once they exit.
+- **Amended 20 Nov (D-079):** the lead re-snapshotted capture to `3cd2ca7` (capture 0.2.1) at 19:44–19:56 UTC; the forecast stand-in still runs from `034c46b`. A restart now holds its own sleep assertion across the stop and the start.
 
 ## D-050 — The forecast stand-in keeps PRES:cloud base: 8 fields, f00–f02 · decided (lead; running) · 2026-11-20 · amends D-030
 - **Profile from 02:39:49 UTC on 20 Nov:** VIS, cloud ceiling, cloud base, `PRES:cloud base`, LCDC, MCDC, HCDC and terrain, at f00–f02, at most 40 MB a run. D-026 asked for `PRES:cloud base`; the default field set already keeps it.
@@ -1097,6 +1098,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
 - **The re-snapshot to capture 0.2.1 is a restart:** about 60–70 s of excess if it is made within seconds of a pass's end (D-065).
 - TODO(M1) in eval: split at a pass's wall-clock start once capture logs one; neither 0.2.0 nor 0.2.1 does.
 - **Amended 20 Nov (D-078):** a camera with no poll after a restart is flagged in the per-viewpoint table and left out of that restart's excess, so one dropped camera cannot keep the clock from closing (`TODO(M1)` in eval; no figure changes).
+- **Amended 20 Nov (D-079):** the 19:44 restart's excess is 763.6 s; to 20:01:58 UTC, 10.69 h are lost and the earliest close is 23:05:58 UTC on Sun 22 Nov.
 
 ## D-070 — The held-out archive edge read on the local or the UTC date until the owner confirms D-038; six 31 May queue entries removed · decided (lead, pending the owner) · 2026-11-20 · amends D-019, D-022, D-038, D-047, D-052
 - **Reading** (the lead): until the owner confirms D-038's local-day reading, CLAUDE.md's "dated 1 Jun 2026 or later" means either the camera's local date or the UTC date. An archived frame is held out if any reading of its date, local or UTC, is on or after 1 Jun 2026.
@@ -1218,6 +1220,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - At 15:46 UTC (`ps`, `pmset -g batt`, `pmset -g assertions`): both jobs running, capture since 02:39:39 and the forecast stand-in since 02:39:48 (13 h 07 min); on AC power, 100 %, charged; the only sleep assertion is that `caffeinate -s`.
 - **The machine:** 19 GiB free of 460 GiB at 15:46 UTC (96 % used, `df -g`). Eight orphaned `terraform-provider-aws` processes (parent pid 1), left by scratch mutation runs of 19 and 20 Nov and outside `cache/runtime/`, held 949,040 KiB of resident memory at 15:46 UTC, about 0.9 GiB. That varies: readings between 15:46 and 17:08 UTC ran from 0.5 to 1.2 GiB (`ps -o rss`). The lead may stop them.
 - **Amended 20 Nov (D-078):** the supervisor now finds the running loops itself (the NPS fetcher lock and the forecast script's path), so the owner's start command names no pid; its header gives the verified start form (a subshell, `setsid() != -1`). Still not started.
+- **Amended 20 Nov (D-079):** the supervisor now holds `caffeinate -s` while it runs, so a restart cannot sleep through; on 20 Nov the Mac slept one second after a loop exited.
 
 ## D-077 — One archive request pair on 20 Nov was 4.9944 s apart on the log's stamps · open (a breach record; the fix is proposed for workers/common) · 2026-11-20
 - **What the log shows** (the backfill planner's recount, D-072; recounted by the docs fixer from a copy of `capture_log/2026-11-20.jsonl` taken at 17:03 UTC). A request's end is its record's `t`, and its start is `t − elapsed_ms`.
@@ -1230,6 +1233,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - The limiter is `MinIntervalLimiter.hold()` in `workers/common/src/lookout_common/http.py`. It sleeps for the rest of the spacing. Then, if no other process changed its state meanwhile, it lets the request start whatever the clock now reads, which is how it caps the wait at one interval when the clock has stepped back. So a sleep that ends early on the wall clock is not caught.
 - **Proposed fix, for `workers/common`'s owner, with a test:** read the clock again after the sleep and wait out any remainder, or space archive requests at 5.05 s (D-072: no measurable cost).
 - **Status:** the running loop (capture 0.2.0, snapshot `034c46b`) is unchanged, and capture 0.2.1 doesn't touch the limiter. The same margin applies from 00:00 UTC on 21 Nov, when the next day's budget opens, until a fixed `workers/common` is committed and the runtime is re-snapshotted.
+- **Amended 20 Nov (D-079):** fixed in `3cd2ca7` (the limiter waits out the wall clock after every sleep; archive spacing 5.05 s), live in the capture loop since 19:56 UTC.
 
 
 ## D-078 — The fourth workflow committed per package; the supervisor finds the running loops itself; T1b queued; a camera not polled after a restart is flagged, not counted · decided (lead) · 2026-11-20 · amends D-064, D-069, D-072, D-076
@@ -1253,6 +1257,34 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - CLAUDE.md's archived-frames rule carries D-070's interim reading (local or UTC date);
   - the NPS email draft's frame figure is the regenerated plan's: about 23,700 frames (about 1.4 GB) by mid-December;
   - the plan's line on the supervisor says what adoption does not remove.
+- **Amended 20 Nov (D-079):** the capture loop's pid changed at the 19:56 restart (now 70525); the supervisor's start command needs no change.
+
+## D-079 — The archive limiter fix committed; capture 0.2.1 live since 19:56 UTC; the Mac slept through the restart · decided (lead; record and operation) · 2026-11-20 · amends D-049, D-069, D-076, D-077, D-078
+- **The limiter fix** (D-077's fix): commit `3cd2ca7`, in `workers/common` and capture's spacing constant.
+  - `MinIntervalLimiter.hold()` and `wait()` start a request only when three things hold: the wall clock shows the interval since the recorded last request (and any back-off is over); this process's own last request is an interval ago on a sleep-inclusive monotonic clock (`timeutil.steady_clock`); and the real wait asked for at the first read has passed.
+  - After every sleep, the limiter reads both clocks and the state again and waits out any remainder. HEAD's shortcut is gone: it let a request start once the state was unchanged after a sleep, which is how 20 Nov's pair logged 4.9944 s (reproduced in a test: 4.99399996 s on HEAD's code).
+  - A wall-clock step back costs at most one more interval of real waiting. Back-offs, and the guarantee between two processes, remain wall-clock only (documented).
+  - `ARCHIVE_MIN_INTERVAL_S` is now 5.05 s, so the log's own stamps (`t` cut to the millisecond, `elapsed_ms` to 0.1 ms) also show at least 5 s. In loop_sim that costs about 1 % more loop time per 1,000 requests, and every simulated day still spends the 1,000-request budget.
+  - **Checks:** common 293 tests (35 new; 19 of the builder's fail on HEAD); capture 249 + 4 slow; the planner's 44. Two adversarial reviews (clock semantics, regressions) found nothing above low; the fixer fixed 8 code defects with tests and documented the rest.
+- **`make test` on `3cd2ca7`:** all 10 suites passed, run 19:41–20:00 UTC (1,078 s of wall time). Capture's pytest reported 178.6 s against 886 s of wall time, because the Mac slept through most of that span (below).
+- **The re-snapshot** (D-049's procedure, capture only):
+  - the lead built `~/lookout-data/cache/runtime/3cd2ca7` at 19:41 UTC with its own venvs (capture 0.2.1, forecast 0.2.0; `uv sync --locked --no-dev --offline`). Its read-only `status` showed every camera's next poll on 0.2.1's `legacy_state` bound;
+  - `current` → `3cd2ca7` at 19:43:59; SIGTERM to the 0.2.0 loop (pid 36437) at 19:44:05, 13 s after its pass ended at 19:43:52; it exited at 19:44:06 with status 0;
+  - the new loop (pid 70525, `lookout-capture/0.2.1`) started at 19:56:13 and took the NPS fetcher lock at 19:56:14.
+  - The forecast stand-in (pid 36474) was not restarted. It still runs forecast 0.1.0 from `034c46b`, and moves to 0.2.0 at its next start.
+- **Why the restart took 12 minutes: the Mac slept.** It went to sleep at 19:44:07 UTC, one second after the old loop exited (`pmset -g log`). It woke for 9 s at 19:44:48, slept again at 19:44:57, and stayed asleep until 19:56:05; the lead's start command ran 8 s after that.
+  - The old loop's `caffeinate -s` was the last assertion holding the Mac (the 8 h keep-awake ended at 14:27:54 UTC, D-076).
+  - This Mac's system sleep is set to 1 minute (`pmset -g`), so it slept the moment that assertion dropped.
+- **What it cost** (`lookout-eval data-report` to 20:01:58 UTC):
+  - each camera went 1,058.9–1,063.6 s between its last 0.2.0 poll (19:43:41–19:43:52) and its first 0.2.1 poll (20:01:20–20:01:36);
+  - the gate rule counts that restart's excess as 763.6 s (Smokies); the loop's own 12.4 min gap between passes is an outage under PLAN.md's figure;
+  - 10.69 h are now lost, and the clock's earliest close moves from 22:53:14 to **23:05:58 UTC on Sun 22 Nov**. PLAN.md's capture-only figure: 22:44:12 UTC. The plan had expected 60–70 s.
+  - Part of that cost is by design: 0.2.0's state records no answers, so 0.2.1 counted each camera's last poll as answered when it first read the state (19:56:14), then waited 300 s (D-065's upgrade bound).
+- **The first 0.2.1 pass** (20:01:20–20:01:37): all 8 cameras polled (HTTP 200), each request record carries `sent_at` and `answered_at`, and every camera stored a new image. No new unproven pair: the window's 10 unproven pairs are all from 19 Nov's 0.1.0 code except Acadia's 299.588 s (0.2.0).
+- **Lessons, now in the procedure:**
+  - a restart holds its own sleep assertion (`caffeinate -s`, on AC) across the stop and the start, and stops and starts in one command;
+  - the supervisor (still not started) now holds `caffeinate -s` while it runs, the same AC-only assertion the loop holds, so its own restarts cannot sleep through (tested in the scratchpad).
+- **Still session-attached:** the new loop is a child of the lead's session, like the old one. The supervisor finds it through the fetcher lock (D-078), so owner action 1's command is unchanged.
 
 ---
 
