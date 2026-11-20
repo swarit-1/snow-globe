@@ -7,8 +7,16 @@ cross-field rules a schema cannot express:
 - the file name is ``<id>.json`` and ``place_id`` is the part of ``id`` before the dot;
 - ``time_zone`` loads as an IANA zone;
 - each place has exactly one ``default`` viewpoint;
-- no alias is shared by two different places (the parser could not tell them apart);
-- each landmark's ``distance_km`` matches the great-circle distance from the camera.
+- no alias is shared by two different places, compared after the spacing, hyphen
+  and apostrophe differences a parser normalises away (it could not tell them apart);
+- each landmark's ``distance_km`` matches the great-circle distance from the camera,
+  and its ``azimuth_deg``, when given, the initial bearing;
+- ``archive_since`` is null exactly when ``archive_code`` is null.
+
+The schema departs from the PRD Appendix A sketch in a few places: the pose fields
+live in a top-level ``pose`` object (not under ``camera``), landmarks live at the top
+level (not under ``plate``), and the hourly cap is ``max_images_per_hour``. A manifest
+written to the Appendix A shape is refused with a message naming the new place.
 
 The manifest folder is ``$LOOKOUT_MANIFEST_DIR`` if set, else the first
 ``viewpoints/manifests`` found walking up from this file (editable installs) or from
@@ -21,6 +29,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date
@@ -47,6 +56,7 @@ __all__ = [
     "load_manifests",
     "load_schema",
     "manifest_dir",
+    "normalise_alias",
     "schema_path",
     "validate_manifest",
 ]
@@ -57,6 +67,25 @@ SCHEMA_FILENAME = "viewpoint.schema.json"
 _EARTH_RADIUS_KM = 6371.0088  # IUGG mean radius
 _DISTANCE_TOLERANCE_KM = 0.5
 _DISTANCE_TOLERANCE_FRAC = 0.02
+_AZIMUTH_TOLERANCE_DEG = 0.5
+
+#: PRD Appendix A spellings the schema moved, with where each now lives.
+_APPENDIX_A_MOVES: dict[tuple[str, ...], str] = {
+    **{
+        ("camera", key): f"pose.{key}"
+        for key in (
+            "heading_deg",
+            "pitch_deg",
+            "roll_deg",
+            "fov_deg",
+            "pose_rms_px",
+            "pose_check_deg",
+            "pose_check_method",
+        )
+    },
+    ("plate", "landmarks"): "the top-level landmarks array (the one every consumer reads)",
+    ("truth_camera", "polite_caps", "max_per_hour"): "truth_camera.polite_caps.max_images_per_hour",
+}
 
 Status = Literal["msv", "third", "v1-candidate"]
 TruthKind = Literal["ard-aircam", "park-cam"]
@@ -123,8 +152,29 @@ def load_schema(path: Path | None = None) -> dict[str, Any]:
     return schema
 
 
+def _appendix_a_hints(document: Mapping[str, Any]) -> list[str]:
+    """Name every PRD Appendix A field the document uses that the schema moved."""
+    hints: list[str] = []
+    for path, target in _APPENDIX_A_MOVES.items():
+        node: Any = document
+        for part in path:
+            node = node.get(part) if isinstance(node, Mapping) else None
+            if node is None:
+                break
+        else:
+            hints.append(f"{'.'.join(path)} is not used: put it in {target}")
+    return hints
+
+
 def validate_manifest(document: Mapping[str, Any], schema: Mapping[str, Any]) -> None:
-    """Raise :class:`ManifestError` listing every schema violation in ``document``."""
+    """Raise :class:`ManifestError` listing every schema violation in ``document``.
+
+    A field written to the PRD Appendix A shape that the schema moved (see the module
+    docstring) is reported first, with the place it belongs now.
+    """
+    hints = _appendix_a_hints(document)
+    if hints:
+        raise ManifestError("; ".join(hints))
     validator = Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER)
     errors = sorted(
         validator.iter_errors(document), key=lambda e: [str(p) for p in e.absolute_path]
@@ -313,6 +363,12 @@ def _check_one(doc: Mapping[str, Any], path: Path) -> None:
         ZoneInfo(doc["time_zone"])
     except (ZoneInfoNotFoundError, ValueError):
         problems.append(f"time_zone {doc['time_zone']!r} is not an IANA zone")
+    truth = doc["truth_camera"]
+    if (truth["archive_code"] is None) != (truth["archive_since"] is None):
+        problems.append(
+            f"archive_since {truth['archive_since']!r} and archive_code "
+            f"{truth['archive_code']!r} must both be set or both be null"
+        )
     cam = doc["camera"]
     for item in doc["landmarks"]:
         computed = great_circle_km(cam["lat"], cam["lon"], item["lat"], item["lon"])
@@ -322,22 +378,37 @@ def _check_one(doc: Mapping[str, Any], path: Path) -> None:
                 f"landmark {item['name']!r}: distance_km {item['distance_km']} but the "
                 f"camera-to-landmark great-circle distance is {computed:.2f} km"
             )
+        if item.get("azimuth_deg") is not None:
+            bearing = initial_bearing_deg(cam["lat"], cam["lon"], item["lat"], item["lon"])
+            off = abs((item["azimuth_deg"] - bearing + 180.0) % 360.0 - 180.0)
+            if off > _AZIMUTH_TOLERANCE_DEG:
+                problems.append(
+                    f"landmark {item['name']!r}: azimuth_deg {item['azimuth_deg']} but the "
+                    f"initial bearing from the camera is {bearing:.2f} deg"
+                )
     if problems:
         raise ManifestError(f"{path.name}: " + "; ".join(problems))
+
+
+def normalise_alias(alias: str) -> str:
+    """The form two aliases are compared in: lower case, apostrophes dropped, hyphens and
+    runs of spaces as one space (PRD §7.5: the parser cannot tell such variants apart)."""
+    return " ".join(re.split(r"[\s-]+", alias.lower().replace("'", ""))).strip()
 
 
 def _check_set(viewpoints: Mapping[str, Viewpoint]) -> None:
     problems: list[str] = []
     defaults: dict[str, list[str]] = {}
-    alias_owner: dict[str, str] = {}
+    alias_owner: dict[str, tuple[str, str]] = {}
     for vp in viewpoints.values():
         defaults.setdefault(vp.place_id, [])
         if vp.default:
             defaults[vp.place_id].append(vp.id)
         for alias in vp.aliases:
-            owner = alias_owner.setdefault(alias, vp.place_id)
+            owner, first = alias_owner.setdefault(normalise_alias(alias), (vp.place_id, alias))
             if owner != vp.place_id:
-                problems.append(f"alias {alias!r} is used by both {owner!r} and {vp.place_id!r}")
+                shown = repr(alias) if first == alias else f"{alias!r} (as {first!r})"
+                problems.append(f"alias {shown} is used by both {owner!r} and {vp.place_id!r}")
     for place_id, ids in sorted(defaults.items()):
         if len(ids) != 1:
             problems.append(f"place {place_id!r} needs exactly one default viewpoint, has {ids}")

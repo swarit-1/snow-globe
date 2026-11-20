@@ -48,6 +48,54 @@ def test_user_agent_env_override_and_header_cannot_replace_it(monkeypatch: pytes
     assert lh.user_agent() == lh.DEFAULT_USER_AGENT
 
 
+def test_a_per_request_header_cannot_replace_the_ua():
+    """Review finding: only constructor headers were filtered before."""
+    seen: list[httpx.Request] = []
+    with lh.polite_client(transport=_recording_transport(seen)) as client:
+        client.get("https://www.nps.gov/x", headers={"User-Agent": "Mozilla/5.0 owner@example"})
+        request = client.build_request("GET", "https://www.nps.gov/y")
+        request.headers["user-agent"] = "curl/8"
+        client.send(request)
+    assert [r.headers["User-Agent"] for r in seen] == [lh.DEFAULT_USER_AGENT] * 2
+
+
+def test_redirect_carries_no_cookie_and_keeps_the_ua():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.host == "www.nps.gov":
+            return httpx.Response(
+                302,
+                headers={"Location": "https://other.example/final", "Set-Cookie": "s=1; Path=/"},
+            )
+        return httpx.Response(200, text="ok")
+
+    with lh.polite_client(transport=httpx.MockTransport(handler)) as client:
+        response = client.get("https://www.nps.gov/start", headers={"User-Agent": "Mozilla"})
+    assert response.status_code == 200 and [r.url.host for r in seen] == [
+        "www.nps.gov",
+        "other.example",
+    ]
+    assert all(r.headers["User-Agent"] == lh.DEFAULT_USER_AGENT for r in seen)
+    assert "cookie" not in {k.lower() for k in seen[1].headers}
+
+
+def test_redirects_are_capped_at_five():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(302, headers={"Location": f"/r{len(seen)}"})
+
+    with (
+        lh.polite_client(transport=httpx.MockTransport(handler)) as client,
+        pytest.raises(httpx.TooManyRedirects),
+    ):
+        client.get("https://www.nps.gov/r0")
+    assert len(seen) == 6  # the request and five redirects, never a seventh
+
+
 def test_cookies_are_never_kept():
     seen: list[httpx.Request] = []
     with lh.polite_client(transport=_recording_transport(seen)) as client:
@@ -164,23 +212,61 @@ def test_clock_stepping_back_caps_the_wait(tmp_path: Path):
     assert limiter.next_allowed_in() == pytest.approx(5.0)
 
 
-def test_corrupt_state_assumes_a_request_just_happened(tmp_path: Path):
+def test_corrupt_state_assumes_the_longest_back_off_and_keeps_it(tmp_path: Path):
+    """Review finding: an unreadable state file used to drop an active back-off."""
     clock = FakeClock()
     limiter = _limiter(tmp_path, clock)
-    (tmp_path / "ratelimit" / "nps-archive.json").write_text("{not json")
-    assert limiter.next_allowed_in() == pytest.approx(5.0)
+    limiter.defer(3600)
+    state = tmp_path / "ratelimit" / "nps-archive.json"
+    state.write_text(state.read_text()[:20])  # torn: the back-off is unreadable
+    assert limiter.next_allowed_in() == pytest.approx(lh.BACKOFF_CAP_S)
+    clock.now += 600
+    assert limiter.next_allowed_in() == pytest.approx(lh.BACKOFF_CAP_S)  # still unreadable
+    limiter.defer(0)  # any locked call writes the conservative state back ...
+    repaired = json.loads(state.read_text())
+    assert repaired["not_before_unix"] == pytest.approx(clock.now + lh.BACKOFF_CAP_S)
+    clock.now += 1800
+    assert limiter.next_allowed_in() == pytest.approx(lh.BACKOFF_CAP_S - 1800)  # ... so it ends
+    assert limiter.wait() == pytest.approx(lh.BACKOFF_CAP_S - 1800)
 
 
-def test_process_mode_is_shared_in_process_and_auto_picks_it_for_s3(
-    monkeypatch: pytest.MonkeyPatch,
-):
+def test_corrupt_state_hold_off_is_configurable(tmp_path: Path):
+    clock = FakeClock()
+    limiter = MinIntervalLimiter(
+        "x",
+        5.0,
+        state_dir=tmp_path,
+        mode="file",
+        clock=clock,
+        sleep=clock.sleep,
+        corrupt_hold_off_s=60.0,
+    )
+    (tmp_path / "ratelimit" / "x.json").write_text('{"last_unix": "soon"}')
+    assert limiter.next_allowed_in() == pytest.approx(60.0)
+    (tmp_path / "ratelimit" / "x.json").write_text('{"last_unix": NaN, "not_before_unix": 0}')
+    assert limiter.next_allowed_in() == pytest.approx(60.0)
+    with pytest.raises(ValueError):
+        MinIntervalLimiter("x", 5.0, state_dir=tmp_path, mode="file", corrupt_hold_off_s=-1)
+
+
+def test_process_mode_is_shared_in_process():
     clock = FakeClock()
     a = MinIntervalLimiter("lambda-test", 2.0, mode="process", clock=clock, sleep=clock.sleep)
     b = MinIntervalLimiter("lambda-test", 2.0, mode="process", clock=clock, sleep=clock.sleep)
     assert a.wait() == 0.0
     assert b.wait() == pytest.approx(2.0)
+
+
+def test_auto_picks_process_mode_only_on_lambda(monkeypatch: pytest.MonkeyPatch, data_root: Path):
+    """Review finding: LOOKOUT_STORAGE=s3 on this laptop used to drop cross-process spacing."""
     monkeypatch.setenv("LOOKOUT_STORAGE", "s3")
-    assert MinIntervalLimiter("lambda-auto", 1.0).mode == "process"
+    assert MinIntervalLimiter("auto-laptop", 1.0).mode == "file"
+    assert (data_root / "state" / "ratelimit").is_dir()
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "lookout-capture")
+    assert lh.on_aws_lambda()
+    assert MinIntervalLimiter("auto-lambda", 1.0).mode == "process"
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "  ")
+    assert not lh.on_aws_lambda()
 
 
 def test_auto_mode_uses_the_data_dir_state(data_root: Path):
@@ -223,3 +309,69 @@ def test_hold_serialises_and_spaces_real_processes(tmp_path: Path):
     assert len(spans) == 6
     gaps = [b_start - a_end for (_, a_end), (b_start, _) in itertools.pairwise(spans)]
     assert min(gaps) >= 0.24, gaps
+
+
+def _auto_worker(data_dir: str, out: str) -> None:
+    import os
+
+    os.environ["LOOKOUT_DATA_DIR"] = data_dir
+    os.environ["LOOKOUT_STORAGE"] = "s3"  # S3 storage on this laptop, not on Lambda
+    os.environ.pop("AWS_LAMBDA_FUNCTION_NAME", None)
+    limiter = MinIntervalLimiter("probe-auto", 0.3)  # the default mode="auto"
+    for _ in range(2):
+        with limiter.hold():
+            start = time.time()
+            time.sleep(0.01)
+            end = time.time()
+        with open(out, "a") as handle:
+            handle.write(f"{start} {end} {limiter.mode}\n")
+
+
+def test_auto_mode_with_s3_storage_still_spaces_processes_on_one_machine(tmp_path: Path):
+    """Review finding: two processes started requests microseconds apart under auto + S3."""
+    out = tmp_path / "times.txt"
+    ctx = multiprocessing.get_context("spawn")
+    procs = [
+        ctx.Process(target=_auto_worker, args=(str(tmp_path / "data"), str(out))) for _ in range(2)
+    ]
+    for proc in procs:
+        proc.start()
+    for proc in procs:
+        proc.join(60)
+        assert proc.exitcode == 0
+    rows = sorted(line.split() for line in out.read_text().splitlines())
+    assert {mode for *_, mode in rows} == {"file"} and len(rows) == 4
+    spans = sorted((float(start), float(end)) for start, end, _ in rows)
+    gaps = [b_start - a_end for (_, a_end), (b_start, _) in itertools.pairwise(spans)]
+    assert min(gaps) >= 0.29, gaps
+
+
+def _deferring_holder(state_dir: str, ready: str, out: str) -> None:
+    limiter = MinIntervalLimiter("probe-hold", 0.05, state_dir=state_dir, mode="file")
+    limiter.defer(1.5)
+    Path(ready).write_text(str(time.time()))
+    with limiter.hold():
+        Path(out).write_text(str(time.time()))
+
+
+def test_back_off_sleep_does_not_hold_the_lock_across_processes(tmp_path: Path):
+    """Review finding: hold() slept under the flock, so other processes' calls blocked."""
+    ready, out = tmp_path / "ready.txt", tmp_path / "started.txt"
+    ctx = multiprocessing.get_context("spawn")
+    proc = ctx.Process(target=_deferring_holder, args=(str(tmp_path), str(ready), str(out)))
+    proc.start()
+    deadline = time.time() + 30
+    while not ready.exists() and time.time() < deadline:
+        time.sleep(0.01)
+    time.sleep(0.3)  # the holder is now waiting out its 1.5 s back-off inside hold()
+    limiter = MinIntervalLimiter("probe-hold", 0.05, state_dir=tmp_path, mode="file")
+    began = time.time()
+    remaining = limiter.next_allowed_in()
+    limiter.defer(0.0)  # takes the lock: must not wait for the holder's back-off
+    blocked = time.time() - began
+    proc.join(30)
+    assert proc.exitcode == 0
+    assert blocked < 0.5, blocked
+    assert 0.3 < remaining < 1.3, remaining
+    started, deferred_at = float(out.read_text()), float(ready.read_text())
+    assert started - deferred_at >= 1.45  # the holder still honoured the back-off

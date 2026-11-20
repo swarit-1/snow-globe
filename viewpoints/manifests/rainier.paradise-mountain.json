@@ -118,6 +118,7 @@
     "Night mode measured on one frame (2026-11-18 20:21 PST, ~/lookout-data/samples/mountain.jpg): monochrome, mean channel spread 0.01/255, mean luma 61.6.",
     "EXIF carries DateTimeOriginal in local time plus TimeZoneOffset -8 and SubSecTimeOriginal; use lookout_common.images.exif_summary.",
     "Update cadence undocumented; the 2026-11-19 stopgap saw a new Last-Modified at every 5-minute poll, so the 4-per-hour cap binds. Measure before filling interval_min_measured.",
-    "Faces a busy visitor area: people and vehicles must be blurred before any publication (PRD §15.1)."
+    "Faces a busy visitor area: people and vehicles must be blurred before any publication (PRD §15.1).",
+    "Night mode confirmed on the capture loop's live frame of 2026-11-19 10:55Z (Sun 44.0 deg below the horizon): chroma_spread 0.011/255, mean luma 34.7 (capture-loop sidecars ~/lookout-data/frames/rainier.paradise-mountain/2026-11-19/*.json; Sun altitude from the NOAA solar-position equations at the camera position)."
   ]
 }

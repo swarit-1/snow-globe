@@ -119,17 +119,26 @@ def test_archive_summer_create_time_in_standard_time_is_accepted():
     # Real `pore` asset, 15 Jul 2021 (archive check, 2026-11-19): ImageCreateDateTime stays on
     # PST in summer; LocalTimeString is PDT civil time. Both mean 21:30 UTC, and NPS's own
     # SolarElevationAngle (67.29 deg) matches 21:30 UTC at Point Reyes.
-    args = ("07/15/2021 01:30:00 PM", "7/15/2021 2:30 PM Pacific Daylight Time",
-            "America/Los_Angeles")
+    args = (
+        "07/15/2021 01:30:00 PM",
+        "7/15/2021 2:30 PM Pacific Daylight Time",
+        "America/Los_Angeles",
+    )
     assert tu.parse_nps_archive_time(*args) == utc(2021, 7, 15, 21, 30)
     assert tu.parse_nps_archive_time(*args, convention="wall") == utc(2021, 7, 15, 21, 30)
     # Any other disagreement is still refused.
     with pytest.raises(ValueError, match="disagree"):
-        tu.parse_nps_archive_time("07/15/2021 03:30:00 PM",
-                                  "7/15/2021 2:30 PM Pacific Daylight Time", "America/Los_Angeles")
+        tu.parse_nps_archive_time(
+            "07/15/2021 03:30:00 PM",
+            "7/15/2021 2:30 PM Pacific Daylight Time",
+            "America/Los_Angeles",
+        )
     with pytest.raises(ValueError, match="disagree"):
-        tu.parse_nps_archive_time("01/15/2021 01:30:00 PM",
-                                  "1/15/2021 2:30 PM Pacific Standard Time", "America/Los_Angeles")
+        tu.parse_nps_archive_time(
+            "01/15/2021 01:30:00 PM",
+            "1/15/2021 2:30 PM Pacific Standard Time",
+            "America/Los_Angeles",
+        )
 
 
 def test_archive_conventions_differ_only_for_standard_labels_in_summer():

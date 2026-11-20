@@ -19,6 +19,7 @@ from .paths import (
     frame_key,
     sidecar_key,
     state_key,
+    thumb_key,
 )
 from .storage import KeyNotFoundError, LocalStorage, S3Storage, Storage, storage_from_env
 from .timeutil import (
@@ -58,5 +59,6 @@ __all__ = [
     "sidecar_key",
     "state_key",
     "storage_from_env",
+    "thumb_key",
     "utcnow",
 ]

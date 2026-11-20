@@ -12,11 +12,17 @@ SAMPLES = Path.home() / "lookout-data" / "samples"
 
 
 @pytest.fixture(autouse=True)
-def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Drop any LOOKOUT_* or AWS_* variables from the developer's shell."""
+def clean_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Drop any LOOKOUT_* or AWS_* variables from the developer's shell.
+
+    LOOKOUT_DATA_DIR then points at a folder inside this test's tmp_path, so a test that
+    forgets ``data_root`` still never reaches the real ``~/lookout-data``. A test of the
+    built-in default must ``delenv`` it (and set HOME to a temp folder).
+    """
     for name in list(os.environ):
         if name.startswith(("LOOKOUT_", "AWS_")):
             monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(tmp_path / "default-data-dir"))
 
 
 @pytest.fixture

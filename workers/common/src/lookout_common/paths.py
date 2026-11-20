@@ -7,6 +7,10 @@ The same key is used on local disk (relative to the data dir) and in S3 (relativ
 to the bucket prefix), so a worker never needs to know where it is running.
 
 Dates in keys are UTC dates of the UTC timestamp in the same key.
+
+The data-dir guard (D-017) compares folders by identity (device and inode), not only by
+spelling, so ``~/documents`` on a case-insensitive disk and the firmlinked
+``/System/Volumes/Data/Users/...`` path are both recognised as ``~/Documents``.
 """
 
 from __future__ import annotations
@@ -37,6 +41,7 @@ __all__ = [
     "sidecar_key",
     "state_dir",
     "state_key",
+    "thumb_key",
     "validate_key",
     "validate_viewpoint_id",
 ]
@@ -85,13 +90,39 @@ def _is_within(path: Path, root: Path) -> bool:
     return True
 
 
+def _identity(path: Path) -> tuple[int, int] | None:
+    """``(st_dev, st_ino)`` of an existing path (symlinks followed), else None."""
+    try:
+        info = os.stat(path)
+    except OSError:
+        return None
+    return info.st_dev, info.st_ino
+
+
+def _is_within_by_identity(path: Path, root: Path) -> bool:
+    """True if ``root`` exists and ``path`` or one of its existing ancestors *is* ``root``.
+
+    Folder identity, not spelling: on a case-insensitive APFS disk ``~/documents`` is
+    ``~/Documents``, and ``/System/Volumes/Data/Users/<me>/Documents`` is the same
+    folder through a firmlink. ``Path.resolve()`` keeps both spellings as typed.
+    """
+    target = _identity(root)
+    if target is None:
+        return False
+    return any(_identity(candidate) == target for candidate in (path, *path.parents))
+
+
 def check_data_dir(path: Path, *, home: Path | None = None) -> Path:
     """Refuse a data dir inside a git work tree or a cloud-synced folder; return it resolved.
+
+    Implements D-017 and CLAUDE.md "Data":
 
     - Inside any git work tree (this repo included): always refused. CLAUDE.md forbids
       frames, audio, plates, renders, traces or GRIB files inside the repo.
     - Inside ``~/Documents``, ``~/Desktop`` or another synced root: refused unless
-      ``LOOKOUT_ALLOW_SYNCED_DATA=1`` (iCloud would upload gigabytes of frames).
+      ``LOOKOUT_ALLOW_SYNCED_DATA=1`` (iCloud would upload gigabytes of frames). A
+      path counts as inside when it is spelled under the root, or when it or an
+      existing ancestor is the same folder as the root (case variants, firmlinks).
     """
     resolved = path.expanduser().resolve()
     git_root = enclosing_git_root(resolved)
@@ -104,7 +135,7 @@ def check_data_dir(path: Path, *, home: Path | None = None) -> Path:
     if not _truthy(os.environ.get(ENV_ALLOW_SYNCED)):
         for root in SYNCED_ROOTS:
             synced = (home_dir / root.removeprefix("~/")).resolve()
-            if _is_within(resolved, synced):
+            if _is_within(resolved, synced) or _is_within_by_identity(resolved, synced):
                 raise UnsafeDataDirError(
                     f"data dir {resolved} is inside {synced}, which is cloud-synced; "
                     f"use {DEFAULT_DATA_DIR} or set {ENV_ALLOW_SYNCED}=1 to override"
@@ -138,7 +169,9 @@ def cache_dir() -> Path:
 def validate_key(key: str) -> str:
     """Return ``key`` if it is a safe POSIX relative key, else raise ``ValueError``.
 
-    Safe means: non-empty, relative, ``/``-separated, no ``.``/``..``/empty segments,
+    Safe means: non-empty, relative, ``/``-separated, no empty segments and no segment
+    that starts with ``.`` (so no ``.``/``..``, and no hidden names: local listings skip
+    dot-files such as temp files and ``.DS_Store``, and S3 must list the same keys),
     no backslashes, no NUL, and no trailing slash.
     """
     if not isinstance(key, str) or not key:
@@ -148,8 +181,10 @@ def validate_key(key: str) -> str:
     if key.startswith("/") or key.endswith("/"):
         raise ValueError(f"storage key {key!r} must be relative and must not end with '/'")
     for segment in key.split("/"):
-        if segment in {"", ".", ".."}:
-            raise ValueError(f"storage key {key!r} has an empty, '.' or '..' segment")
+        if segment == "":
+            raise ValueError(f"storage key {key!r} has an empty segment")
+        if segment.startswith("."):
+            raise ValueError(f"storage key {key!r} has a segment starting with '.'")
     return key
 
 
@@ -189,18 +224,32 @@ def _utc_date(value: date | datetime, what: str) -> date:
     raise TypeError(f"{what} must be a date or an aware datetime")
 
 
+def _hashed_image_key(folder: str, viewpoint_id: str, image_time_utc: datetime, sha256: str) -> str:
+    validate_viewpoint_id(viewpoint_id)
+    digest = sha256.lower() if isinstance(sha256, str) else ""
+    if len(digest) < 12 or not _HEX_RE.match(digest):
+        raise ValueError("sha256 must be a hex digest of at least 12 characters")
+    utc = _as_utc(image_time_utc, "image_time_utc")
+    return f"{folder}/{viewpoint_id}/{utc:%Y-%m-%d}/{compact_utc(utc)}_{digest[:12]}.jpg"
+
+
 def frame_key(viewpoint_id: str, image_time_utc: datetime, sha256: str) -> str:
     """Key of a live frame: ``frames/<vp>/<YYYY-MM-DD>/<YYYYMMDDTHHMMSSZ>_<sha256[:12]>.jpg``.
 
     ``sha256`` is the lower-case hex digest of the bytes as downloaded (so dedupe works
     before any resize). The date folder is the UTC date of the image time.
     """
-    validate_viewpoint_id(viewpoint_id)
-    digest = sha256.lower() if isinstance(sha256, str) else ""
-    if len(digest) < 12 or not _HEX_RE.match(digest):
-        raise ValueError("sha256 must be a hex digest of at least 12 characters")
-    utc = _as_utc(image_time_utc, "image_time_utc")
-    return f"frames/{viewpoint_id}/{utc:%Y-%m-%d}/{compact_utc(utc)}_{digest[:12]}.jpg"
+    return _hashed_image_key("frames", viewpoint_id, image_time_utc, sha256)
+
+
+def thumb_key(viewpoint_id: str, image_time_utc: datetime, sha256: str) -> str:
+    """Key of a 640 px thumbnail (PRD §8.7 staleness checks and Tier 0).
+
+    ``thumbs/<vp>/<YYYY-MM-DD>/<YYYYMMDDTHHMMSSZ>_<sha256[:12]>.jpg``, UTC image time and
+    UTC date folder. Pass the same ``sha256`` as :func:`frame_key`, the digest of the
+    bytes as downloaded, so a thumbnail and its full frame share a file name.
+    """
+    return _hashed_image_key("thumbs", viewpoint_id, image_time_utc, sha256)
 
 
 def archive_key(viewpoint_id: str, image_time_utc: datetime, asset_id: str) -> str:

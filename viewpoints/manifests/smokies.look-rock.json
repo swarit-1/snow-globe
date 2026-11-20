@@ -66,7 +66,7 @@
     "interval_min_nominal": 15,
     "interval_min_measured": null,
     "fixed_view": true,
-    "night_mode": "unknown",
+    "night_mode": "infrared",
     "polite_caps": {
       "max_images_per_hour": 4,
       "poll_interval_s": 300,
@@ -87,6 +87,7 @@
     "3DEP ground elevation 808.4 m vs AirNow's 793.3 m (15 m apart); the camera is on or near the observation tower, so its height above ground is unknown.",
     "archive_since is GetAvailableDays MinDay for 'grsm' (~/lookout-data/samples/nps-json/days_grsm.json, fetched 2026-11-19).",
     "EXIF Artist and Copyright 'National Park Service', Software 'ARS_Digicam', 3840x2160: read from the first 64 KB of one live frame on 2026-11-19.",
-    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2)."
+    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2).",
+    "Night mode measured on one live frame (2026-11-19 10:45Z, Sun 18.3 deg below the horizon): monochrome, chroma_spread 0.0036/255, mean luma 22.1; daylight frames 28.0-38.4 (capture-loop sidecars ~/lookout-data/frames/smokies.look-rock/2026-11-19/*.json; Sun altitude from the NOAA solar-position equations at the camera position). Factual correction of 'unknown', 2026-11-19."
   ]
 }

@@ -9,8 +9,10 @@ from pathlib import Path
 
 import boto3
 import pytest
+from botocore.exceptions import ClientError
 from moto import mock_aws
 
+from lookout_common import jsonl
 from lookout_common import storage as st
 from lookout_common.paths import UnsafeDataDirError
 from lookout_common.storage import KeyNotFoundError, LocalStorage, LockTimeoutError, S3Storage
@@ -225,6 +227,92 @@ def test_s3_append_repairs_a_torn_last_line(s3_client):
     store.append_jsonl("capture_log/2026-11-19.jsonl", {"a": 2})
     lines = store.get_bytes("capture_log/2026-11-19.jsonl").decode().splitlines()
     assert [json.loads(x)["a"] for x in lines] == [1, 2]
+
+
+def test_s3_append_after_a_really_torn_tail_keeps_the_log_readable(s3_client):
+    """Review finding: the fragment became a middle line, and the whole day raised."""
+    key = "forecast_log/2026-11-19.jsonl"
+    s3_client.put_object(Bucket=BUCKET, Key=key, Body=b'{"t":"x","a":1}\n{"t":"2026-11-19T06:05')
+    store = S3Storage(BUCKET, "", client=s3_client)
+    store.append_jsonl(key, {"a": 2})
+    bad: list[jsonl.BadLine] = []
+    rows = list(jsonl.iter_jsonl_bytes(store.get_bytes(key), bad_lines=bad))
+    assert [r["a"] for r in rows] == [1, 2]
+    assert [(b.line, b.reason) for b in bad] == [(2, jsonl.REASON_INVALID_JSON)]
+
+
+def test_write_json_turns_non_finite_floats_into_null(store):
+    store.write_json("state/x.json", {"lag_s": float("nan"), "ok": 1.5})
+    raw = store.get_bytes("state/x.json")
+    assert b"NaN" not in raw
+    assert store.read_json("state/x.json") == {"lag_s": None, "ok": 1.5}
+
+
+# --- S3 conditional-write conflicts (409 is "retry", 412 is "exists") ------------------------
+class _ConflictThenStub:
+    """A fake S3 client whose put_object raises the given error codes, then succeeds."""
+
+    def __init__(self, codes: list[str]) -> None:
+        self.codes = list(codes)
+        self.calls = 0
+
+    def put_object(self, **params: object) -> dict[str, str]:
+        self.calls += 1
+        if self.codes:
+            code = self.codes.pop(0)
+            status = 409 if code == "ConditionalRequestConflict" else 412
+            raise ClientError(
+                {
+                    "Error": {"Code": code, "Message": code},
+                    "ResponseMetadata": {"HTTPStatusCode": status},
+                },
+                "PutObject",
+            )
+        return {"ETag": '"new"'}
+
+
+def test_if_absent_put_does_not_report_exists_on_a_409():
+    stub = _ConflictThenStub(["ConditionalRequestConflict", "ConditionalRequestConflict"])
+    slept: list[float] = []
+    store = S3Storage(BUCKET, "", client=stub, sleep=slept.append)
+    assert store.put_bytes("frames/a.b/x.jpg", b"x", if_absent=True) is True
+    assert stub.calls == 3 and len(slept) == 2  # retried with back-off, then stored
+
+
+def test_if_absent_put_raises_when_409s_persist():
+    stub = _ConflictThenStub(["ConditionalRequestConflict"] * 10)
+    store = S3Storage(BUCKET, "", client=stub, sleep=lambda _s: None)
+    with pytest.raises(ClientError):
+        store.put_bytes("frames/a.b/x.jpg", b"x", if_absent=True, max_attempts=4)
+    assert stub.calls == 4
+
+
+def test_if_absent_put_reports_exists_only_on_a_412():
+    stub = _ConflictThenStub(["ConditionalRequestConflict", "PreconditionFailed"])
+    store = S3Storage(BUCKET, "", client=stub, sleep=lambda _s: None)
+    assert store.put_bytes("frames/a.b/x.jpg", b"x", if_absent=True) is False
+    assert stub.calls == 2
+
+
+def test_plain_put_does_not_swallow_conflicts():
+    store = S3Storage(BUCKET, "", client=_ConflictThenStub(["PreconditionFailed"]))
+    with pytest.raises(ClientError):
+        store.put_bytes("frames/a.b/x.jpg", b"x")
+
+
+# --- hidden names: the two backends list the same keys ---------------------------------------
+def test_keys_with_a_dot_leading_segment_are_rejected(store):
+    for key in ["state/.marker", ".hidden/x.json", "frames/.a.b/x.jpg"]:
+        with pytest.raises(ValueError, match=r"starting with '\.'"):
+            store.put_bytes(key, b"x")
+    with pytest.raises(ValueError):
+        store.list_prefix("state/.")
+
+
+def test_s3_listing_skips_dot_names_written_by_other_tools(s3_client):
+    s3_client.put_object(Bucket=BUCKET, Key="state/.marker", Body=b"x")  # e.g. an aws cli upload
+    s3_client.put_object(Bucket=BUCKET, Key="state/ok.json", Body=b"{}")
+    assert S3Storage(BUCKET, "", client=s3_client).list_prefix("state/") == ["state/ok.json"]
 
 
 class FakeClock:

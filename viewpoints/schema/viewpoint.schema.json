@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:lookout:schema:viewpoint:1",
   "title": "Lookout viewpoint manifest",
-  "description": "One file per viewpoint at viewpoints/manifests/<id>.json (PRD §8.2, Appendix A). Validated in CI by lookout_common.manifest, which also checks rules a schema cannot express: file name = id, place_id = prefix of id, IANA zone loads, one default per place, no alias shared across places, landmark distances match the camera position. Fields marked M2 are optional until the plate build.",
+  "description": "One file per viewpoint at viewpoints/manifests/<id>.json (PRD §8.2, Appendix A). Validated in CI by lookout_common.manifest, which also checks rules a schema cannot express: file name = id, place_id = prefix of id, IANA zone loads, one default per place, no alias shared across places (after normalising spaces, hyphens and apostrophes), landmark distance_km and azimuth_deg match the camera position, archive_since null exactly when archive_code is null. Fields marked M2 are optional until the plate build. Departures from the Appendix A sketch: pose fields sit in the top-level 'pose' object (not under camera), landmarks sit in the top-level 'landmarks' array (not under plate), and the hourly cap is polite_caps.max_images_per_hour (not max_per_hour).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -40,13 +40,13 @@
       "minLength": 1
     },
     "aliases": {
-      "description": "Lower-case names, nicknames and likely speech-to-text mishearings the parser matches (PRD §7.5).",
+      "description": "Lower-case names, nicknames and likely speech-to-text mishearings the parser matches (PRD §7.5). Words of letters, digits and apostrophes, joined by single spaces or hyphens.",
       "type": "array",
       "minItems": 6,
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "pattern": "^[a-z0-9](?:[a-z0-9' -]*[a-z0-9])?$"
+        "pattern": "^[a-z0-9](?:[a-z0-9']*[a-z0-9])?(?:[ -][a-z0-9](?:[a-z0-9']*[a-z0-9])?)*$"
       }
     },
     "default": {
@@ -102,8 +102,33 @@
       }
     },
     "plate": {
-      "description": "M2: plate set files and licences (PRD §8.5, Appendix A).",
-      "type": ["object", "null"]
+      "description": "M2: plate set files and licences (PRD §8.5, Appendix A). The known keys are typed; others stay allowed until the M2 plate build fixes the set (TODO(M2): then set additionalProperties false). Landmarks do not go here: they live in the top-level 'landmarks' array, which is what forecast and eval read.",
+      "type": ["object", "null"],
+      "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "base": { "type": "string", "minLength": 1 },
+        "night": { "type": "string", "minLength": 1 },
+        "depth": { "type": "string", "minLength": 1 },
+        "world_height": { "type": "string", "minLength": 1 },
+        "normals": { "type": "string", "minLength": 1 },
+        "horizon_map": { "type": "string", "minLength": 1 },
+        "sky_mask": { "type": "string", "minLength": 1 },
+        "lights_mask": { "type": "string", "minLength": 1 },
+        "landmark_bands": { "type": "string", "minLength": 1 },
+        "dem": {
+          "type": "object",
+          "properties": {
+            "source": { "type": "string" },
+            "licence": { "type": "string" },
+            "datum": { "type": "string" }
+          }
+        },
+        "assets_licence": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "landmarks": false
+      }
     },
     "haze_profile": {
       "description": "M2: per-viewpoint clear-air haze fit (PRD §9.3).",
@@ -232,7 +257,7 @@
           "oneOf": [{ "type": "string", "pattern": "^[a-z]{4}$" }, { "type": "null" }]
         },
         "archive_since": {
-          "description": "First archive day (GetAvailableDays MinDay), or null.",
+          "description": "First archive day (GetAvailableDays MinDay), or null; null exactly when archive_code is null (checked by the loader).",
           "oneOf": [{ "$ref": "#/$defs/iso_date" }, { "type": "null" }]
         },
         "terms_url": { "$ref": "#/$defs/https_url" },

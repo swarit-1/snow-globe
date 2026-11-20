@@ -81,6 +81,7 @@
     "'arcadia' is kept as a speech-to-text mishearing of Acadia; no other viewpoint uses it.",
     "archive_since is GetAvailableDays MinDay for 'acad' (~/lookout-data/samples/nps-json/days_acad.json, fetched 2026-11-19).",
     "EXIF Artist and Copyright 'National Park Service', Software 'ARS_Digicam', 3840x2160: read from the first 64 KB of one live frame on 2026-11-19.",
-    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2)."
+    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2).",
+    "night_mode stays 'unknown': the only live frame of 2026-11-19 with the Sun below -6 deg (10:45Z, 8.9 deg below the horizon, nautical twilight) was colour, chroma_spread 12.9/255, mean luma 109 (capture-loop sidecars ~/lookout-data/frames/acadia.mcfarland/2026-11-19/*.json; Sun altitude from the NOAA solar-position equations at the camera position). Check a frame with the Sun more than 12 deg below the horizon before setting it."
   ]
 }

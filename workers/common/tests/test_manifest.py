@@ -196,6 +196,40 @@ def _set(path: list[str], value):
             lambda d: d["landmarks"][0].__setitem__("distance_km", 12.0),
             "great-circle",
         ),
+        # Review findings: cross-field rules the loader used to miss.
+        (
+            "rainier.paradise-mountain",
+            lambda d: d["landmarks"][0].__setitem__("azimuth_deg", 10.0),
+            "initial bearing from the camera is 348.78",
+        ),
+        (
+            "point-reyes.beach",
+            _set(["truth_camera", "archive_code"], None),
+            "both be set or both be null",
+        ),
+        (
+            "point-reyes.beach",
+            _set(["truth_camera", "archive_since"], None),
+            "both be set or both be null",
+        ),
+        ("point-reyes.beach", lambda d: d["aliases"].append("point  reyes"), "aliases"),
+        ("point-reyes.beach", lambda d: d["aliases"].append("point reyes "), "aliases"),
+        ("acadia.mcfarland", lambda d: d["aliases"].append("point-reyes"), "as 'point reyes'"),
+        ("acadia.mcfarland", lambda d: d["aliases"].append("point rey's"), "as 'point reys'"),
+        # The PRD Appendix A shape, refused with the field's new home.
+        (
+            "rainier.paradise-mountain",
+            _set(["plate"], {"version": 1, "landmarks": [{"name": "summit"}]}),
+            "plate.landmarks is not used: put it in the top-level landmarks",
+        ),
+        ("rainier.paradise-mountain", _set(["camera", "heading_deg"], 348.8), "pose.heading_deg"),
+        (
+            "point-reyes.beach",
+            _set(["truth_camera", "polite_caps", "max_per_hour"], 4),
+            "polite_caps.max_images_per_hour",
+        ),
+        ("point-reyes.beach", _set(["plate"], {"version": "one"}), "plate/version"),
+        ("point-reyes.beach", _set(["plate"], {"sky_mask": ""}), "plate/sky_mask"),
     ],
 )
 def test_bad_manifests_are_rejected(scratch: Path, vid: str, change, message: str):
@@ -235,6 +269,55 @@ def test_m2_fields_are_optional_and_nullable(scratch: Path):
     _edit(scratch, "point-reyes.beach", add)
     vp = mf.load_manifests(scratch)["point-reyes.beach"]
     assert vp.raw["plate"] == {"version": 1}
+
+
+def test_appendix_a_plate_keys_validate(scratch: Path):
+    def add(doc):
+        doc["plate"] = {
+            "version": 1,
+            "base": "base.webp",
+            "sky_mask": "sky.png",
+            "dem": {"source": "USGS 3DEP 1/3 arc-second", "licence": "public domain", "datum": ""},
+            "assets_licence": {"base": "NPS public domain (pending confirmation)"},
+        }
+
+    _edit(scratch, "rainier.paradise-mountain", add)
+    assert mf.load_manifests(scratch)["rainier.paradise-mountain"].raw["plate"]["version"] == 1
+
+
+def test_landmark_azimuth_within_half_a_degree_is_accepted(scratch: Path):
+    _edit(
+        scratch,
+        "rainier.paradise-mountain",
+        lambda d: d["landmarks"][0].__setitem__("azimuth_deg", 349.2),  # 0.42 deg off
+    )
+    assert mf.load_manifests(scratch)["rainier.paradise-mountain"].landmarks
+
+
+def test_normalise_alias():
+    assert mf.normalise_alias("Point-Reyes") == "point reyes"
+    assert mf.normalise_alias("point  rey's") == "point reys"
+    assert mf.normalise_alias("mount rainier") == "mount rainier"
+
+
+# Factual correction (2026-11-19 capture-loop sidecars; see each manifest's notes).
+NIGHT_MODE = {
+    "rainier.paradise-mountain": "infrared",
+    "point-reyes.beach": "infrared",
+    "grand-canyon.yavapai": "infrared",
+    "grand-teton.science-center": "infrared",
+    "yosemite.turtleback": "infrared",
+    "smokies.look-rock": "infrared",
+    "big-bend.panther-junction": "infrared",
+    "acadia.mcfarland": "unknown",  # its only dark frame was in nautical twilight, in colour
+}
+
+
+def test_night_modes(viewpoints):
+    assert {vid: vp.truth_camera.night_mode for vid, vp in viewpoints.items()} == NIGHT_MODE
+    for vid, vp in viewpoints.items():
+        if NIGHT_MODE[vid] == "infrared":
+            assert any("chroma_spread" in note for note in vp.raw["notes"]), vid
 
 
 def test_geodesy_helpers():

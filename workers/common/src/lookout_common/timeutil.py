@@ -9,8 +9,8 @@ offset, and both are flagged.
 
 NPS labels times with a zone *name* ("PST", "Pacific Standard Time"). The live feed's
 abbreviation fixes the UTC offset exactly. The archive's long name is checked against
-the viewpoint's zone; see :func:`parse_nps_archive_time` for the open question about
-summer archive times.
+the viewpoint's zone and read as an honest civil-time label; the M0.5 archive check
+confirmed that, summer included (see :func:`parse_nps_archive_time`).
 """
 
 from __future__ import annotations
@@ -237,26 +237,31 @@ def parse_nps_archive_time(
     viewpoint's IANA zone (Grand Canyon is ``America/Phoenix``: Arizona keeps MST).
 
     Checks: both strings must give the same wall time to the minute, and the zone
-    name must belong to ``tz_name``'s region (``ValueError`` otherwise).
+    name must belong to ``tz_name``'s region (``ValueError`` otherwise). The one
+    accepted exception is the summer case below: a "Daylight" ``LocalTimeString``
+    exactly 1 h ahead of ``ImageCreateDateTime``, which is then read from the label.
 
     ``convention`` picks how the wall time maps to UTC:
 
-    - ``"label"`` (default): the zone name decides the offset. "Standard" means the
-      zone's standard offset and "Daylight" means standard + 1 h. This is right if NPS
-      labels honestly, including the common air-quality practice of keeping local
-      standard time all year. It cannot be ambiguous.
+    - ``"label"`` (default, and the one the evidence supports): read
+      ``LocalTimeString`` as an honest civil-time label. "Standard" means the zone's
+      standard offset and "Daylight" means standard + 1 h. It cannot be ambiguous.
     - ``"wall"``: treat the wall time as civil time in ``tz_name`` with DST rules. This
-      is right if the name is a fixed Windows zone ID (e.g. "Pacific Standard Time"
-      all year) while the clock follows DST. A fold is resolved by a "Daylight"
-      label; otherwise :class:`AmbiguousTimeError` is raised. A gap raises
-      :class:`NonexistentTimeError`, since a camera cannot record a time that
-      did not exist.
+      would be right if the name were a fixed Windows zone ID (e.g. "Pacific Standard
+      Time" all year) while the clock followed DST; the archive check found no such
+      case. A fold is resolved by a "Daylight" label; otherwise
+      :class:`AmbiguousTimeError` is raised. A gap raises
+      :class:`NonexistentTimeError`, since a camera cannot record a time that did not
+      exist.
 
-    Evidence so far: for the 88 Point Reyes assets of 17 Nov 2026 (standard time),
-    times parsed here reproduce NPS's own ``SolarElevationAngle`` to a mean of -0.03°
-    and at most 0.66° (largest near the horizon), against up to 11.9° for a 1 h error.
-    Which convention holds in summer is not yet verified: repeat that comparison for
-    a July day before trusting either. TODO(M0.5), in the archive check.
+    Evidence (M0.5 archive check, ``docs/research/nps-archive-check.md``; D-024): on
+    all 90 sampled days, winter and summer, times parsed here match NPS's own
+    ``SolarElevationAngle``. The mean absolute difference per day is 0.015-0.065°
+    and the best-fitting clock offset is 0 min on every day; a 1 h error would show
+    as up to ~12°. In summer, ``ImageCreateDateTime`` stays on local standard time
+    while ``LocalTimeString`` gives civil time labelled "Daylight", one hour ahead
+    (``07/15/2021 01:30:00 PM`` against ``7/15/2021 2:30 PM Pacific Daylight Time``);
+    both name the same instant, which this function returns.
     """
     create_match = _ARCHIVE_DT_RE.match(image_create_datetime or "")
     if not create_match:

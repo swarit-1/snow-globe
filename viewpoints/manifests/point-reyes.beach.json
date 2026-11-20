@@ -94,6 +94,7 @@
     "Looks along a public beach: people must be blurred before any publication (PRD §15.1).",
     "archive_since is GetAvailableDays MinDay for 'pore' (~/lookout-data/samples/nps-json/days_pore.json, fetched 2026-11-19).",
     "EXIF Artist and Copyright 'National Park Service', Software 'ARS_Digicam', 3840x2160: read from ~/lookout-data/samples/porelarge.jpg (2026-11-19).",
-    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2)."
+    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2).",
+    "Night mode confirmed on the 4 live frames of 2026-11-19 with the Sun 25.9 to 49.3 deg below the horizon (10:45-12:45Z): chroma_spread 0.0/255 on all 4 (capture-loop sidecars ~/lookout-data/frames/point-reyes.beach/2026-11-19/*.json; Sun altitude from the NOAA solar-position equations at the camera position)."
   ]
 }

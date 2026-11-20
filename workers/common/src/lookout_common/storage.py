@@ -8,10 +8,16 @@ Guarantees:
 
 - ``put_bytes`` and ``write_json`` are atomic: readers see the old object or the new
   one, never a partial file. ``put_bytes(..., if_absent=True)`` is a race-free create
-  (used to never store anything twice).
-- ``append_jsonl`` adds whole lines. Locally it is an ``flock``-ed ``O_APPEND`` write.
-  S3 has no append, so it is a read-modify-write guarded by ``If-Match`` /
-  ``If-None-Match`` and retried on conflict.
+  (used to never store anything twice). It returns False only when the key already
+  exists (S3 412). S3's 409 ``ConditionalRequestConflict`` means a concurrent
+  conditional write and is retried, since nothing may have been stored.
+- ``append_jsonl`` adds whole lines and never glues a record onto a torn last line.
+  Locally it is an ``flock``-ed ``O_APPEND`` write. S3 has no append, so it is a
+  read-modify-write guarded by ``If-Match`` / ``If-None-Match`` and retried on conflict.
+- Keys never have a segment that starts with ``.`` (:func:`~lookout_common.paths.validate_key`),
+  and ``list_prefix`` skips such names in both backends (local temp files, ``.DS_Store``),
+  so the two backends list the same keys.
+- JSON is written as valid RFC 8259 text: NaN and ±Infinity become ``null``.
 - ``lock(name)`` is a mutual-exclusion lock with the same name space in both
   backends (key ``state/locks/<name>.lock``). Locally it is ``fcntl.flock``, released by
   the OS if the process dies. In S3 it is an object created with ``If-None-Match: *``.
@@ -40,7 +46,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Protocol, runtime_checkable
 
 from .jsonl import append_jsonl_many as _append_local
-from .jsonl import encode_line, json_default, make_record
+from .jsonl import dumps_json, encode_line, make_record
 from .paths import check_data_dir, data_dir, state_key, validate_key
 from .timeutil import isoformat_z, utcnow
 
@@ -76,7 +82,11 @@ _CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
 }
 _NOT_FOUND_CODES = frozenset({"NoSuchKey", "404", "NotFound"})
-_CONFLICT_CODES = frozenset({"PreconditionFailed", "412", "ConditionalRequestConflict", "409"})
+#: The condition failed: the object exists (If-None-Match) or changed (If-Match).
+_PRECONDITION_CODES = frozenset({"PreconditionFailed", "412"})
+#: A concurrent conditional write was in progress; AWS says to retry the request.
+_RETRY_CODES = frozenset({"ConditionalRequestConflict", "409"})
+_CONFLICT_CODES = _PRECONDITION_CODES | _RETRY_CODES
 
 
 class KeyNotFoundError(FileNotFoundError):
@@ -102,13 +112,18 @@ def _validate_prefix(prefix: str) -> str:
         return prefix
     if "\\" in prefix or "\x00" in prefix or prefix.startswith("/"):
         raise ValueError(f"invalid list prefix {prefix!r}")
-    if any(segment in {".", ".."} for segment in prefix.split("/")):
-        raise ValueError(f"invalid list prefix {prefix!r}")
+    if any(segment.startswith(".") for segment in prefix.split("/")):
+        raise ValueError(f"invalid list prefix {prefix!r}: no segment may start with '.'")
     return prefix
 
 
+def _hidden(key: str) -> bool:
+    """True if a segment of ``key`` starts with '.', which no valid key has."""
+    return any(segment.startswith(".") for segment in key.split("/"))
+
+
 def _dumps_json(obj: Any) -> bytes:
-    return (json.dumps(obj, ensure_ascii=False, indent=2, default=json_default) + "\n").encode()
+    return (dumps_json(obj, indent=2) + "\n").encode("utf-8")
 
 
 @runtime_checkable
@@ -333,8 +348,21 @@ class S3Storage:
         return self.prefix + validate_key(key)
 
     def put_bytes(
-        self, key: str, data: bytes, *, content_type: str | None = None, if_absent: bool = False
+        self,
+        key: str,
+        data: bytes,
+        *,
+        content_type: str | None = None,
+        if_absent: bool = False,
+        max_attempts: int = 5,
     ) -> bool:
+        """Store ``data``; with ``if_absent`` (``If-None-Match: *``) only if the key is new.
+
+        Returns False only on 412 PreconditionFailed: the key exists and was kept. A 409
+        ConditionalRequestConflict (another conditional write to the key was in
+        flight) is retried up to ``max_attempts`` times with jittered back-off, then
+        raised: nothing may have been stored, so it must never read as "exists".
+        """
         params: dict[str, Any] = {
             "Bucket": self.bucket,
             "Key": self._full(key),
@@ -343,13 +371,20 @@ class S3Storage:
         }
         if if_absent:
             params["IfNoneMatch"] = "*"
-        try:
-            self._s3.put_object(**params)
-        except Exception as exc:
-            if if_absent and _error_code(exc) in _CONFLICT_CODES:
-                return False
-            raise
-        return True
+        for attempt in range(max(1, max_attempts)):
+            try:
+                self._s3.put_object(**params)
+                return True
+            except Exception as exc:
+                code = _error_code(exc)
+                if not if_absent or code not in _CONFLICT_CODES:
+                    raise
+                if code in _PRECONDITION_CODES:
+                    return False
+                if attempt + 1 >= max_attempts:
+                    raise
+            self._sleep(min(0.05 * 2**attempt, 1.0) * random.uniform(0.5, 1.0))
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def _get(self, key: str) -> tuple[bytes, str]:
         try:
@@ -378,7 +413,9 @@ class S3Storage:
         keys: list[str] = []
         for page in paginator.paginate(Bucket=self.bucket, Prefix=self.prefix + prefix):
             for item in page.get("Contents", []):
-                keys.append(item["Key"][len(self.prefix) :])
+                key = item["Key"][len(self.prefix) :]
+                if not _hidden(key):  # as LocalStorage, which skips dot-files
+                    keys.append(key)
         return sorted(keys)
 
     def read_json(self, key: str, default: Any = _MISSING) -> Any:

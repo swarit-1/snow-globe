@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -16,6 +17,7 @@ SHA = "9e88bc13788ff06480a4d50c305477b4621fc31eb1480f34b405f2886021dbca"
 
 def test_data_dir_defaults_to_home_lookout_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("LOOKOUT_DATA_DIR")
     assert paths.data_dir() == (tmp_path / "lookout-data").resolve()
 
 
@@ -64,6 +66,45 @@ def test_symlink_into_synced_folder_is_refused(tmp_path: Path, monkeypatch: pyte
         paths.data_dir()
 
 
+def test_case_variant_of_synced_folder_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Review finding: on a case-insensitive disk ~/documents *is* ~/Documents (iCloud)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / "Documents").mkdir()
+    variant = tmp_path / "documents"
+    if not variant.exists():
+        pytest.skip("case-sensitive filesystem: ~/documents is a different folder here")
+    for spelling in (variant / "lookout-data", tmp_path / "DOCUMENTS" / "deep" / "data"):
+        monkeypatch.setenv("LOOKOUT_DATA_DIR", str(spelling))
+        with pytest.raises(UnsafeDataDirError, match="cloud-synced"):
+            paths.data_dir()
+        assert not spelling.exists()  # the guard creates nothing
+    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(tmp_path / "documents-elsewhere"))
+    assert paths.data_dir() == (tmp_path / "documents-elsewhere").resolve()
+
+
+def test_firmlinked_data_volume_path_to_documents_is_refused():
+    """Review finding: /System/Volumes/Data/Users/<me>/Documents is the same iCloud folder."""
+    documents = Path.home() / "Documents"
+    firmlinked = Path("/System/Volumes/Data") / documents.relative_to("/")
+    if not (documents.is_dir() and firmlinked.is_dir()):
+        pytest.skip("no macOS firmlinked Data volume with a ~/Documents here")
+    if not os.path.samefile(documents, firmlinked):
+        pytest.skip("the Data-volume path is not the same folder here")
+    probe = firmlinked / "lookout-data-firmlink-probe"
+    assert not probe.exists()
+    with pytest.raises(UnsafeDataDirError, match="cloud-synced"):
+        paths.check_data_dir(probe)
+    assert not probe.exists()
+
+
+def test_case_variant_of_the_repo_is_still_refused_by_the_git_check():
+    variant = Path(str(REPO_ROOT).swapcase())
+    if not variant.exists():
+        pytest.skip("case-sensitive filesystem")
+    with pytest.raises(UnsafeDataDirError, match="git work tree"):
+        paths.check_data_dir(variant / "data")
+
+
 def test_tilde_in_env_is_expanded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("LOOKOUT_DATA_DIR", "~/elsewhere")
@@ -106,6 +147,21 @@ def test_frame_key_rejects_bad_input(vp, when, digest, error):
         paths.frame_key(vp, when, digest)
 
 
+def test_thumb_key_shares_the_frame_stem_under_thumbs():
+    local = datetime(2026, 11, 18, 22, 40, 14, 57851, tzinfo=PST)  # 06:40:14Z next day
+    key = paths.thumb_key("point-reyes.beach", local, SHA.upper())
+    assert key == "thumbs/point-reyes.beach/2026-11-19/20261119T064014Z_9e88bc13788f.jpg"
+    frame = paths.frame_key("point-reyes.beach", local, SHA)
+    assert key.removeprefix("thumbs/") == frame.removeprefix("frames/")
+    assert paths.sidecar_key(key) == key[: -len(".jpg")] + ".json"
+    with pytest.raises(ValueError):
+        paths.thumb_key("point-reyes.beach", datetime(2026, 11, 19, 6, 40), SHA)  # naive
+    with pytest.raises(ValueError):
+        paths.thumb_key("point-reyes.beach", local, "abc")
+    with pytest.raises(ValueError):
+        paths.thumb_key("../etc", local, SHA)
+
+
 def test_archive_key_uses_first_eight_asset_chars():
     t = datetime(2026, 11, 17, 8, 0, tzinfo=UTC)
     key = paths.archive_key("point-reyes.beach", t, "50C46AC9-87eb-4f24-bcb6-5928653027d3")
@@ -144,10 +200,18 @@ def test_state_key_rejects_unsafe_names(name: str):
         paths.state_key(name)
 
 
-@pytest.mark.parametrize("key", ["", "/a", "a/", "a//b", "a/../b", "./a", "a\\b", "a\x00b"])
+@pytest.mark.parametrize(
+    "key",
+    ["", "/a", "a/", "a//b", "a/../b", "./a", "a\\b", "a\x00b", ".hidden", "state/.marker"],
+)
 def test_validate_key_rejects(key: str):
     with pytest.raises(ValueError):
         paths.validate_key(key)
+
+
+@pytest.mark.parametrize("key", ["frames/a.b/x.jpg", "state/locks/nps-archive.lock", "a/b.c.d"])
+def test_validate_key_accepts_dots_inside_segments(key: str):
+    assert paths.validate_key(key) == key
 
 
 def test_local_path_maps_keys_under_root(tmp_path: Path):

@@ -32,6 +32,8 @@ build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# iCloud hides the venv's .pth files on this machine, so the editable install can vanish.
+pythonpath = ["src"]
 addopts = "-m 'not network' --strict-markers"
 markers = [
     "network: touches the network; excluded by default (run with -m network)",

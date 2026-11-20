@@ -63,7 +63,7 @@
     "interval_min_nominal": 15,
     "interval_min_measured": null,
     "fixed_view": true,
-    "night_mode": "unknown",
+    "night_mode": "infrared",
     "polite_caps": {
       "max_images_per_hour": 4,
       "poll_interval_s": 300,
@@ -83,6 +83,7 @@
     "3DEP ground elevation 2122.6 m differs from AirNow's listed 2106.3 m by 16 m; 3DEP is used.",
     "archive_since is GetAvailableDays MinDay for 'grte' (~/lookout-data/samples/nps-json/days_grte.json, fetched 2026-11-19).",
     "EXIF Artist and Copyright 'National Park Service', Software 'ARS_Digicam', 3840x2160: read from the first 64 KB of one live frame on 2026-11-19.",
-    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2)."
+    "Landmarks are added at the M2 plate build (pose from >= 3 surveyed landmarks, PRD §8.5). TODO(M2).",
+    "Night mode measured on the 3 live frames of 2026-11-19 with the Sun 20.0 to 38.9 deg below the horizon (10:45-12:30Z): monochrome, chroma_spread 0.0002-0.0004/255; daylight frames 4.5-5.2 (capture-loop sidecars ~/lookout-data/frames/grand-teton.science-center/2026-11-19/*.json; Sun altitude from the NOAA solar-position equations at the camera position). Factual correction of 'unknown', 2026-11-19."
   ]
 }
