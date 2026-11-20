@@ -1,0 +1,7 @@
+# SwiftPM build output. Build with --scratch-path "$LOOKOUT_DATA_DIR/cache/speech-macos" (README),
+# which keeps it out of the iCloud-synced repo; this catches a plain `swift build`.
+/.build/
+/.swiftpm/
+/build/
+*.xcodeproj
+xcuserdata/

@@ -1,0 +1,25 @@
+# Symbols liblookout_speech.a must never refer to (PRD §15.1: speech on device only; audio in RAM
+# for the query, never stored). One rule per line: a category, a TAB, then a POSIX extended
+# regular expression (also valid for NSRegularExpression) matched against every undefined symbol
+# name. Read by scripts/check-symbols.sh (release archive) and by
+# Tests/LookoutSpeechTests/StaticChecksTests.swift (debug objects), so the two never drift.
+#
+# This is the deny list: it names what is forbidden and gives a clear failure. The allow list is
+# scripts/archive-imports.txt, the reviewed set of everything the release archive imports; any
+# import outside it fails as well, so an API missing from this file still needs a review.
+# scripts/check-symbols-selftest.sh compiles objects that call these APIs and checks that each
+# one fails.
+#
+# Patterns are anchored to their owners where a bare word would also match a harmless symbol:
+# the archive already imports Swift.Double.write(to: inout TextOutputStream) ($sSd5write2to...),
+# so Foundation's Data.write(to:) is matched as 10Foundation4DataV5write, not as 5write2to.
+networking (Foundation URL loading)	NSURLSession|NSURLConnection|NSURLDownload|URLSession|URLRequest|NSURLRequest
+networking (CFNetwork)	CFSocket|CFStreamCreatePairWithSocket|CFHost|CFHTTP|CFNetwork
+networking (Network.framework)	^_nw_|7Network
+networking (BSD sockets, DNS)	^_(socket|connect|bind|listen|accept|sendto|sendmsg|recvfrom|recvmsg|getaddrinfo|gethostbyname|getnameinfo)$
+server-capable recognition (SFSpeechRecognizer tasks)	SFSpeechRecognitionTask|SFSpeechAudioBufferRecognitionRequest|SFSpeechURLRecognitionRequest|recognitionTask
+authorization prompt (requestAuthorization)	requestAuthorization
+model download (AssetInventory installation)	assetInstallationRequest|downloadAndInstall|AssetInstallationRequest
+microphone or recording	AVAudioEngine|AVAudioRecorder|AVCaptureSession|AVCaptureDevice|AudioQueueNewInput|AVAudioInputNode|AudioOutputUnitStart|AudioDeviceStart
+file writing (Foundation, CoreAudio, POSIX)	AVAudioFile|ExtAudioFile|AudioFileCreate|AudioFileOpen|NSFileHandle|FileHandle|NSFileManager|FileManager|writeToFile|writeToURL|createFile|CFWriteStream|10Foundation4DataV5write|10FoundationE5write|6Darwin4open|^_(fopen|fwrite|fputs|creat|open|openat|write|pwrite|writev|rename|renameat|mkstemp|mkstemps|mkdtemp|unlink|unlinkat|truncate|ftruncate)$
+file or URL reading (the library reads no files)	CFReadStream|10Foundation4DataV10contentsOf|10FoundationE10contentsOf|ContentsOfURL|contentsOfURL|ContentsOfFile|contentsOfFile|^_(fread|read|pread|readv)$

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>dev.lookout.transcribe</string>
+  <key>CFBundleName</key>
+  <string>lookout-transcribe</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.2.0</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>lookout-transcribe transcribes WAV files with Apple's on-device dictation model to measure Lookout's speech latency and accuracy. Audio and text stay on this Mac.</string>
+</dict>
+</plist>

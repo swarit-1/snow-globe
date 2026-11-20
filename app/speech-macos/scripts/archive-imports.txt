@@ -1,0 +1,448 @@
+# The reviewed list of external symbols liblookout_speech.a (release build) imports, and of the
+# Objective-C selector names it contains, as @selector(name). One per line: the name, a TAB,
+# then the demangled name for the reviewer.
+#
+# scripts/check-symbols.sh fails when the archive imports a symbol that is not listed here, or
+# no longer imports one that is (an allow list: every new dependency needs a review, which the
+# deny list in forbidden-symbols.txt alone cannot guarantee).
+# Regenerate with `scripts/check-symbols.sh --update-baseline` after reviewing what it prints.
+# Toolchain: Apple Swift version 6.2.3 (swiftlang-6.2.3.3.21 clang-1700.6.3.2); SDK 26.2.
+@selector(T#,R)	@selector(T#,R)
+@selector(T@"NSString",?,R,C)	@selector(T@"NSString",?,R,C)
+@selector(T@"NSString",R,C)	@selector(T@"NSString",R,C)
+@selector(TQ,R)	@selector(TQ,R)
+@selector(authorizationStatus)	@selector(authorizationStatus)
+@selector(autorelease)	@selector(autorelease)
+@selector(channelCount)	@selector(channelCount)
+@selector(class)	@selector(class)
+@selector(code)	@selector(code)
+@selector(commonFormat)	@selector(commonFormat)
+@selector(conformsToProtocol:)	@selector(conformsToProtocol:)
+@selector(convertToBuffer:error:withInputFromBlock:)	@selector(convertToBuffer:error:withInputFromBlock:)
+@selector(debugDescription)	@selector(debugDescription)
+@selector(description)	@selector(description)
+@selector(domain)	@selector(domain)
+@selector(floatChannelData)	@selector(floatChannelData)
+@selector(frameLength)	@selector(frameLength)
+@selector(hash)	@selector(hash)
+@selector(initFromFormat:toFormat:)	@selector(initFromFormat:toFormat:)
+@selector(initStandardFormatWithSampleRate:channels:)	@selector(initStandardFormatWithSampleRate:channels:)
+@selector(initWithPCMFormat:frameCapacity:)	@selector(initWithPCMFormat:frameCapacity:)
+@selector(isEqual:)	@selector(isEqual:)
+@selector(isInterleaved)	@selector(isInterleaved)
+@selector(isKindOfClass:)	@selector(isKindOfClass:)
+@selector(isMemberOfClass:)	@selector(isMemberOfClass:)
+@selector(isProxy)	@selector(isProxy)
+@selector(localizedDescription)	@selector(localizedDescription)
+@selector(performSelector:)	@selector(performSelector:)
+@selector(performSelector:withObject:)	@selector(performSelector:withObject:)
+@selector(performSelector:withObject:withObject:)	@selector(performSelector:withObject:withObject:)
+@selector(release)	@selector(release)
+@selector(respondsToSelector:)	@selector(respondsToSelector:)
+@selector(retain)	@selector(retain)
+@selector(retainCount)	@selector(retainCount)
+@selector(sampleRate)	@selector(sampleRate)
+@selector(self)	@selector(self)
+@selector(setFrameLength:)	@selector(setFrameLength:)
+@selector(superclass)	@selector(superclass)
+@selector(zone)	@selector(zone)
+_$s10Foundation12CharacterSetV22whitespacesAndNewlinesACvgZ	static Foundation.CharacterSet.whitespacesAndNewlines.getter : Foundation.CharacterSet
+_$s10Foundation12CharacterSetVMa	type metadata accessor for Foundation.CharacterSet
+_$s10Foundation13CustomNSErrorMp	protocol descriptor for Foundation.CustomNSError
+_$s10Foundation13CustomNSErrorP11errorDomainSSvgZTq	method descriptor for static Foundation.CustomNSError.errorDomain.getter : Swift.String
+_$s10Foundation13CustomNSErrorP13errorUserInfoSDySSypGvgTq	method descriptor for Foundation.CustomNSError.errorUserInfo.getter : [Swift.String : Any]
+_$s10Foundation13CustomNSErrorP9errorCodeSivgTq	method descriptor for Foundation.CustomNSError.errorCode.getter : Swift.Int
+_$s10Foundation13CustomNSErrorPs5ErrorTb	base conformance descriptor for Foundation.CustomNSError: Swift.Error
+_$s10Foundation16AttributedStringV10charactersAC13CharacterViewVvg	Foundation.AttributedString.characters.getter : Foundation.AttributedString.CharacterView
+_$s10Foundation16AttributedStringV13CharacterViewVMa	type metadata accessor for Foundation.AttributedString.CharacterView
+_$s10Foundation16AttributedStringV13CharacterViewVSTAAMc	protocol conformance descriptor for Foundation.AttributedString.CharacterView : Swift.Sequence in Foundation
+_$s10Foundation16AttributedStringVMa	type metadata accessor for Foundation.AttributedString
+_$s10Foundation18_ErrorCodeProtocolMp	protocol descriptor for Foundation._ErrorCodeProtocol
+_$s10Foundation18_ErrorCodeProtocolP01_B4TypeAC_AA21_BridgedStoredNSErrorTn	associated conformance descriptor for Foundation._ErrorCodeProtocol.Foundation._ErrorCodeProtocol._ErrorType: Foundation._BridgedStoredNSError
+_$s10Foundation18_ErrorCodeProtocolPSQTb	base conformance descriptor for Foundation._ErrorCodeProtocol: Swift.Equatable
+_$s10Foundation21_BridgedStoredNSErrorMp	protocol descriptor for Foundation._BridgedStoredNSError
+_$s10Foundation21_BridgedStoredNSErrorP4CodeAC_8RawValueSYs17FixedWidthIntegerTn	associated conformance descriptor for Foundation._BridgedStoredNSError.Foundation._BridgedStoredNSError.Code.Swift.RawRepresentable.RawValue: Swift.FixedWidthInteger
+_$s10Foundation21_BridgedStoredNSErrorP4CodeAC_AA06_ErrorE8ProtocolTn	associated conformance descriptor for Foundation._BridgedStoredNSError.Foundation._BridgedStoredNSError.Code: Foundation._ErrorCodeProtocol
+_$s10Foundation21_BridgedStoredNSErrorP4CodeAC_SYTn	associated conformance descriptor for Foundation._BridgedStoredNSError.Foundation._BridgedStoredNSError.Code: Swift.RawRepresentable
+_$s10Foundation21_BridgedStoredNSErrorP8_nsErrorSo0D0CvgTq	method descriptor for Foundation._BridgedStoredNSError._nsError.getter : __C.NSError
+_$s10Foundation21_BridgedStoredNSErrorP8_nsErrorxSo0D0C_tcfCTq	method descriptor for Foundation._BridgedStoredNSError.init(_nsError: __C.NSError) -> A
+_$s10Foundation21_BridgedStoredNSErrorPAA06CustomD0Tb	base conformance descriptor for Foundation._BridgedStoredNSError: Foundation.CustomNSError
+_$s10Foundation21_BridgedStoredNSErrorPAA26_ObjectiveCBridgeableErrorTb	base conformance descriptor for Foundation._BridgedStoredNSError: Foundation._ObjectiveCBridgeableError
+_$s10Foundation21_BridgedStoredNSErrorPAAE012_getEmbeddedD0yXlSgyF	(extension in Foundation):Foundation._BridgedStoredNSError._getEmbeddedNSError() -> Swift.AnyObject?
+_$s10Foundation21_BridgedStoredNSErrorPAAE08_bridgedD0xSgSo0D0C_tcfC	(extension in Foundation):Foundation._BridgedStoredNSError.init(_bridgedNSError: __C.NSError) -> A?
+_$s10Foundation21_BridgedStoredNSErrorPAAE13errorUserInfoSDySSypGvg	(extension in Foundation):Foundation._BridgedStoredNSError.errorUserInfo.getter : [Swift.String : Any]
+_$s10Foundation21_BridgedStoredNSErrorPAAE2eeoiySbx_xtFZ	static (extension in Foundation):Foundation._BridgedStoredNSError.== infix(A, A) -> Swift.Bool
+_$s10Foundation21_BridgedStoredNSErrorPAAE4code4CodeQzvg	(extension in Foundation):Foundation._BridgedStoredNSError.code.getter : A.Code
+_$s10Foundation21_BridgedStoredNSErrorPAAE4hash4intoys6HasherVz_tF	(extension in Foundation):Foundation._BridgedStoredNSError.hash(into: inout Swift.Hasher) -> ()
+_$s10Foundation21_BridgedStoredNSErrorPAAE9errorCodeSivg	(extension in Foundation):Foundation._BridgedStoredNSError.errorCode.getter : Swift.Int
+_$s10Foundation21_BridgedStoredNSErrorPSHTb	base conformance descriptor for Foundation._BridgedStoredNSError: Swift.Hashable
+_$s10Foundation22_convertErrorToNSErrorySo0E0Cs0C0_pF	Foundation._convertErrorToNSError(Swift.Error) -> __C.NSError
+_$s10Foundation26_ObjectiveCBridgeableErrorMp	protocol descriptor for Foundation._ObjectiveCBridgeableError
+_$s10Foundation26_ObjectiveCBridgeableErrorP15_bridgedNSErrorxSgSo0F0Ch_tcfCTq	method descriptor for Foundation._ObjectiveCBridgeableError.init(_bridgedNSError: __shared __C.NSError) -> A?
+_$s10Foundation26_ObjectiveCBridgeableErrorPs0D0Tb	base conformance descriptor for Foundation._ObjectiveCBridgeableError: Swift.Error
+_$s10Foundation6LocaleV10identifierACSS_tcfC	Foundation.Locale.init(identifier: Swift.String) -> Foundation.Locale
+_$s10Foundation6LocaleVMa	type metadata accessor for Foundation.Locale
+_$s10Foundation6LocaleVMn	nominal type descriptor for Foundation.Locale
+_$s10_ErrorType10Foundation01_A12CodeProtocolPTl	associated type descriptor for Foundation._ErrorCodeProtocol._ErrorType
+_$s15Synchronization5MutexVMa	type metadata accessor for Synchronization.Mutex
+_$s15Synchronization5MutexVMn	nominal type descriptor for Synchronization.Mutex
+_$s15Synchronization5_CellVMa	type metadata accessor for Synchronization._Cell
+_$s15Synchronization5_CellVMn	nominal type descriptor for Synchronization._Cell
+_$s15Synchronization6AtomicVMn	nominal type descriptor for Synchronization.Atomic
+_$s4Code10Foundation21_BridgedStoredNSErrorPTl	associated type descriptor for Foundation._BridgedStoredNSError.Code
+_$s6Speech0A12ModuleResultPAAE7isFinalSbvg	(extension in Speech):Speech.SpeechModuleResult.isFinal.getter : Swift.Bool
+_$s6Speech0A6ModuleMp	protocol descriptor for Speech.SpeechModule
+_$s6Speech0A8AnalyzerC10setContextyyAA08AnalysisD0CYaKF	Speech.SpeechAnalyzer.setContext(Speech.AnalysisContext) async throws -> ()
+_$s6Speech0A8AnalyzerC10setContextyyAA08AnalysisD0CYaKFTu	async function pointer to Speech.SpeechAnalyzer.setContext(Speech.AnalysisContext) async throws -> ()
+_$s6Speech0A8AnalyzerC16prepareToAnalyze2inySo13AVAudioFormatCSg_tYaKF	Speech.SpeechAnalyzer.prepareToAnalyze(in: __C.AVAudioFormat?) async throws -> ()
+_$s6Speech0A8AnalyzerC16prepareToAnalyze2inySo13AVAudioFormatCSg_tYaKFTu	async function pointer to Speech.SpeechAnalyzer.prepareToAnalyze(in: __C.AVAudioFormat?) async throws -> ()
+_$s6Speech0A8AnalyzerC18cancelAndFinishNowyyYaF	Speech.SpeechAnalyzer.cancelAndFinishNow() async -> ()
+_$s6Speech0A8AnalyzerC18cancelAndFinishNowyyYaFTu	async function pointer to Speech.SpeechAnalyzer.cancelAndFinishNow() async -> ()
+_$s6Speech0A8AnalyzerC24bestAvailableAudioFormat14compatibleWith11consideringSo07AVAudioF0CSgSayAA0A6Module_pG_AItYaFZ	static Speech.SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [Speech.SpeechModule], considering: __C.AVAudioFormat?) async -> __C.AVAudioFormat?
+_$s6Speech0A8AnalyzerC24bestAvailableAudioFormat14compatibleWith11consideringSo07AVAudioF0CSgSayAA0A6Module_pG_AItYaFZTu	async function pointer to static Speech.SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [Speech.SpeechModule], considering: __C.AVAudioFormat?) async -> __C.AVAudioFormat?
+_$s6Speech0A8AnalyzerC34finalizeAndFinishThroughEndOfInputyyYaKF	Speech.SpeechAnalyzer.finalizeAndFinishThroughEndOfInput() async throws -> ()
+_$s6Speech0A8AnalyzerC34finalizeAndFinishThroughEndOfInputyyYaKFTu	async function pointer to Speech.SpeechAnalyzer.finalizeAndFinishThroughEndOfInput() async throws -> ()
+_$s6Speech0A8AnalyzerC5start13inputSequenceyx_tYaKs8SendableRzSciRzAA0B5InputV7ElementRtzlF	Speech.SpeechAnalyzer.start<A where A: Swift.Sendable, A: Swift.AsyncSequence, A.Element == Speech.AnalyzerInput>(inputSequence: A) async throws -> ()
+_$s6Speech0A8AnalyzerC5start13inputSequenceyx_tYaKs8SendableRzSciRzAA0B5InputV7ElementRtzlFTu	async function pointer to Speech.SpeechAnalyzer.start<A where A: Swift.Sendable, A: Swift.AsyncSequence, A.Element == Speech.AnalyzerInput>(inputSequence: A) async throws -> ()
+_$s6Speech0A8AnalyzerC7OptionsV14ModelRetentionO10whileInUseyA2GmFWC	enum case for Speech.SpeechAnalyzer.Options.ModelRetention.whileInUse(Speech.SpeechAnalyzer.Options.ModelRetention.Type) -> Speech.SpeechAnalyzer.Options.ModelRetention
+_$s6Speech0A8AnalyzerC7OptionsV14ModelRetentionO15processLifetimeyA2GmFWC	enum case for Speech.SpeechAnalyzer.Options.ModelRetention.processLifetime(Speech.SpeechAnalyzer.Options.ModelRetention.Type) -> Speech.SpeechAnalyzer.Options.ModelRetention
+_$s6Speech0A8AnalyzerC7OptionsV14ModelRetentionO9lingeringyA2GmFWC	enum case for Speech.SpeechAnalyzer.Options.ModelRetention.lingering(Speech.SpeechAnalyzer.Options.ModelRetention.Type) -> Speech.SpeechAnalyzer.Options.ModelRetention
+_$s6Speech0A8AnalyzerC7OptionsV14ModelRetentionOMa	type metadata accessor for Speech.SpeechAnalyzer.Options.ModelRetention
+_$s6Speech0A8AnalyzerC7OptionsV8priority14modelRetentionAEScP_AE05ModelF0OtcfC	Speech.SpeechAnalyzer.Options.init(priority: Swift.TaskPriority, modelRetention: Speech.SpeechAnalyzer.Options.ModelRetention) -> Speech.SpeechAnalyzer.Options
+_$s6Speech0A8AnalyzerC7OptionsVMa	type metadata accessor for Speech.SpeechAnalyzer.Options
+_$s6Speech0A8AnalyzerC7OptionsVMn	nominal type descriptor for Speech.SpeechAnalyzer.Options
+_$s6Speech0A8AnalyzerC7modules7optionsACSayAA0A6Module_pG_AC7OptionsVSgtcfC	Speech.SpeechAnalyzer.__allocating_init(modules: [Speech.SpeechModule], options: Speech.SpeechAnalyzer.Options?) -> Speech.SpeechAnalyzer
+_$s6Speech0A8AnalyzerCMa	type metadata accessor for Speech.SpeechAnalyzer
+_$s6Speech0A8AnalyzerCMn	nominal type descriptor for Speech.SpeechAnalyzer
+_$s6Speech13AnalyzerInputV6bufferACSo16AVAudioPCMBufferC_tcfC	Speech.AnalyzerInput.init(buffer: __C.AVAudioPCMBuffer) -> Speech.AnalyzerInput
+_$s6Speech13AnalyzerInputVMa	type metadata accessor for Speech.AnalyzerInput
+_$s6Speech13AnalyzerInputVMn	nominal type descriptor for Speech.AnalyzerInput
+_$s6Speech14AssetInventoryC6StatusO11downloadingyA2EmFWC	enum case for Speech.AssetInventory.Status.downloading(Speech.AssetInventory.Status.Type) -> Speech.AssetInventory.Status
+_$s6Speech14AssetInventoryC6StatusO11unsupportedyA2EmFWC	enum case for Speech.AssetInventory.Status.unsupported(Speech.AssetInventory.Status.Type) -> Speech.AssetInventory.Status
+_$s6Speech14AssetInventoryC6StatusO9installedyA2EmFWC	enum case for Speech.AssetInventory.Status.installed(Speech.AssetInventory.Status.Type) -> Speech.AssetInventory.Status
+_$s6Speech14AssetInventoryC6StatusO9supportedyA2EmFWC	enum case for Speech.AssetInventory.Status.supported(Speech.AssetInventory.Status.Type) -> Speech.AssetInventory.Status
+_$s6Speech14AssetInventoryC6StatusOMa	type metadata accessor for Speech.AssetInventory.Status
+_$s6Speech14AssetInventoryC6status10forModulesAC6StatusOSayAA0A6Module_pG_tYaFZ	static Speech.AssetInventory.status(forModules: [Speech.SpeechModule]) async -> Speech.AssetInventory.Status
+_$s6Speech14AssetInventoryC6status10forModulesAC6StatusOSayAA0A6Module_pG_tYaFZTu	async function pointer to static Speech.AssetInventory.status(forModules: [Speech.SpeechModule]) async -> Speech.AssetInventory.Status
+_$s6Speech14AssetInventoryC7reserve6localeSb10Foundation6LocaleV_tYaKFZ	static Speech.AssetInventory.reserve(locale: Foundation.Locale) async throws -> Swift.Bool
+_$s6Speech14AssetInventoryC7reserve6localeSb10Foundation6LocaleV_tYaKFZTu	async function pointer to static Speech.AssetInventory.reserve(locale: Foundation.Locale) async throws -> Swift.Bool
+_$s6Speech14AssetInventoryCMa	type metadata accessor for Speech.AssetInventory
+_$s6Speech15AnalysisContextC17contextualStringsSDyAC010ContextualE3TagVSaySSGGvM	Speech.AnalysisContext.contextualStrings.modify : [Speech.AnalysisContext.ContextualStringsTag : [Swift.String]]
+_$s6Speech15AnalysisContextC20ContextualStringsTagV7generalAEvgZ	static Speech.AnalysisContext.ContextualStringsTag.general.getter : Speech.AnalysisContext.ContextualStringsTag
+_$s6Speech15AnalysisContextC20ContextualStringsTagVMa	type metadata accessor for Speech.AnalysisContext.ContextualStringsTag
+_$s6Speech15AnalysisContextC20ContextualStringsTagVMn	nominal type descriptor for Speech.AnalysisContext.ContextualStringsTag
+_$s6Speech15AnalysisContextC20ContextualStringsTagVSHAAMc	protocol conformance descriptor for Speech.AnalysisContext.ContextualStringsTag : Swift.Hashable in Speech
+_$s6Speech15AnalysisContextC20ContextualStringsTagVSQAAMc	protocol conformance descriptor for Speech.AnalysisContext.ContextualStringsTag : Swift.Equatable in Speech
+_$s6Speech15AnalysisContextCACycfc	Speech.AnalysisContext.init() -> Speech.AnalysisContext
+_$s6Speech15AnalysisContextCMa	type metadata accessor for Speech.AnalysisContext
+_$s6Speech20DictationTranscriberC15ReportingOptionO15volatileResultsyA2EmFWC	enum case for Speech.DictationTranscriber.ReportingOption.volatileResults(Speech.DictationTranscriber.ReportingOption.Type) -> Speech.DictationTranscriber.ReportingOption
+_$s6Speech20DictationTranscriberC15ReportingOptionOMa	type metadata accessor for Speech.DictationTranscriber.ReportingOption
+_$s6Speech20DictationTranscriberC15ReportingOptionOMn	nominal type descriptor for Speech.DictationTranscriber.ReportingOption
+_$s6Speech20DictationTranscriberC15ReportingOptionOSHAAMc	protocol conformance descriptor for Speech.DictationTranscriber.ReportingOption : Swift.Hashable in Speech
+_$s6Speech20DictationTranscriberC15ReportingOptionOSQAAMc	protocol conformance descriptor for Speech.DictationTranscriber.ReportingOption : Swift.Equatable in Speech
+_$s6Speech20DictationTranscriberC15supportedLocale12equivalentTo10Foundation0E0VSgAH_tYaFZ	static Speech.DictationTranscriber.supportedLocale(equivalentTo: Foundation.Locale) async -> Foundation.Locale?
+_$s6Speech20DictationTranscriberC15supportedLocale12equivalentTo10Foundation0E0VSgAH_tYaFZTu	async function pointer to static Speech.DictationTranscriber.supportedLocale(equivalentTo: Foundation.Locale) async -> Foundation.Locale?
+_$s6Speech20DictationTranscriberC6PresetV016progressiveShortB0AEvgZ	static Speech.DictationTranscriber.Preset.progressiveShortDictation.getter : Speech.DictationTranscriber.Preset
+_$s6Speech20DictationTranscriberC6PresetV12contentHintsShyAC11ContentHintVGvg	Speech.DictationTranscriber.Preset.contentHints.getter : Swift.Set<Speech.DictationTranscriber.ContentHint>
+_$s6Speech20DictationTranscriberC6PresetV16attributeOptionsShyAC21ResultAttributeOptionOGvg	Speech.DictationTranscriber.Preset.attributeOptions.getter : Swift.Set<Speech.DictationTranscriber.ResultAttributeOption>
+_$s6Speech20DictationTranscriberC6PresetV16reportingOptionsShyAC15ReportingOptionOGvg	Speech.DictationTranscriber.Preset.reportingOptions.getter : Swift.Set<Speech.DictationTranscriber.ReportingOption>
+_$s6Speech20DictationTranscriberC6PresetV20transcriptionOptionsShyAC19TranscriptionOptionOGvg	Speech.DictationTranscriber.Preset.transcriptionOptions.getter : Swift.Set<Speech.DictationTranscriber.TranscriptionOption>
+_$s6Speech20DictationTranscriberC6PresetVMa	type metadata accessor for Speech.DictationTranscriber.Preset
+_$s6Speech20DictationTranscriberC6ResultV23resultsFinalizationTimeSo6CMTimeavg	Speech.DictationTranscriber.Result.resultsFinalizationTime.getter : __C.CMTime
+_$s6Speech20DictationTranscriberC6ResultV4text10Foundation16AttributedStringVvg	Speech.DictationTranscriber.Result.text.getter : Foundation.AttributedString
+_$s6Speech20DictationTranscriberC6ResultV5rangeSo11CMTimeRangeavg	Speech.DictationTranscriber.Result.range.getter : __C.CMTimeRange
+_$s6Speech20DictationTranscriberC6ResultVAA0a6ModuleD0AAWP	protocol witness table for Speech.DictationTranscriber.Result : Speech.SpeechModuleResult in Speech
+_$s6Speech20DictationTranscriberC6ResultVMa	type metadata accessor for Speech.DictationTranscriber.Result
+_$s6Speech20DictationTranscriberC6ResultVMn	nominal type descriptor for Speech.DictationTranscriber.Result
+_$s6Speech20DictationTranscriberC6locale12contentHints20transcriptionOptions09reportingH009attributeH0AC10Foundation6LocaleV_ShyAC11ContentHintVGShyAC19TranscriptionOptionOGShyAC09ReportingP0OGShyAC015ResultAttributeP0OGtcfC	Speech.DictationTranscriber.__allocating_init(locale: Foundation.Locale, contentHints: Swift.Set<Speech.DictationTranscriber.ContentHint>, transcriptionOptions: Swift.Set<Speech.DictationTranscriber.TranscriptionOption>, reportingOptions: Swift.Set<Speech.DictationTranscriber.ReportingOption>, attributeOptions: Swift.Set<Speech.DictationTranscriber.ResultAttributeOption>) -> Speech.DictationTranscriber
+_$s6Speech20DictationTranscriberC7resultsQrvg	Speech.DictationTranscriber.results.getter : some
+_$s6Speech20DictationTranscriberC7resultsQrvpQOMQ	opaque type descriptor for <<opaque return type of Speech.DictationTranscriber.results : some>>
+_$s6Speech20DictationTranscriberCAA0A6ModuleAAMc	protocol conformance descriptor for Speech.DictationTranscriber : Speech.SpeechModule in Speech
+_$s6Speech20DictationTranscriberCMa	type metadata accessor for Speech.DictationTranscriber
+_$s6Speech20DictationTranscriberCMn	nominal type descriptor for Speech.DictationTranscriber
+_$s8AllCasess12CaseIterablePTl	associated type descriptor for Swift.CaseIterable.AllCases
+_$s8Dispatch0A11SpecificKeyCACyxGycfc	Dispatch.DispatchSpecificKey.init() -> Dispatch.DispatchSpecificKey<A>
+_$s8Dispatch0A11SpecificKeyCMn	nominal type descriptor for Dispatch.DispatchSpecificKey
+_$s8Dispatch0A12TimeIntervalO11nanosecondsyACSicACmFWC	enum case for Dispatch.DispatchTimeInterval.nanoseconds(Dispatch.DispatchTimeInterval.Type) -> (Swift.Int) -> Dispatch.DispatchTimeInterval
+_$s8Dispatch0A12TimeIntervalO12millisecondsyACSicACmFWC	enum case for Dispatch.DispatchTimeInterval.milliseconds(Dispatch.DispatchTimeInterval.Type) -> (Swift.Int) -> Dispatch.DispatchTimeInterval
+_$s8Dispatch0A12TimeIntervalO5neveryA2CmFWC	enum case for Dispatch.DispatchTimeInterval.never(Dispatch.DispatchTimeInterval.Type) -> Dispatch.DispatchTimeInterval
+_$s8Dispatch0A12TimeIntervalOMa	type metadata accessor for Dispatch.DispatchTimeInterval
+_$s8Dispatch0A13TimeoutResultO2eeoiySbAC_ACtFZ	static Dispatch.DispatchTimeoutResult.== infix(Dispatch.DispatchTimeoutResult, Dispatch.DispatchTimeoutResult) -> Swift.Bool
+_$s8Dispatch0A13WorkItemFlagsVMa	type metadata accessor for Dispatch.DispatchWorkItemFlags
+_$s8Dispatch0A13WorkItemFlagsVMn	nominal type descriptor for Dispatch.DispatchWorkItemFlags
+_$s8Dispatch0A13WorkItemFlagsVs10SetAlgebraAAMc	protocol conformance descriptor for Dispatch.DispatchWorkItemFlags : Swift.SetAlgebra in Dispatch
+_$s8Dispatch0A3QoSV0B6SClassO7utilityyA2EmFWC	enum case for Dispatch.DispatchQoS.QoSClass.utility(Dispatch.DispatchQoS.QoSClass.Type) -> Dispatch.DispatchQoS.QoSClass
+_$s8Dispatch0A3QoSV0B6SClassOMa	type metadata accessor for Dispatch.DispatchQoS.QoSClass
+_$s8Dispatch0A3QoSV11unspecifiedACvgZ	static Dispatch.DispatchQoS.unspecified.getter : Dispatch.DispatchQoS
+_$s8Dispatch0A3QoSV13userInitiatedACvgZ	static Dispatch.DispatchQoS.userInitiated.getter : Dispatch.DispatchQoS
+_$s8Dispatch0A3QoSVMa	type metadata accessor for Dispatch.DispatchQoS
+_$s8Dispatch0A4TimeV3nowACyFZ	static Dispatch.DispatchTime.now() -> Dispatch.DispatchTime
+_$s8Dispatch0A4TimeVMa	type metadata accessor for Dispatch.DispatchTime
+_$s8Dispatch1poiyAA0A4TimeVAD_AA0aB8IntervalOtF	Dispatch.+ infix(Dispatch.DispatchTime, Dispatch.DispatchTimeInterval) -> Dispatch.DispatchTime
+_$s8Dispatch1poiyAA0A4TimeVAD_SdtF	Dispatch.+ infix(Dispatch.DispatchTime, Swift.Double) -> Dispatch.DispatchTime
+_$s8RawValueSYTl	associated type descriptor for Swift.RawRepresentable.RawValue
+_$sBOWV	value witness table for Builtin.UnknownObject
+_$sBi32_WV	value witness table for Builtin.Int32
+_$sBi64_WV	value witness table for Builtin.Int64
+_$sBoWV	value witness table for Builtin.NativeObject
+_$sSH13_rawHashValue4seedS2i_tFTj	dispatch thunk of Swift.Hashable._rawHashValue(seed: Swift.Int) -> Swift.Int
+_$sSH13_rawHashValue4seedS2i_tFTq	method descriptor for Swift.Hashable._rawHashValue(seed: Swift.Int) -> Swift.Int
+_$sSH4hash4intoys6HasherVz_tFTj	dispatch thunk of Swift.Hashable.hash(into: inout Swift.Hasher) -> ()
+_$sSH4hash4intoys6HasherVz_tFTq	method descriptor for Swift.Hashable.hash(into: inout Swift.Hasher) -> ()
+_$sSH9hashValueSivgTq	method descriptor for Swift.Hashable.hashValue.getter : Swift.Int
+_$sSHMp	protocol descriptor for Swift.Hashable
+_$sSHSQTb	base conformance descriptor for Swift.Hashable: Swift.Equatable
+_$sSJ12isWhitespaceSbvg	Swift.Character.isWhitespace.getter : Swift.Bool
+_$sSJ4hash4intoys6HasherVz_tF	Swift.Character.hash(into: inout Swift.Hasher) -> ()
+_$sSJN	type metadata for Swift.Character
+_$sSQ2eeoiySbx_xtFZTj	dispatch thunk of static Swift.Equatable.== infix(A, A) -> Swift.Bool
+_$sSQ2eeoiySbx_xtFZTq	method descriptor for static Swift.Equatable.== infix(A, A) -> Swift.Bool
+_$sSQMp	protocol descriptor for Swift.Equatable
+_$sSS10FoundationE36_unconditionallyBridgeFromObjectiveCySSSo8NSStringCSgFZ	static (extension in Foundation):Swift.String._unconditionallyBridgeFromObjectiveC(__C.NSString?) -> Swift.String
+_$sSS11utf8CStrings15ContiguousArrayVys4Int8VGvg	Swift.String.utf8CString.getter : Swift.ContiguousArray<Swift.Int8>
+_$sSS14_fromSubstringySSSshFZ	static Swift.String._fromSubstring(__shared Swift.Substring) -> Swift.String
+_$sSS14validatingUTF8SSSgSPys4Int8VG_tcfC	Swift.String.init(validatingUTF8: Swift.UnsafePointer<Swift.Int8>) -> Swift.String?
+_$sSS4hash4intoys6HasherVz_tF	Swift.String.hash(into: inout Swift.Hasher) -> ()
+_$sSS5index5afterSS5IndexVAD_tF	Swift.String.index(after: Swift.String.Index) -> Swift.String.Index
+_$sSS5index6beforeSS5IndexVAD_tF	Swift.String.index(before: Swift.String.Index) -> Swift.String.Index
+_$sSS6appendyySSF	Swift.String.append(Swift.String) -> ()
+_$sSS8UTF8ViewV13_foreignCountSiyF	Swift.String.UTF8View._foreignCount() -> Swift.Int
+_$sSS8UTF8ViewV13_foreignIndex5afterSS0D0VAF_tF	Swift.String.UTF8View._foreignIndex(after: Swift.String.Index) -> Swift.String.Index
+_$sSS8UTF8ViewV13_foreignIndex_8offsetBySS0D0VAF_SitF	Swift.String.UTF8View._foreignIndex(_: Swift.String.Index, offsetBy: Swift.Int) -> Swift.String.Index
+_$sSS8UTF8ViewV17_foreignSubscript8positions5UInt8VSS5IndexV_tF	Swift.String.UTF8View._foreignSubscript(position: Swift.String.Index) -> Swift.UInt8
+_$sSS9UTF16ViewV5index_8offsetBySS5IndexVAF_SitF	Swift.String.UTF16View.index(_: Swift.String.Index, offsetBy: Swift.Int) -> Swift.String.Index
+_$sSSN	type metadata for Swift.String
+_$sSSSysMc	protocol conformance descriptor for Swift.String : Swift.StringProtocol in Swift
+_$sSSySJSS5IndexVcig	Swift.String.subscript.getter : (Swift.String.Index) -> Swift.Character
+_$sSSySSxcSTRzSJ7ElementRtzlufC	Swift.String.init<A where A: Swift.Sequence, A.Element == Swift.Character>(A) -> Swift.String
+_$sSSySsSnySS5IndexVGcig	Swift.String.subscript.getter : (Swift.Range<Swift.String.Index>) -> Swift.Substring
+_$sSY8rawValue03RawB0QzvgTq	method descriptor for Swift.RawRepresentable.rawValue.getter : A.RawValue
+_$sSY8rawValuexSg03RawB0Qz_tcfCTq	method descriptor for Swift.RawRepresentable.init(rawValue: A.RawValue) -> A?
+_$sSYMp	protocol descriptor for Swift.RawRepresentable
+_$sSa034_makeUniqueAndReserveCapacityIfNotB0yyFyXl_Ts5	generic pre-specialization <Swift.AnyObject> of Swift.Array._makeUniqueAndReserveCapacityIfNotUnique() -> ()
+_$sSa16_createNewBuffer14bufferIsUnique15minimumCapacity13growForAppendySb_SiSbtFyXl_Ts5	generic pre-specialization <Swift.AnyObject> of Swift.Array._createNewBuffer(bufferIsUnique: Swift.Bool, minimumCapacity: Swift.Int, growForAppend: Swift.Bool) -> ()
+_$sSa37_appendElementAssumeUniqueAndCapacity_03newB0ySi_xntFyXl_Ts5	generic pre-specialization <Swift.AnyObject> of Swift.Array._appendElementAssumeUniqueAndCapacity(_: Swift.Int, newElement: __owned A) -> ()
+_$sSayxGSTsMc	protocol conformance descriptor for [A] : Swift.Sequence in Swift
+_$sSayxGSlsMc	protocol conformance descriptor for [A] : Swift.Collection in Swift
+_$sScA15unownedExecutorScevgTj	dispatch thunk of Swift.Actor.unownedExecutor.getter : Swift.UnownedSerialExecutor
+_$sScC6resume9returningyxn_tF	Swift.CheckedContinuation.resume(returning: __owned A) -> ()
+_$sScEMa	type metadata accessor for Swift.CancellationError
+_$sScI4next9isolation7ElementQzSgScA_pSgYi_tYa7FailureQzYKFTj	dispatch thunk of Swift.AsyncIteratorProtocol.next(isolation: isolated Swift.Actor?) async throws(A.Failure) -> A.Element?
+_$sScI4next9isolation7ElementQzSgScA_pSgYi_tYa7FailureQzYKFTjTu	async function pointer to dispatch thunk of Swift.AsyncIteratorProtocol.next(isolation: isolated Swift.Actor?) async throws(A.Failure) -> A.Element?
+_$sScP13userInitiatedScPvgZ	static Swift.TaskPriority.userInitiated.getter : Swift.TaskPriority
+_$sScP8rawValues5UInt8Vvg	Swift.TaskPriority.rawValue.getter : Swift.UInt8
+_$sScPMa	type metadata accessor for Swift.TaskPriority
+_$sScS10makeStream2of15bufferingPolicyScSyxG6stream_ScS12ContinuationVyx_G12continuationtxm_AG09BufferingE0Oyx__GtFZ	static Swift.AsyncStream.makeStream(of: A.Type, bufferingPolicy: Swift.AsyncStream<A>.Continuation.BufferingPolicy) -> (stream: Swift.AsyncStream<A>, continuation: Swift.AsyncStream<A>.Continuation)
+_$sScS12ContinuationV11YieldResultOMn	nominal type descriptor for Swift.AsyncStream.Continuation.YieldResult
+_$sScS12ContinuationV15BufferingPolicyO9unboundedyADyx__GAFmlFWC	enum case for Swift.AsyncStream.Continuation.BufferingPolicy.unbounded<A>(Swift.AsyncStream<A>.Continuation.BufferingPolicy.Type) -> Swift.AsyncStream<A>.Continuation.BufferingPolicy
+_$sScS12ContinuationV15BufferingPolicyOMn	nominal type descriptor for Swift.AsyncStream.Continuation.BufferingPolicy
+_$sScS12ContinuationV5yieldyAB11YieldResultOyx__GxnF	Swift.AsyncStream.Continuation.yield(__owned A) -> Swift.AsyncStream<A>.Continuation.YieldResult
+_$sScS12ContinuationV6finishyyF	Swift.AsyncStream.Continuation.finish() -> ()
+_$sScS12ContinuationVMn	nominal type descriptor for Swift.AsyncStream.Continuation
+_$sScSyxGScisMc	protocol conformance descriptor for Swift.AsyncStream<A> : Swift.AsyncSequence in Swift
+_$sScT6cancelyyF	Swift.Task.cancel() -> ()
+_$sScTss5NeverORs_rlE5valuexvg	(extension in Swift):Swift.Task< where B == Swift.Never>.value.getter : A
+_$sScTss5NeverORs_rlE5valuexvgTu	async function pointer to (extension in Swift):Swift.Task< where B == Swift.Never>.value.getter : A
+_$sSci13AsyncIteratorSci_ScITn	associated conformance descriptor for Swift.AsyncSequence.Swift.AsyncSequence.AsyncIterator: Swift.AsyncIteratorProtocol
+_$sSci17makeAsyncIterator0bC0QzyFTj	dispatch thunk of Swift.AsyncSequence.makeAsyncIterator() -> A.AsyncIterator
+_$sSciTL	protocol requirements base descriptor for Swift.AsyncSequence
+_$sSd5write2toyxz_ts16TextOutputStreamRzlF	Swift.Double.write<A where A: Swift.TextOutputStream>(to: inout A) -> ()
+_$sSiN	type metadata for Swift.Int
+_$sSis17FixedWidthIntegersMc	protocol conformance descriptor for Swift.Int : Swift.FixedWidthInteger in Swift
+_$sSis23CustomStringConvertiblesWP	protocol witness table for Swift.Int : Swift.CustomStringConvertible in Swift
+_$sSo11CMTimeRangea9CoreMediaE3endSo0A0avg	(extension in CoreMedia):__C.CMTimeRange.end.getter : __C.CMTime
+_$sSo17OS_dispatch_queueC8DispatchE10AttributesVMa	type metadata accessor for (extension in Dispatch):__C.OS_dispatch_queue.Attributes
+_$sSo17OS_dispatch_queueC8DispatchE10AttributesVMn	nominal type descriptor for (extension in Dispatch):__C.OS_dispatch_queue.Attributes
+_$sSo17OS_dispatch_queueC8DispatchE10AttributesVs10SetAlgebraACMc	protocol conformance descriptor for (extension in Dispatch):__C.OS_dispatch_queue.Attributes : Swift.SetAlgebra in Dispatch
+_$sSo17OS_dispatch_queueC8DispatchE11getSpecific3keyxSgAC0dF3KeyCyxG_tlFZ	static (extension in Dispatch):__C.OS_dispatch_queue.getSpecific<A>(key: Dispatch.DispatchSpecificKey<A>) -> A?
+_$sSo17OS_dispatch_queueC8DispatchE11setSpecific3key5valueyAC0dF3KeyCyxG_xSgtlF	(extension in Dispatch):__C.OS_dispatch_queue.setSpecific<A>(key: Dispatch.DispatchSpecificKey<A>, value: A?) -> ()
+_$sSo17OS_dispatch_queueC8DispatchE20AutoreleaseFrequencyO7inherityA2EmFWC	enum case for (extension in Dispatch):__C.OS_dispatch_queue.AutoreleaseFrequency.inherit((extension in Dispatch):__C.OS_dispatch_queue.AutoreleaseFrequency.Type) -> (extension in Dispatch):__C.OS_dispatch_queue.AutoreleaseFrequency
+_$sSo17OS_dispatch_queueC8DispatchE20AutoreleaseFrequencyOMa	type metadata accessor for (extension in Dispatch):__C.OS_dispatch_queue.AutoreleaseFrequency
+_$sSo17OS_dispatch_queueC8DispatchE5async5group3qos5flags7executeySo0a1_b1_F0CSg_AC0D3QoSVAC0D13WorkItemFlagsVyyXBtF	(extension in Dispatch):__C.OS_dispatch_queue.async(group: __C.OS_dispatch_group?, qos: Dispatch.DispatchQoS, flags: Dispatch.DispatchWorkItemFlags, execute: @convention(block) () -> ()) -> ()
+_$sSo17OS_dispatch_queueC8DispatchE5label3qos10attributes20autoreleaseFrequency6targetABSS_AC0D3QoSVAbCE10AttributesVAbCE011AutoreleaseI0OABSgtcfC	(extension in Dispatch):__C.OS_dispatch_queue.init(label: Swift.String, qos: Dispatch.DispatchQoS, attributes: (extension in Dispatch):__C.OS_dispatch_queue.Attributes, autoreleaseFrequency: (extension in Dispatch):__C.OS_dispatch_queue.AutoreleaseFrequency, target: __C.OS_dispatch_queue?) -> __C.OS_dispatch_queue
+_$sSo17OS_dispatch_queueC8DispatchE6global3qosAbC0D3QoSV0G6SClassO_tFZ	static (extension in Dispatch):__C.OS_dispatch_queue.global(qos: Dispatch.DispatchQoS.QoSClass) -> __C.OS_dispatch_queue
+_$sSo17SFSpeechErrorCodeV6SpeechE15audioDisorderedABvgZ	static (extension in Speech):__C.SFSpeechErrorCode.audioDisordered.getter : __C.SFSpeechErrorCode
+_$sSo17SFSpeechErrorCodeV6SpeechE21insufficientResourcesABvgZ	static (extension in Speech):__C.SFSpeechErrorCode.insufficientResources.getter : __C.SFSpeechErrorCode
+_$sSo17SFSpeechErrorCodeV6SpeechE21unexpectedAudioFormatABvgZ	static (extension in Speech):__C.SFSpeechErrorCode.unexpectedAudioFormat.getter : __C.SFSpeechErrorCode
+_$sSo17SFSpeechErrorCodeV6SpeechE23assetLocaleNotAllocatedABvgZ	static (extension in Speech):__C.SFSpeechErrorCode.assetLocaleNotAllocated.getter : __C.SFSpeechErrorCode
+_$sSo17SFSpeechErrorCodeV6SpeechE24incompatibleAudioFormatsABvgZ	static (extension in Speech):__C.SFSpeechErrorCode.incompatibleAudioFormats.getter : __C.SFSpeechErrorCode
+_$sSo17SFSpeechErrorCodeV6SpeechE28tooManyAssetLocalesAllocatedABvgZ	static (extension in Speech):__C.SFSpeechErrorCode.tooManyAssetLocalesAllocated.getter : __C.SFSpeechErrorCode
+_$sSo17SFSpeechErrorCodeV6SpeechE31cannotAllocateUnsupportedLocaleABvgZ	static (extension in Speech):__C.SFSpeechErrorCode.cannotAllocateUnsupportedLocale.getter : __C.SFSpeechErrorCode
+_$sSo17SFSpeechErrorCodeV6SpeechE7noModelABvgZ	static (extension in Speech):__C.SFSpeechErrorCode.noModel.getter : __C.SFSpeechErrorCode
+_$sSo18OS_dispatch_sourceC8DispatchE10TimerFlagsVMa	type metadata accessor for (extension in Dispatch):__C.OS_dispatch_source.TimerFlags
+_$sSo18OS_dispatch_sourceC8DispatchE10TimerFlagsVMn	nominal type descriptor for (extension in Dispatch):__C.OS_dispatch_source.TimerFlags
+_$sSo18OS_dispatch_sourceC8DispatchE10TimerFlagsVs10SetAlgebraACMc	protocol conformance descriptor for (extension in Dispatch):__C.OS_dispatch_source.TimerFlags : Swift.SetAlgebra in Dispatch
+_$sSo18OS_dispatch_sourceC8DispatchE15makeTimerSource5flags5queueSo0a1_b1_C6_timer_pAbCE0F5FlagsV_So0a1_b1_I0CSgtFZ	static (extension in Dispatch):__C.OS_dispatch_source.makeTimerSource(flags: (extension in Dispatch):__C.OS_dispatch_source.TimerFlags, queue: __C.OS_dispatch_queue?) -> __C.OS_dispatch_source_timer
+_$sSo18OS_dispatch_sourceP8DispatchE15setEventHandler3qos5flags7handleryAC0D3QoSV_AC0D13WorkItemFlagsVyyXBSgtF	(extension in Dispatch):__C.OS_dispatch_source.setEventHandler(qos: Dispatch.DispatchQoS, flags: Dispatch.DispatchWorkItemFlags, handler: (@convention(block) () -> ())?) -> ()
+_$sSo18OS_dispatch_sourceP8DispatchE6cancelyyF	(extension in Dispatch):__C.OS_dispatch_source.cancel() -> ()
+_$sSo18OS_dispatch_sourceP8DispatchE6resumeyyF	(extension in Dispatch):__C.OS_dispatch_source.resume() -> ()
+_$sSo21OS_dispatch_semaphoreC8DispatchE4wait7timeoutAC0D13TimeoutResultOAC0D4TimeV_tF	(extension in Dispatch):__C.OS_dispatch_semaphore.wait(timeout: Dispatch.DispatchTime) -> Dispatch.DispatchTimeoutResult
+_$sSo21OS_dispatch_semaphoreC8DispatchE6signalSiyF	(extension in Dispatch):__C.OS_dispatch_semaphore.signal() -> Swift.Int
+_$sSo24OS_dispatch_source_timerP8DispatchE8schedule8deadline9repeating6leewayyAC0E4TimeV_AC0eJ8IntervalOAKtF	(extension in Dispatch):__C.OS_dispatch_source_timer.schedule(deadline: Dispatch.DispatchTime, repeating: Dispatch.DispatchTimeInterval, leeway: Dispatch.DispatchTimeInterval) -> ()
+_$sSo6CMTimea9CoreMediaE7secondsSdvg	(extension in CoreMedia):__C.CMTime.seconds.getter : Swift.Double
+_$sSo8NSObjectC10ObjectiveCE2eeoiySbAB_ABtFZ	static (extension in ObjectiveC):__C.NSObject.== infix(__C.NSObject, __C.NSObject) -> Swift.Bool
+_$sSo8NSObjectC10ObjectiveCE9hashValueSivg	(extension in ObjectiveC):__C.NSObject.hashValue.getter : Swift.Int
+_$sSp12deinitialize5countSvSi_tF	Swift.UnsafeMutablePointer.deinitialize(count: Swift.Int) -> Swift.UnsafeMutableRawPointer
+_$sSqMa	type metadata accessor for Swift.Optional
+_$sSuN	type metadata for Swift.UInt
+_$sSus23CustomStringConvertiblesWP	protocol witness table for Swift.UInt : Swift.CustomStringConvertible in Swift
+_$sSy10FoundationE18trimmingCharacters2inSSAA12CharacterSetV_tF	(extension in Foundation):Swift.StringProtocol.trimmingCharacters(in: Foundation.CharacterSet) -> Swift.String
+_$ss10SetAlgebraPyxqd__ncSTRd__7ElementQyd__ACRtzlufCTj	dispatch thunk of Swift.SetAlgebra.init<A where A1: Swift.Sequence, A.Element == A1.Element>(__owned A1) -> A
+_$ss11_SetStorageC4copy8originalAByxGs05__RawaB0C_tFZ	static Swift._SetStorage.copy(original: Swift.__RawSetStorage) -> Swift._SetStorage<A>
+_$ss11_SetStorageC6resize8original8capacity4moveAByxGs05__RawaB0C_SiSbtFZ	static Swift._SetStorage.resize(original: Swift.__RawSetStorage, capacity: Swift.Int, move: Swift.Bool) -> Swift._SetStorage<A>
+_$ss11_SetStorageC8allocate8capacityAByxGSi_tFZ	static Swift._SetStorage.allocate(capacity: Swift.Int) -> Swift._SetStorage<A>
+_$ss11_SetStorageCMn	nominal type descriptor for Swift._SetStorage
+_$ss11_StringGutsV16_slowWithCStringyxxSPys4Int8VGKXEKlF	Swift._StringGuts._slowWithCString<A>((Swift.UnsafePointer<Swift.Int8>) throws -> A) throws -> A
+_$ss11_StringGutsV4growyySiF	Swift._StringGuts.grow(Swift.Int) -> ()
+_$ss12CaseIterableMp	protocol descriptor for Swift.CaseIterable
+_$ss12CaseIterableP8AllCasesAB_SlTn	associated conformance descriptor for Swift.CaseIterable.Swift.CaseIterable.AllCases: Swift.Collection
+_$ss12CaseIterableP8allCases03AllD0QzvgZTq	method descriptor for static Swift.CaseIterable.allCases.getter : A.AllCases
+_$ss12_ArrayBufferV19_getElementSlowPathyyXlSiFyXl_Ts5	generic pre-specialization <Swift.AnyObject> of Swift._ArrayBuffer._getElementSlowPath(Swift.Int) -> Swift.AnyObject
+_$ss13_StringObjectV10sharedUTF8SRys5UInt8VGvg	Swift._StringObject.sharedUTF8.getter : Swift.UnsafeBufferPointer<Swift.UInt8>
+_$ss18_CocoaArrayWrapperV8endIndexSivg	Swift._CocoaArrayWrapper.endIndex.getter : Swift.Int
+_$ss18_DictionaryStorageC4copy8originalAByxq_Gs05__RawaB0C_tFZ	static Swift._DictionaryStorage.copy(original: Swift.__RawDictionaryStorage) -> Swift._DictionaryStorage<A, B>
+_$ss18_DictionaryStorageC6resize8original8capacity4moveAByxq_Gs05__RawaB0C_SiSbtFZ	static Swift._DictionaryStorage.resize(original: Swift.__RawDictionaryStorage, capacity: Swift.Int, move: Swift.Bool) -> Swift._DictionaryStorage<A, B>
+_$ss18_DictionaryStorageCMn	nominal type descriptor for Swift._DictionaryStorage
+_$ss20__StaticArrayStorageCN	type metadata for Swift.__StaticArrayStorage
+_$ss21_findStringSwitchCase5cases6stringSiSays06StaticB0VG_SStF	Swift._findStringSwitchCase(cases: [Swift.StaticString], string: Swift.String) -> Swift.Int
+_$ss23CustomStringConvertibleMp	protocol descriptor for Swift.CustomStringConvertible
+_$ss23CustomStringConvertibleP11descriptionSSvgTj	dispatch thunk of Swift.CustomStringConvertible.description.getter : Swift.String
+_$ss23CustomStringConvertibleP11descriptionSSvgTq	method descriptor for Swift.CustomStringConvertible.description.getter : Swift.String
+_$ss23_ContiguousArrayStorageCMn	nominal type descriptor for Swift._ContiguousArrayStorage
+_$ss23withCheckedContinuation9isolation8function_xScA_pSgYi_SSyScCyxs5NeverOGXEtYalF	Swift.withCheckedContinuation<A>(isolation: isolated Swift.Actor?, function: Swift.String, _: (Swift.CheckedContinuation<A, Swift.Never>) -> ()) async -> A
+_$ss23withCheckedContinuation9isolation8function_xScA_pSgYi_SSyScCyxs5NeverOGXEtYalFTu	async function pointer to Swift.withCheckedContinuation<A>(isolation: isolated Swift.Actor?, function: Swift.String, _: (Swift.CheckedContinuation<A, Swift.Never>) -> ()) async -> A
+_$ss26DefaultStringInterpolationVN	type metadata for Swift.DefaultStringInterpolation
+_$ss26DefaultStringInterpolationVs16TextOutputStreamsWP	protocol witness table for Swift.DefaultStringInterpolation : Swift.TextOutputStream in Swift
+_$ss27_stringCompareWithSmolCheck__9expectingSbs11_StringGutsV_ADs01_G16ComparisonResultOtF	Swift._stringCompareWithSmolCheck(_: Swift._StringGuts, _: Swift._StringGuts, expecting: Swift._StringComparisonResult) -> Swift.Bool
+_$ss4Int8VMn	nominal type descriptor for Swift.Int8
+_$ss50ELEMENT_TYPE_OF_SET_VIOLATES_HASHABLE_REQUIREMENTSys5NeverOypXpF	Swift.ELEMENT_TYPE_OF_SET_VIOLATES_HASHABLE_REQUIREMENTS(Any.Type) -> Swift.Never
+_$ss53KEY_TYPE_OF_DICTIONARY_VIOLATES_HASHABLE_REQUIREMENTSys5NeverOypXpF	Swift.KEY_TYPE_OF_DICTIONARY_VIOLATES_HASHABLE_REQUIREMENTS(Any.Type) -> Swift.Never
+_$ss5ErrorMp	protocol descriptor for Swift.Error
+_$ss5ErrorP10FoundationAC13CustomNSErrorRzrlE5_codeSivg	(extension in Foundation):Swift.Error< where A: Foundation.CustomNSError>._code.getter : Swift.Int
+_$ss5ErrorP10FoundationAC13CustomNSErrorRzrlE7_domainSSvg	(extension in Foundation):Swift.Error< where A: Foundation.CustomNSError>._domain.getter : Swift.String
+_$ss5ErrorP19_getEmbeddedNSErroryXlSgyFTq	method descriptor for Swift.Error._getEmbeddedNSError() -> Swift.AnyObject?
+_$ss5ErrorP5_codeSivgTq	method descriptor for Swift.Error._code.getter : Swift.Int
+_$ss5ErrorP7_domainSSvgTq	method descriptor for Swift.Error._domain.getter : Swift.String
+_$ss5ErrorP9_userInfoyXlSgvgTq	method descriptor for Swift.Error._userInfo.getter : Swift.AnyObject?
+_$ss5ErrorPsE19_getEmbeddedNSErroryXlSgyF	(extension in Swift):Swift.Error._getEmbeddedNSError() -> Swift.AnyObject?
+_$ss5ErrorPsE5_codeSivg	(extension in Swift):Swift.Error._code.getter : Swift.Int
+_$ss5ErrorPsE7_domainSSvg	(extension in Swift):Swift.Error._domain.getter : Swift.String
+_$ss5ErrorPsE9_userInfoyXlSgvg	(extension in Swift):Swift.Error._userInfo.getter : Swift.AnyObject?
+_$ss5Int32VMn	nominal type descriptor for Swift.Int32
+_$ss5Int32VN	type metadata for Swift.Int32
+_$ss5Int32Vs23CustomStringConvertiblesWP	protocol witness table for Swift.Int32 : Swift.CustomStringConvertible in Swift
+_$ss5NeverOMn	nominal type descriptor for Swift.Never
+_$ss5NeverON	type metadata for Swift.Never
+_$ss5NeverOs5ErrorsWP	protocol witness table for Swift.Never : Swift.Error in Swift
+_$ss6HasherV5_seedABSi_tcfC	Swift.Hasher.init(_seed: Swift.Int) -> Swift.Hasher
+_$ss6HasherV8_combineyys6UInt32VF	Swift.Hasher._combine(Swift.UInt32) -> ()
+_$ss6HasherV9_finalizeSiyF	Swift.Hasher._finalize() -> Swift.Int
+_$ss6UInt32VMn	nominal type descriptor for Swift.UInt32
+_$ss6UInt32VN	type metadata for Swift.UInt32
+_$ss6UInt32Vs23CustomStringConvertiblesWP	protocol witness table for Swift.UInt32 : Swift.CustomStringConvertible in Swift
+_$ss6UInt64VMn	nominal type descriptor for Swift.UInt64
+_$sytN	type metadata for ()
+_$sytWV	value witness table for ()
+_OBJC_CLASS_$_AVAudioConverter	_OBJC_CLASS_$_AVAudioConverter
+_OBJC_CLASS_$_AVAudioFormat	_OBJC_CLASS_$_AVAudioFormat
+_OBJC_CLASS_$_AVAudioPCMBuffer	_OBJC_CLASS_$_AVAudioPCMBuffer
+_OBJC_CLASS_$_NSObject	_OBJC_CLASS_$_NSObject
+_OBJC_CLASS_$_OS_dispatch_queue	_OBJC_CLASS_$_OS_dispatch_queue
+_OBJC_CLASS_$_OS_dispatch_source	_OBJC_CLASS_$_OS_dispatch_source
+_OBJC_CLASS_$_SFSpeechRecognizer	_OBJC_CLASS_$_SFSpeechRecognizer
+_OBJC_CLASS_$__TtCs12_SwiftObject	_OBJC_CLASS_$_Swift._SwiftObject
+_OBJC_METACLASS_$__TtCs12_SwiftObject	_OBJC_METACLASS_$_Swift._SwiftObject
+_SFSpeechErrorDomain	_SFSpeechErrorDomain
+__Block_copy	__Block_copy
+__Block_release	__Block_release
+__NSConcreteStackBlock	__NSConcreteStackBlock
+___chkstk_darwin	___chkstk_darwin
+___stack_chk_fail	___stack_chk_fail
+___stack_chk_guard	___stack_chk_guard
+__objc_empty_cache	__objc_empty_cache
+__swiftEmptyArrayStorage	__swiftEmptyArrayStorage
+__swiftEmptySetSingleton	__swiftEmptySetSingleton
+__swiftImmortalRefCount	__swiftImmortalRefCount
+__swift_FORCE_LOAD_$_swiftAVFoundation	__swift_FORCE_LOAD_$_swiftAVFoundation
+__swift_FORCE_LOAD_$_swiftCoreAudio	__swift_FORCE_LOAD_$_swiftCoreAudio
+__swift_FORCE_LOAD_$_swiftCoreFoundation	__swift_FORCE_LOAD_$_swiftCoreFoundation
+__swift_FORCE_LOAD_$_swiftCoreImage	__swift_FORCE_LOAD_$_swiftCoreImage
+__swift_FORCE_LOAD_$_swiftCoreMIDI	__swift_FORCE_LOAD_$_swiftCoreMIDI
+__swift_FORCE_LOAD_$_swiftCoreMedia	__swift_FORCE_LOAD_$_swiftCoreMedia
+__swift_FORCE_LOAD_$_swiftDispatch	__swift_FORCE_LOAD_$_swiftDispatch
+__swift_FORCE_LOAD_$_swiftFoundation	__swift_FORCE_LOAD_$_swiftFoundation
+__swift_FORCE_LOAD_$_swiftIOKit	__swift_FORCE_LOAD_$_swiftIOKit
+__swift_FORCE_LOAD_$_swiftMetal	__swift_FORCE_LOAD_$_swiftMetal
+__swift_FORCE_LOAD_$_swiftObjectiveC	__swift_FORCE_LOAD_$_swiftObjectiveC
+__swift_FORCE_LOAD_$_swiftQuartzCore	__swift_FORCE_LOAD_$_swiftQuartzCore
+__swift_FORCE_LOAD_$_swiftUniformTypeIdentifiers	__swift_FORCE_LOAD_$_swiftUniformTypeIdentifiers
+__swift_FORCE_LOAD_$_swiftXPC	__swift_FORCE_LOAD_$_swiftXPC
+__swift_FORCE_LOAD_$_swift_Builtin_float	__swift_FORCE_LOAD_$_swift_Builtin_float
+__swift_FORCE_LOAD_$_swiftsimd	__swift_FORCE_LOAD_$_swiftsimd
+_bzero	_bzero
+_dispatch_semaphore_create	_dispatch_semaphore_create
+_dispatch_sync	_dispatch_sync
+_malloc_size	_malloc_size
+_memcpy	_memcpy
+_memmove	_memmove
+_memset_s	_memset_s
+_objc_allocWithZone	_objc_allocWithZone
+_objc_autoreleaseReturnValue	_objc_autoreleaseReturnValue
+_objc_msgSend	_objc_msgSend
+_objc_opt_self	_objc_opt_self
+_objc_release	_objc_release
+_objc_retain	_objc_retain
+_objc_retainAutoreleasedReturnValue	_objc_retainAutoreleasedReturnValue
+_os_unfair_lock_lock	_os_unfair_lock_lock
+_os_unfair_lock_unlock	_os_unfair_lock_unlock
+_swift_allocError	_swift_allocError
+_swift_allocObject	_swift_allocObject
+_swift_allocateGenericClassMetadata	_swift_allocateGenericClassMetadata
+_swift_arrayDestroy	_swift_arrayDestroy
+_swift_arrayInitWithCopy	_swift_arrayInitWithCopy
+_swift_beginAccess	_swift_beginAccess
+_swift_bridgeObjectRelease	_swift_bridgeObjectRelease
+_swift_bridgeObjectRetain	_swift_bridgeObjectRetain
+_swift_deallocClassInstance	_swift_deallocClassInstance
+_swift_deallocObject	_swift_deallocObject
+_swift_deallocPartialClassInstance	_swift_deallocPartialClassInstance
+_swift_deletedMethodError	_swift_deletedMethodError
+_swift_dynamicCast	_swift_dynamicCast
+_swift_errorRelease	_swift_errorRelease
+_swift_errorRetain	_swift_errorRetain
+_swift_getAssociatedConformanceWitness	_swift_getAssociatedConformanceWitness
+_swift_getEnumTagSinglePayloadGeneric	_swift_getEnumTagSinglePayloadGeneric
+_swift_getForeignTypeMetadata	_swift_getForeignTypeMetadata
+_swift_getGenericMetadata	_swift_getGenericMetadata
+_swift_getObjCClassMetadata	_swift_getObjCClassMetadata
+_swift_getObjectType	_swift_getObjectType
+_swift_getOpaqueTypeConformance2	_swift_getOpaqueTypeConformance2
+_swift_getSingletonMetadata	_swift_getSingletonMetadata
+_swift_getTypeByMangledNameInContext2	_swift_getTypeByMangledNameInContext2
+_swift_getTypeByMangledNameInContextInMetadataState2	_swift_getTypeByMangledNameInContextInMetadataState2
+_swift_getWitnessTable	_swift_getWitnessTable
+_swift_initClassMetadata2	_swift_initClassMetadata2
+_swift_initStructMetadata	_swift_initStructMetadata
+_swift_isEscapingClosureAtFileLocation	_swift_isEscapingClosureAtFileLocation
+_swift_isUniquelyReferenced_nonNull_native	_swift_isUniquelyReferenced_nonNull_native
+_swift_once	_swift_once
+_swift_release	_swift_release
+_swift_release_n	_swift_release_n
+_swift_retain	_swift_retain
+_swift_retain_n	_swift_retain_n
+_swift_runtimeSupportsNoncopyableTypes	_swift_runtimeSupportsNoncopyableTypes
+_swift_setDeallocating	_swift_setDeallocating
+_swift_slowAlloc	_swift_slowAlloc
+_swift_slowDealloc	_swift_slowDealloc
+_swift_storeEnumTagSinglePayloadGeneric	_swift_storeEnumTagSinglePayloadGeneric
+_swift_task_alloc	_swift_task_alloc
+_swift_task_create	_swift_task_create
+_swift_task_dealloc	_swift_task_dealloc
+_swift_task_switch	_swift_task_switch
+_swift_unknownObjectRelease	_swift_unknownObjectRelease
+_swift_unknownObjectRetain	_swift_unknownObjectRetain
+_swift_updateClassMetadata2	_swift_updateClassMetadata2
+_swift_weakDestroy	_swift_weakDestroy
+_swift_weakInit	_swift_weakInit
+_swift_weakLoadStrong	_swift_weakLoadStrong
+_swift_willThrow	_swift_willThrow
