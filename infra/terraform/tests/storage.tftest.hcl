@@ -179,7 +179,11 @@ run "noncurrent_retention_must_be_whole_days" {
   expect_failures = [var.data_noncurrent_version_days]
 }
 
-run "cache_prefix_expires_after_7_days" {
+# cache/ holds capture's staged frames (D-028) until their hour is decided, and the hours of a stopped capture job
+# are decided when it runs again. So the backstop expiry outlasts the longest hard stop (AWS Budgets lifts it at the
+# next budget month, at most 31 days on) with room for the first passes after it; at 7 days a stop that began before
+# about day 23 of a month cost the undecided hours their full frames.
+run "cache_prefix_expires_after_35_days" {
   command = plan
 
   assert {
@@ -187,8 +191,8 @@ run "cache_prefix_expires_after_7_days" {
     error_message = "the expiring rule must be scoped to cache/"
   }
   assert {
-    condition     = one([for r in aws_s3_bucket_lifecycle_configuration.data.rule : r.expiration[0].days if r.id == "expire-cache"]) == 7
-    error_message = "cache/ must expire after 7 days"
+    condition     = one([for r in aws_s3_bucket_lifecycle_configuration.data.rule : r.expiration[0].days if r.id == "expire-cache"]) == 35
+    error_message = "cache/ must expire after 35 days, longer than a hard stop can last (31 days)"
   }
   assert {
     condition     = one([for r in aws_s3_bucket_lifecycle_configuration.data.rule : r.noncurrent_version_expiration[0].noncurrent_days if r.id == "expire-cache"]) == 1

@@ -14,10 +14,12 @@ locals {
   data_bucket     = var.data_bucket_name != "" ? var.data_bucket_name : "${var.project}-data-${local.account_id}"
   data_bucket_arn = "arn:${local.partition}:s3:::${local.data_bucket}"
 
-  # Fixed by the PRD rather than tunable. §15.2 promises 30-day log retention, and cache/ holds only
-  # deletable files (CLAUDE.md data layout). ECR keeps the last 5 images.
+  # Fixed rather than tunable. PRD §15.2 promises 30-day log retention. cache/ holds only deletable files (CLAUDE.md
+  # data layout): in the bucket, capture's staged frames, which it deletes itself once their hour is decided
+  # (storage.tf). Its expiry is a backstop that outlasts the longest hard stop (one budget month, monitoring.tf), so a
+  # stopped capture job finds its undecided hours' frames when it runs again. ECR keeps the last 5 images.
   log_retention_days    = 30
-  cache_expiration_days = 7
+  cache_expiration_days = 35
   ecr_keep_images       = 5
 
   # The daily JSONL logs in the data bucket (CLAUDE.md data layout); storage.tf expires their old versions sooner.
@@ -33,10 +35,18 @@ locals {
   # Data-bucket access, as IAM key patterns (CLAUDE.md data layout). A job reads and writes only its own outputs,
   # its own state documents (state/<job>/) and its own locks (state/locks/<job>..., the lookout_common lock
   # names "<job>/..." or "<job>-..."). So neither job can overwrite or delete the other's state: the capture
-  # job's NPS rate-limit history stays out of the forecast job's reach. s3_delete is narrower still: releasing a
-  # lock is the only delete a worker makes (lookout_common.storage has no delete method), plus forecast's
-  # deletable cache/. No role may delete a frame, forecast or log, none has s3:DeleteObjectVersion, and the bucket
-  # is versioned (storage.tf), so an overwrite is recoverable for var.data_noncurrent_version_days.
+  # job's NPS rate-limit history stays out of the forecast job's reach.
+  #
+  # Capture (lookout-capture 0.2.0, PRD §8.7 as decided in D-028) also writes a 640 px thumbnail of every download
+  # to thumbs/, and stages each download of the six hourly cameras under cache/staging/frames/ until its hour is
+  # decided; the nearest frame is then copied to frames/ and every staged copy deleted (workers/capture/README.md,
+  # "IAM"; lookout_capture.retention). Forecast keeps its GRIB subsets on the function's local disk
+  # (lookout_common.paths.cache_dir(), /tmp on Lambda), never in the bucket, so it has no cache/ grant.
+  #
+  # s3_delete is narrower still: releasing a lock and removing capture's own staged copies are the only deletes a
+  # worker makes (lookout_common.storage has no delete method; retention.delete_staged refuses any key outside
+  # cache/staging/). No role may delete a frame, thumbnail, forecast or log, none has s3:DeleteObjectVersion, and
+  # the bucket is versioned (storage.tf), so an overwrite is recoverable for var.data_noncurrent_version_days.
   jobs = {
     capture = {
       description          = "Lookout capture: polls NPS camera feeds, stores changed frames (PRD 11.2, 15.3)"
@@ -46,8 +56,8 @@ locals {
       ephemeral_storage_mb = 512
       schedule_expression  = var.capture_schedule_expression
       schedule_enabled     = var.capture_schedule_enabled
-      s3_read_write        = ["frames/*", "capture_log/*", "state/capture/*", "state/locks/capture*"]
-      s3_delete            = ["state/locks/capture*"]
+      s3_read_write        = ["frames/*", "thumbs/*", "cache/staging/*", "capture_log/*", "state/capture/*", "state/locks/capture*"]
+      s3_delete            = ["cache/staging/*", "state/locks/capture*"]
     }
     forecast = {
       description          = "Lookout forecast: HRRR byte-range extraction per viewpoint, availability lag (PRD 8.3, 11.2)"
@@ -57,8 +67,8 @@ locals {
       ephemeral_storage_mb = 2048
       schedule_expression  = var.forecast_schedule_expression
       schedule_enabled     = var.forecast_schedule_enabled
-      s3_read_write        = ["forecast/*", "forecast_log/*", "cache/*", "state/forecast/*", "state/locks/forecast*"]
-      s3_delete            = ["cache/*", "state/locks/forecast*"]
+      s3_read_write        = ["forecast/*", "forecast_log/*", "state/forecast/*", "state/locks/forecast*"]
+      s3_delete            = ["state/locks/forecast*"]
     }
   }
 

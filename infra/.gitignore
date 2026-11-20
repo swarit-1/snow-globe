@@ -1,4 +1,4 @@
-# Terraform working directories. Provider binaries (~735 MB) belong in TF_PLUGIN_CACHE_DIR outside iCloud
+# Terraform working directories. Provider binaries (~760 MB) belong in TF_PLUGIN_CACHE_DIR outside iCloud
 # (infra/README.md); .terraform/ then holds only symlinks.
 **/.terraform/
 

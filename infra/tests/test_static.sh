@@ -2,8 +2,10 @@
 # Static checks on infra/ that `terraform test` cannot make (a mocked provider never sees the provider block, a
 # variable's default, or depends_on). No network, no credentials, no Terraform run.
 #
-#   1. Privacy (CLAUDE.md; the repo is public): no email address anywhere in the Terraform code or the infra
-#      scripts, and variable "alarm_email" stays required (no default), non-nullable and sensitive.
+#   1. Privacy (CLAUDE.md; the repo is public): no email address anywhere in the Terraform code, the infra scripts
+#      (shell, Python, Dockerfiles) or the cost files; in the tests and the README, only addresses at the reserved
+#      example.com and example.invalid domains; and variable "alarm_email" stays required (no default), non-nullable
+#      and sensitive.
 #   2. Tags: both provider blocks keep default_tags, and the root one uses local.tags (project=lookout).
 #   3. Ordering: the depends_on hints that avoid first-deploy races are still there.
 #   4. Hermetic tests: every test file pins every variable of its module, and each pin equals the variable's
@@ -67,13 +69,26 @@ echo "infra/tests/test_static.sh"
 
 CURRENT="no_email_address_in_infra_code"
 EMAIL_RE='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
-files="$(find "$TF" "$INFRA/lambda" "$INFRA/deploy.sh" "$INFRA/test.sh" \
-  \( -name .terraform -o -name tests \) -prune -o \
-  -type f \( -name '*.tf' -o -name '*.hcl' -o -name '*.sh' -o -name 'Dockerfile*' \) ! -name '.terraform.lock.hcl' -print)"
+files="$(find "$TF" "$INFRA/lambda" "$INFRA/cost" "$INFRA/deploy.sh" "$INFRA/test.sh" "$INFRA/tf_providers.sh" \
+  \( -name .terraform -o -name tests -o -name __pycache__ -o -name .ruff_cache \) -prune -o \
+  -type f \( -name '*.tf' -o -name '*.hcl' -o -name '*.sh' -o -name '*.py' -o -name '*.json' -o -name '*.toml' \
+  -o -name 'Dockerfile*' \) ! -name '.terraform.lock.hcl' -print)"
 [ -n "$files" ] || fail "found no files to scan under $INFRA"
 # shellcheck disable=SC2086 # one path per line, none with spaces
 if hits="$(grep -n -E "$EMAIL_RE" $files)"; then
   fail "email-like text in infra code (put addresses in TF_VAR_alarm_email only):
+$hits"
+fi
+ok
+
+# Tests need an address to pass as alarm_email, and the README shows where yours goes: those use only the reserved
+# example.com and example.invalid domains (RFC 2606), which reach nobody.
+CURRENT="tests_and_readme_use_only_example_addresses"
+files="$(find "$INFRA/tests" "$TF/tests" "$TF/bootstrap/tests" "$INFRA/README.md" -type f -print)"
+[ -n "$files" ] || fail "found no test files or README under $INFRA"
+# shellcheck disable=SC2086 # one path per line, none with spaces
+if hits="$(grep -n -o -E "$EMAIL_RE" $files | grep -v -E '@example\.(com|invalid)$')"; then
+  fail "an address outside example.com and example.invalid in the tests or the README:
 $hits"
 fi
 ok

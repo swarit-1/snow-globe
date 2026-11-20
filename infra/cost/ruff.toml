@@ -1,0 +1,7 @@
+# Lint and format settings for the hosting-estimate scripts (infra/test.sh runs ruff check and ruff format --check
+# here, with --no-cache so nothing is written into the iCloud-synced tree). The workers' rules, with longer lines.
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]

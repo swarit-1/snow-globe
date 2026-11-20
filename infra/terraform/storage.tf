@@ -1,7 +1,7 @@
 # Private data bucket (PRD §8.7, §15.2) and the ECR repository for the Lambda image.
 # Adapted from Oculus storage.tf. Nothing here is public: every frame stays private until NPS confirms (PRD §15).
 
-# ---- data bucket: frames/, capture_log/, forecast/, forecast_log/, state/, cache/ (CLAUDE.md data layout) ------
+# ---- data bucket: frames/, thumbs/, capture_log/, forecast/, forecast_log/, state/, cache/ (CLAUDE.md data layout) ---
 # Versioned (see aws_s3_bucket_versioning.data). Each job's key access is in local.jobs (main.tf).
 
 resource "aws_s3_bucket" "data" {
@@ -68,7 +68,10 @@ resource "aws_s3_bucket_policy" "data" {
 resource "aws_s3_bucket_lifecycle_configuration" "data" {
   bucket = aws_s3_bucket.data.id
 
-  # cache/ holds only deletable files (GRIB subsets and the like), so its old versions go after a day too.
+  # cache/ holds only deletable files, so its old versions go after a day too. On AWS that is capture's staged frames
+  # (cache/staging/, D-028), which capture deletes itself once their hour is decided. The 35-day expiry is a backstop
+  # for copies it never deleted. It is longer than a hard stop can last (31 days), because a stopped job decides its
+  # last hours only when it runs again. The forecast job's GRIB subsets never reach the bucket (Lambda's /tmp).
   rule {
     id     = "expire-cache"
     status = "Enabled"
