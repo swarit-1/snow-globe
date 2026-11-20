@@ -62,9 +62,34 @@ class DocsInvariants(unittest.TestCase):
     def test_viewpoint_ids_are_manifests(self) -> None:
         self.assert_clean("viewpoints")
 
+    def test_third_party_notices_name_every_locked_package(self) -> None:
+        self.assert_clean("notices")
+
+    def test_prd_appendix_a_has_the_manifest_schemas_shape(self) -> None:
+        self.assert_clean("appendix-a")
+
+    def test_ci_runs_every_make_test_suite(self) -> None:
+        self.assert_clean("ci-suites")
+
     def test_every_check_has_a_test(self) -> None:
-        names = {"links", "tables", "weekdays", "day-g", "calendar", "milestones", "decisions",
-                 "append-only", "d-refs", "tickets", "spend", "prd-sections", "viewpoints"}
+        names = {
+            "links",
+            "tables",
+            "weekdays",
+            "day-g",
+            "calendar",
+            "milestones",
+            "decisions",
+            "append-only",
+            "d-refs",
+            "tickets",
+            "spend",
+            "prd-sections",
+            "viewpoints",
+            "notices",
+            "appendix-a",
+            "ci-suites",
+        }
         self.assertEqual(set(doccheck.CHECKS), names)
 
 

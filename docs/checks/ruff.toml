@@ -1,0 +1,11 @@
+# Lint and format settings for docs/checks/ (standard-library scripts with no pyproject of their
+# own). `make test-docs`, `make lint` and `make fmt-check` run workers/common's locked ruff here with
+# --no-cache, so nothing is written into the iCloud-synced tree. The repo's rules, but for Python 3.9:
+# the checks run on any python3 >= 3.9, such as macOS's /usr/bin/python3 (3.9.6).
+line-length = 120
+target-version = "py39"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+# The docs these checks read use these symbols, so the checks' strings, patterns and comments do too.
+allowed-confusables = ["–", "−", "×", "′"]

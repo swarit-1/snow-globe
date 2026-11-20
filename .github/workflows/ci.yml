@@ -6,16 +6,26 @@
 # runs the same suites on the laptop.
 #
 # Every job runs the `make test-<suite>` target that `make test` runs locally, so CI runs the same
-# commands as the laptop. There are no secrets and no AWS credentials, and nothing here calls NPS,
-# NOAA, AWS or a paid service:
-#   - Python tests marked `network` are deselected, and pytest runs behind a dead proxy;
+# commands as the laptop, for every suite in the Makefile's TEST_SUITES except the LAPTOP_ONLY_SUITES
+# (docs/checks' `ci-suites` check fails if the two drift apart). The one laptop-only suite is
+# speech (app/speech-macos, `swift test`): it needs macOS 26 with Xcode 26.2, and there is no macOS
+# job here. A macOS runner bills at a higher rate than Linux on a private repository, and no runner
+# image with that toolchain has been checked, so adding one is the owner's call; until then
+# `make test` on the laptop is the only place it runs. There are no secrets and no AWS
+# credentials, and nothing here calls NPS, NOAA, AWS or a paid service:
+#   - each Python suite runs ruff check, ruff format --check and pytest; tests marked `network`
+#     are deselected, and pytest runs behind a dead proxy;
+#   - Rust runs cargo fmt --check, Terraform fmt -check; the renderer has no formatter configured;
+#   - docs/checks runs with the runner's python3 (standard library only), then workers/common's
+#     locked ruff checks its code; infra's cost-script ruff step uses that same locked ruff;
 #   - Terraform runs init -backend=false, validate and a mocked `terraform test`, never plan or
-#     apply. Its init asks registry.terraform.io for the provider's versions on every run, even
-#     with the lock file and a cached provider, so the infra job (like test-infra on the laptop)
-#     fails when the registry is unreachable;
+#     apply. On the laptop the init installs the AWS provider from the plugin cache with no network
+#     (infra/tf_providers.sh). The committed lock files hold the darwin_arm64 h1: hash only, so on
+#     linux_amd64 the cache never matches, and the infra job always takes the registry fallback;
 #   - the renderer runs headless Chromium (SwiftShader), with every page request served locally.
-# Otherwise the jobs use the network only for dependencies: PyPI, crates.io, the npm registry,
-# GitHub (the actions and the oculus-core pin) and Playwright's Chromium download.
+# Otherwise the jobs use the network only for dependencies: PyPI (and uv's Python download),
+# crates.io, the npm registry, GitHub (the actions and the oculus-core pin), Playwright's Chromium
+# download and the Terraform registry.
 # Each action is pinned to a full commit SHA; the comment names its release tag. The tags were
 # resolved with `git ls-remote` on 19 Nov 2026.
 name: ci
@@ -34,7 +44,7 @@ concurrency:
 
 jobs:
   python:
-    name: ${{ matrix.suite }} (uv sync --locked, ruff, pytest)
+    name: ${{ matrix.suite }} (uv sync --locked, ruff check + format --check, tests)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -48,6 +58,10 @@ jobs:
             lock: workers/capture/uv.lock
           - suite: forecast
             lock: workers/forecast/uv.lock
+          # bench/ (stdlib unittest, check.py --no-parser, ruff) runs on workers/common's Python
+          # and ruff; its parser tests skip without a fresh release build of lookout-parse.
+          - suite: bench
+            lock: workers/common/uv.lock
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -145,12 +159,20 @@ jobs:
         with:
           terraform_version: 1.16.1
           terraform_wrapper: false
-      # infra/test.sh keeps the AWS provider (~735 MB) in TF_PLUGIN_CACHE_DIR, by default
-      # $HOME/lookout-data/cache/terraform-plugins.
+      # infra/test.sh keeps the AWS provider (~760 MB unpacked) in TF_PLUGIN_CACHE_DIR, by default
+      # $HOME/lookout-data/cache/terraform-plugins. With TF_INIT=auto (the default) the job uses
+      # the registry until the lock files also hold the linux_amd64 h1: hash (infra/README.md,
+      # "Network"); then this cache lets it run offline like the laptop.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/lookout-data/cache/terraform-plugins
           key: terraform-plugins-${{ runner.os }}-${{ hashFiles('infra/terraform/.terraform.lock.hcl', 'infra/terraform/bootstrap/.terraform.lock.hcl') }}
+      # make test-infra syncs workers/common and puts its locked ruff first on PATH, so
+      # infra/tests/test_cost.sh's ruff step runs with the pinned version here too, not skipped.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.6"
+          cache-dependency-glob: workers/common/uv.lock
       # shellcheck is preinstalled on ubuntu-24.04. Docker with buildx is too, so the Lambda
       # build-context check runs: a FROM scratch export, with nothing pulled or pushed.
       - name: Tool versions
@@ -162,7 +184,7 @@ jobs:
         run: make test-infra
 
   docs:
-    name: docs-check (links, dates, append-only DECISIONS.md)
+    name: docs (links, dates, append-only DECISIONS.md, notices, Appendix A, CI suites; ruff)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -171,7 +193,13 @@ jobs:
           persist-credentials: false
           # The append-only check reads every version of DECISIONS.md in the history.
           fetch-depth: 0
-      - name: make docs-check (standard-library Python only)
+      # The checks themselves need only the runner's python3; uv brings workers/common's locked
+      # ruff for their own code.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.6"
+          cache-dependency-glob: workers/common/uv.lock
+      - name: make test-docs (docs-check with the standard library, then ruff on docs/checks)
         run: |
           python3 --version
-          make docs-check
+          make test-docs

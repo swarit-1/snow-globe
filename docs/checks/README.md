@@ -1,14 +1,15 @@
 # docs/checks
 
-Consistency checks for the docs: PLAN.md, DECISIONS.md, PRD_PROGRESS.md, PRD.md and CLAUDE.md, plus every markdown file, and the references that code makes to them. They test invariants, never today's wording, so the docs can keep changing.
+Consistency checks for the docs: PLAN.md, DECISIONS.md, PRD_PROGRESS.md, PRD.md and CLAUDE.md, plus every markdown file, the references that code makes to them, THIRD_PARTY_NOTICES against the lock files, and the Makefile's `make test` suites against CI. They test invariants, never today's wording, so the docs can keep changing.
 
 ```sh
 make docs-check                                     # = python3 -I -B -m unittest discover -s docs/checks -t docs/checks
+make test-docs                                      # docs-check, then ruff check + ruff format --check on docs/checks
 python3 -I -B docs/checks/doccheck.py               # every check, with each problem as path:line
 python3 -I -B docs/checks/doccheck.py links tables  # only some checks
 ```
 
-The checks use the standard library only, with Python 3.9 or later, in isolated mode (`-I`). They make no network calls. They read the working tree and git, and write nothing; `-B` keeps Python from writing a `__pycache__` into the repo.
+The checks use the standard library only, with Python 3.9 or later, in isolated mode (`-I`). They make no network calls. They read the working tree and git, and write nothing; `-B` keeps Python from writing a `__pycache__` into the repo. Their own code is linted and format-checked by `make test-docs` (and `make lint`, `make fmt-check`) with workers/common's locked ruff, under `ruff.toml` here: the repo's rules, for Python 3.9.
 
 ## What is checked
 
@@ -27,12 +28,16 @@ The checks use the standard library only, with Python 3.9 or later, in isolated 
 | `spend` | In DECISIONS.md's spend ledger, each running total is the previous total plus the amount, and dates never go backwards. CLAUDE.md's `Spend so far` equals the last running total. |
 | `prd-sections` | Every `§n.m` in the living docs and the code names a heading of the current PRD.md, and so do both ends of a range (`§13.4-13.7`, `§10.2–10.6`, `§13.4-7`). These are skipped: DECISIONS.md, `docs/review/` and `docs/council/` (historical records numbered against older PRD versions), and a `§` within 40 characters after "Oculus", "RFC", "ISO" or "v0.1"–"v0.3". |
 | `viewpoints` | Every `<park>.<view>` id in the docs that uses a manifest's park prefix is a manifest in `viewpoints/manifests/`. CLAUDE.md's viewpoint table lists exactly the manifests. |
+| `notices` | `THIRD_PARTY_NOTICES` names, on one line each, every package that a lock file in the repo pins, followed by the pinned version: only spaces and `:`, `@`, `=` or `(` may sit between the name and the version, so another package's version on the same line never counts (PRD §12, the licence ledger of §15.4). Every `uv.lock`, `Cargo.lock` and `package.json` that git sees is read, so a new project is covered at once: for a uv project, its runtime closure on macOS (a marker without "or" that needs Windows or Linux leaves a package out), the closure of each extra and dependency group, and the direct members of its `dev` group; for a Cargo lock, the third-party crates each path crate depends on directly; for an npm manifest, its dependencies, devDependencies and optionalDependencies, which must pin exact versions. A bumped lock or a new dependency fails until the notices catch up. An entry for a package no lock holds any more is not caught. |
+| `appendix-a` | The JSON example in PRD.md's Appendix A has the shape of `viewpoints/schema/viewpoint.schema.json`, the source of truth for the manifest (D-044). Every key is a property the schema allows (`false` properties are refused), every required key is present (`required`, and `dependentRequired` when its key is), and objects and arrays sit where the schema allows them, through `$ref`s (with the keywords beside them, which JSON Schema 2020-12 applies too), `items`, `additionalProperties` subschemas, `allOf` (every branch) and `oneOf`/`anyOf` (one branch must fit). A cycle of `$ref`s or applicators is reported, not followed. Placeholder scalars are not type-checked, and `if`/`then`/`else` and `not` are not applied. The check fails closed on what it can't read: a `$ref` other than `#` or a `#/...` pointer to a subschema of the same file (another file, a URL, an `$anchor` name, a typo); a shape keyword it does not read (`patternProperties`, `unevaluatedProperties`, `prefixItems`, `contains`, `dependencies`, `$dynamicRef`, …, or `items` as an array); and a shape constraint inside a `then`, `else` or `not` (`required`, `type`, `additionalProperties`, `items`, `$ref`, `dependentRequired`, or a `false` subschema). Scalar-only conditions, such as the real schema's `const` in a `then`, pass. If D-044 is reversed, this check goes with it. |
+| `ci-suites` | CI runs every suite that `make test` runs (PRD §12). Each name in the Makefile's `TEST_SUITES` has a `test-<name>` rule, and `.github/workflows/ci.yml` runs it as `make test-<name>`, in a `run:` command (step names and comments don't count), directly or through `make test-${{ matrix.suite }}` and a matrix `suite:` entry. The exceptions are the Makefile's `LAPTOP_ONLY_SUITES` (today `speech`, which needs macOS and Xcode), which CI must then not run. CI runs no `make test-<name>` that `TEST_SUITES` lacks. |
 
 ## Files
 
 - `doccheck.py`: the checks, and a CLI that prints every problem.
+- `ruff.toml`: lint and format settings for the three Python files here (Python 3.9, the repo's rules).
 - `test_docs.py`: one test per check, run on the repo.
-- `test_selftest.py`: each check passes a small consistent set of in-memory docs. A deliberate break of each invariant (one or more mutations per check) must be caught. It also covers lookalikes that must not be flagged, and the date, slug and table helpers. `GitFixtures` builds throwaway git repos in a temporary directory for what needs real git and a real disk: merges in DECISIONS.md's history, and link targets in the wrong case or ignored by git. They need the `git` CLI and are skipped without it.
+- `test_selftest.py`: each check passes a small consistent set of in-memory docs. A deliberate break of each invariant (one or more mutations per check) must be caught. It also covers lookalikes that must not be flagged, and the date, slug and table helpers. `Notices`, `AppendixA` and `CiSuites` cover the lock-file readers, the schema walker and the Makefile and workflow readers case by case. `GitFixtures` builds throwaway git repos in a temporary directory for what needs real git and a real disk: merges in DECISIONS.md's history, and link targets in the wrong case or ignored by git. They need the `git` CLI and are skipped without it. `RealFilesAreRead` checks that the readers find packages in every real lock file and walk the real Appendix A. Its mutations are made in memory and picked from those files, so no package, version or key is pinned and a routine bump never breaks it.
 
 ## When a check fails
 
@@ -50,3 +55,17 @@ These checks replace the docs agent's scratch tests of 19 Nov (`test_docs.py`, `
 - **Dropped:** the review-finding probes (`test_f1`–`test_f12`) and their mutation runner. They matched sentences of the 19 Nov text, so any rewording would break them.
 - **Dropped:** the measured-number checks (archive start dates, sample sizes, stopgap counts and outages, Last-Modified against EXIF). They read a dated snapshot of `~/lookout-data` that CI doesn't have. They pinned "as of 08:30 UTC" moments, and the stopgap they read is retired (D-023). The numbers stay in the agents' reports and PRD_PROGRESS.md.
 - **Added:** milestone dates across documents, D-heading statuses and dates, ticket ids and statuses, the spend ledger, PRD § references and viewpoint ids.
+- **Added on 20 Nov:** `notices` and `appendix-a`, from the docs agent's proposal of the night before. Changes made when adopting them:
+  - The lock files are found through git, not listed by hand, so a new project can't slip past.
+  - A marker with "or" is never read as excluding a package.
+  - npm ranges are reported instead of being cut down to a version.
+  - Arrays are read line by line, so one-line ones parse.
+  - `oneOf`/`anyOf` try every branch, and `allOf` applies them all.
+  - Shape keywords the check can't read fail it.
+  - The proposal's real-repo tests pinned today's versions (certifi 2026.10.23, eckitlib 2.5.0.34) and Appendix A keys, so a routine bump would have broken them. `RealFilesAreRead` picks its packages and keys from the files instead.
+- **Changed on 20 Nov, after the integration review:**
+  - `appendix-a` failed open in five ways, each shown with a scratch schema: a `$ref` to another file, a `$ref` to a missing target (both read as "anything"), keywords beside a `$ref` (dropped), `dependentRequired` and `$dynamicRef` (ignored). It now follows `#` and JSON pointers through arrays and escapes, applies the keywords beside a `$ref` and `dependentRequired`, reports what it can't follow or read, reports cycles instead of recursing without end, and fails on shape constraints inside `then`, `else` and `not`. The five cases are regression tests in `AppendixA`.
+  - `notices` let a line pass when it held the name and, anywhere, the version, even another package's version. The version must now follow the name.
+  - Added `ci-suites`, from the reviewer's scratch test: nothing checked that CI runs every suite `make test` runs.
+  - Six behaviours had no test (mutants survived): `anyOf`, npm `optionalDependencies`, `prefixItems` as an unread keyword, `$defs` as a map of subschemas, markers on dev-group members, and the Cargo source in dependency resolution. Each has one now.
+  - The three Python files are formatted and linted with ruff (`ruff.toml`), and `make test-docs` and CI check that.
