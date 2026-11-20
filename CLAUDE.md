@@ -3,7 +3,7 @@
 **Lookout** is a push-to-talk macOS "visual forecast" (repo name: `snow-globe`; product name: Lookout).
 
 **Documents:**
-- [PRD.md](PRD.md) v0.4 is the spec.
+- [PRD.md](PRD.md) v0.4.1 is the spec (v0.4 plus factual corrections, 19 Nov).
 - [PLAN.md](PLAN.md) holds the milestones.
 - [DECISIONS.md](DECISIONS.md) holds decisions with evidence, plus the spend ledger.
 - [PRD_PROGRESS.md](PRD_PROGRESS.md) tracks progress and measured numbers.
@@ -54,9 +54,10 @@ Only the lead session commits. Subagents never commit.
 **General:**
 - Back off on errors.
 - Never run two NPS fetchers at once.
-  - The lead runs `lookout-capture loop` for all 8 cameras; the Rainier stopgap was retired (D-023).
-  - Every `lookout-capture` command except `status` takes a host-wide lock and exits with status 3 if another fetcher is active.
-  - Don't start capture or archive commands yourself; report what you need fetched.
+  - The lead runs `lookout-capture loop --archive-queue` for all 8 cameras; the Rainier stopgap was retired (D-023). Archive backfill runs only inside that loop, from `state/archive/queue.json`.
+  - The loop and a local forecast stand-in run from a frozen snapshot of committed code, with their own venvs, under `~/lookout-data/cache/runtime/<sha>/`. They never use the repo's venvs, so `uv sync` in the repo is safe. Never edit, stop or signal anything under `cache/runtime/`.
+  - Commands that fetch from nps.gov (`once`, `loop`, `archive days|day|sample`, `archive-check`) take a host-wide lock and exit with status 3 if another fetcher is active. The offline commands (`status`, `cadence`, `storage-report`, `archive queue add|list|remove|resume`) take no lock.
+  - Don't start fetching commands yourself; report what you need fetched (the lead queues archive days).
 
 **NOAA:** use anonymous HTTPS to `noaa-hrrr-bdp-pds.s3.amazonaws.com` (us-east-1) with byte-range GETs. Keep local downloads small: subsets only, and delete GRIB files after extraction.
 
@@ -83,6 +84,7 @@ Metadata may be read for any date.
 - iCloud sets the `hidden` flag on the venvs' `.pth` files, and Python 3.13 skips hidden `.pth` files. Imports then fail outside pytest.
   - Prefix commands with `PYTHONPATH=src:../common/src`.
   - From `eval/`, use `src:../workers/common/src`.
+  - The runtime snapshots under `~/lookout-data/cache/runtime/` are outside iCloud, so their venvs need no `PYTHONPATH`.
 - Lint and test with `ruff` + `pytest`.
 - Mark tests that touch the network `@pytest.mark.network`; they are excluded by default (`-m "not network"`).
 
@@ -141,14 +143,18 @@ JSON base: `https://www.nps.gov/featurecontent/ard/webcams/json/`. Images: `http
 ## Data layout under `$LOOKOUT_DATA_DIR`
 
 ```
-frames/<viewpoint_id>/<YYYY-MM-DD>/<YYYYMMDDTHHMMSSZ>_<sha256[:12]>.jpg (+ .json sidecar)   live, UTC image time, ≤1920 px wide
+frames/<viewpoint_id>/<YYYY-MM-DD>/<YYYYMMDDTHHMMSSZ>_<sha256[:12]>.jpg (+ .json sidecar)   live, UTC image time, ≤1920 px wide (D-028: every frame at Rainier and Point Reyes; the frame nearest each UTC hour at the other six)
+thumbs/<viewpoint_id>/<YYYY-MM-DD>/<YYYYMMDDTHHMMSSZ>_<sha256[:12]>.jpg (+ .json)           640 px thumbnail of every live download (D-028)
 archive/<viewpoint_id>/<YYYY-MM-DD>/<YYYYMMDDTHHMMSSZ>_<assetid[:8]>.jpg (+ .json)          NPS archive backfill
 capture_log/<YYYY-MM-DD>.jsonl                                                             append-only capture events
-state/                                                                                     persisted rate-limit and dedupe state
+state/                                                                                     persisted rate-limit and dedupe state; state/archive/queue.json (backfill queue), state/capture/hosts/www.nps.gov.json (shared 429/503 hold)
 forecast/hrrr/<viewpoint_id>/<YYYYMMDDHH>z.json                                            one file per viewpoint per HRRR run
-forecast_log/<YYYY-MM-DD>.jsonl                                                            availability lag and fetch events
-cache/                                                                                     deletable caches (GRIB subsets, etc.)
+forecast_log/<YYYY-MM-DD>.jsonl                                                            availability lag and fetch events (written only by the forecast stand-in)
+scores/pairs/, renders/pairs/                                                              backtest pair records and renders
+spikes/m1/<run-id>.jsonl                                                                   M1 1a spike results (run by the owner)
+cache/                                                                                     deletable caches (GRIB subsets, cache/staging/ capture staging, cache/runtime/ snapshots, etc.)
 samples/                                                                                   hand-picked sample frames and API responses
+quarantine/                                                                                never opened (D-022)
 ```
 
 ## Commands
