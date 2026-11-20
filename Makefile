@@ -16,7 +16,9 @@
 #     request served locally. It has no formatter configured, so there is no format check there;
 #   - app/speech-macos runs `swift test` (macOS only). Its tests put a trap behind the recognizer
 #     for the whole test process, so they never reach the Speech framework, the microphone or a
-#     permission prompt;
+#     permission prompt. Then `scripts/build.sh --no-test` builds the release archive and runs the
+#     signing check, the symbol deny list and reviewed baseline, the checker's mutation self-test
+#     and the C-host link check, none of which calls the recognizer either (D-075);
 #   - docs/checks runs the docs invariants with the standard library, then ruff on its own code.
 # CI (.github/workflows/ci.yml) runs the same `make test-<suite>` targets, except the suites in
 # LAPTOP_ONLY_SUITES; docs/checks fails if the two lists drift apart (its `ci-suites` check).
@@ -71,6 +73,9 @@ PYPATH_forecast := src:../common/src
 PYPATH_eval := src:../workers/common/src
 
 PYTEST_ARGS ?= -q -m "not network"
+# Its -m replaces a project's own -m in addopts. So capture's `slow` schedule tests (3 days each of
+# its four schedules on a fake clock), which its pyproject deselects, run in make test and in CI on
+# purpose: they guard the schedule behaviour behind the polite rule (D-065, D-075).
 # Clear it to run network tests on purpose, e.g.
 #   make test-forecast PYTEST_ARGS='-m network -s' OFFLINE_ENV=
 DEAD_PROXY := http://127.0.0.1:9
@@ -118,9 +123,12 @@ define py_suite
 endef
 
 # app/speech-macos (Swift 6.2, macOS 26): `swift test`, with the build output outside the
-# iCloud-synced repo, where the package's README puts it. Off macOS, or without the Xcode tools
-# (checked with `xcode-select -p`, because the /usr/bin/swift shim would offer to install them in
-# a window), the suite prints SKIP and passes.
+# iCloud-synced repo, where the package's README puts it, then `scripts/build.sh --no-test` (D-075;
+# about 10 s on top of an existing build). build.sh always builds under
+# ${LOOKOUT_DATA_DIR:-$HOME/lookout-data}/cache/speech-macos, whatever SPEECH_SCRATCH says, and
+# deletes the temporary folders it makes under $TMPDIR. Both steps run, and either failing fails
+# the suite. Off macOS, or without the Xcode tools (checked with `xcode-select -p`, because the
+# /usr/bin/swift shim would offer to install them in a window), the suite prints SKIP and passes.
 SWIFT ?= swift
 SPEECH_SCRATCH ?= $(or $(LOOKOUT_DATA_DIR),$(HOME)/lookout-data)/cache/speech-macos
 # Extra `swift test` options, such as --filter (none by default).
@@ -194,7 +202,8 @@ DATA_REPORT_ARGS ?=
 BENCH_ROUNDS ?=
 
 .PHONY: help test test-py test-common viewpoints-check test-capture test-forecast test-eval \
-	test-renderer test-rust test-speech test-infra infra-providers test-docs docs-check test-bench lint fmt-check \
+	test-renderer test-rust test-speech test-infra infra-providers test-docs docs-check test-bench bench-script \
+	lint fmt-check \
 	bench bench-parse bench-renderer backtest score ephem-check data-report \
 	capture-status capture-once capture-loop archive-check \
 	forecast-status forecast-latest forecast-tick
@@ -249,11 +258,15 @@ test-rust: ## app: cargo test --workspace, clippy -D warnings, fmt --check (targ
 	$(CARGO) fmt --all --check || rc=1; \
 	exit $$rc
 
-test-speech: ## app/speech-macos: swift test (macOS + Xcode, else SKIP); trapped recognizer: no microphone, no prompt
+test-speech: ## app/speech-macos: swift test, then scripts/build.sh --no-test (symbols, signing, link); macOS + Xcode, else SKIP
 	@if [ "$$(uname -s)" != Darwin ] || ! xcode-select -p >/dev/null 2>&1; then \
 		echo "-- app/speech-macos: SKIP (needs macOS with the Xcode tools)"; exit 0; fi; \
+	cd app/speech-macos || exit 1; rc=0; \
 	echo "== app/speech-macos: swift test --scratch-path $(SPEECH_SCRATCH) $(SWIFT_TEST_ARGS)"; \
-	cd app/speech-macos && $(SWIFT) test --scratch-path "$(SPEECH_SCRATCH)" $(SWIFT_TEST_ARGS)
+	$(SWIFT) test --scratch-path "$(SPEECH_SCRATCH)" $(SWIFT_TEST_ARGS) || rc=1; \
+	echo "== app/speech-macos: scripts/build.sh --no-test (release build, signing, symbol baseline and self-test, link check)"; \
+	scripts/build.sh --no-test || rc=1; \
+	exit $$rc
 
 # infra/tests/test_cost.sh runs ruff on infra/cost with whichever `ruff` comes first on PATH, and
 # skips that step when there is none. So test-infra puts a directory first on PATH that holds only
@@ -289,6 +302,24 @@ test-bench: ## bench/: utterance-script tests, check.py --no-parser, ruff check 
 	@cd $(DIR_common) || exit 1; \
 	$(UV) sync --locked || exit 1; \
 	$(BENCH_CHECKS)
+
+# The whole script check against the real parser (bench/README.md, D-075): build lookout-parse in
+# release mode, offline and locked, into the target dir outside iCloud, then run check.py on that
+# binary (--bin, so $LOOKOUT_PARSE can't point it elsewhere). check.py needs Python 3.11 or later,
+# so it runs on workers/common's interpreter (uv's 3.13), as test-bench does. Exit 1: the parser's
+# output has drifted from scripted.tsv, or a stored verdict is stale; exit 2: the binary is missing
+# or older than its sources. Not part of make test or CI: CI's bench job sets up no Rust toolchain
+# (the rust job is separate), and --offline needs the crates cached. Run it after any change to
+# app/core's parser or time rules, to the manifests, or to the script.
+BENCH_PARSE_TARGET_DIR = $(abspath $(CARGO_TARGET_DIR))
+
+bench-script: ## Offline: build lookout-parse (cargo --release --offline --locked), then check.py with the real parser
+	@echo "== app: cargo build --release --offline --locked -p lookout-core --bin lookout-parse (CARGO_TARGET_DIR=$(BENCH_PARSE_TARGET_DIR))"
+	@cd app && CARGO_TARGET_DIR="$(BENCH_PARSE_TARGET_DIR)" $(CARGO) build --release --offline --locked -p lookout-core --bin lookout-parse
+	@echo "== bench: check.py --bin $(BENCH_PARSE_TARGET_DIR)/release/lookout-parse (Python of $(DIR_common))"
+	@cd $(DIR_common) || exit 1; \
+	$(UV) sync --locked || exit 1; \
+	$(UV) run --no-sync python -I -B $(BENCH_DIR)/utterances/check.py --bin "$(BENCH_PARSE_TARGET_DIR)/release/lookout-parse"
 
 ##@ Benchmarks, backtest and scores
 

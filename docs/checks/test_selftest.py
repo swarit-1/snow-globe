@@ -76,6 +76,21 @@ DECISIONS = (
     + "| 2026-11-19 | fal | kill test | $0.50 | $0.50 |\n"
 )
 
+# The base DECISIONS.md has no back-pointer, so the pointer rule requires none. BACK_POINTERS,
+# swapped in for BACK_POINTER_BASE (the base's two entries), is a consistent set: D-001 points to
+# D-002, which supersedes it; D-003 amends D-002, which points back to it. The mutations break one
+# link at a time.
+BACK_POINTER_BASE = (
+    "- The first decision.\n\n"
+    "## D-002 — Second · proposed (owner) · 2026-11-19 · supersedes D-001\n- Points back to D-001.\n"
+)
+BACK_POINTERS = (
+    "- The first decision.\n- **Amended 19 Nov (D-002):** superseded.\n\n"
+    "## D-002 — Second · proposed (owner) · 2026-11-19 · supersedes D-001\n- Points back to D-001.\n"
+    "- **Amended 19 Nov (D-003):** amended.\n\n"
+    "## D-003 — Third · open · 2026-11-19 · amends D-002\n- Amends D-002.\n"
+)
+
 PROGRESS = """# PRD_PROGRESS.md
 
 **Updated:** Thu 19 Nov 2026 (day G).
@@ -467,6 +482,29 @@ class MutationsAreCaught(unittest.TestCase):
             "## D-002 - Second",
         ),
         ("decisions", "DECISIONS.md", "**Status:** **decided**", "**State:** **decided**"),
+        # A later id in a heading's list (the first is fine), and back-pointers that cite a missing
+        # entry, an earlier entry, or an entry whose heading doesn't amend this one.
+        ("decisions", "DECISIONS.md", "supersedes D-001", "supersedes D-001, D-002"),
+        (
+            "decisions",
+            "DECISIONS.md",
+            "- The first decision.",
+            "- The first decision.\n- **Amended 19 Nov (D-003):** x.",
+        ),
+        (
+            "decisions",
+            "DECISIONS.md",
+            "- Points back to D-001.",
+            "- Points back to D-001.\n- **Amended 19 Nov (D-001):** x.",
+        ),
+        ("decisions", "DECISIONS.md", BACK_POINTER_BASE, BACK_POINTERS.replace("(D-002):", "(D-002 to D-003):")),
+        # Pointers begin with D-002, so D-003's amendment of D-002 needs a pointer in D-002 too.
+        (
+            "decisions",
+            "DECISIONS.md",
+            BACK_POINTER_BASE,
+            BACK_POINTERS.replace("- **Amended 19 Nov (D-003):** amended.\n", ""),
+        ),
         ("append-only", "DECISIONS.md", "- The first decision.", "- The first decision, reworded."),
         ("append-only", "DECISIONS.md", "Entries are append-only.\n", ""),
         ("d-refs", "PLAN.md", "(D-002, PRD §16)", "(D-012, PRD §16)"),
@@ -568,6 +606,29 @@ class NotFlagged(unittest.TestCase):
         files = mutate(base_files(), "DECISIONS.md", "supersedes D-001", "supersedes D-001 (of 2026-11-18)")
         self.assertEqual(problems("decisions", files), [])
 
+    def test_back_pointers_that_agree_with_the_headings(self) -> None:
+        files = mutate(base_files(), "DECISIONS.md", BACK_POINTER_BASE, BACK_POINTERS)
+        self.assertEqual(problems("decisions", files), [])
+        self.assertEqual(problems("append-only", files), [])  # pointers are inserted lines
+        self.assertEqual(problems("d-refs", files), [])
+
+    def test_a_pointer_range_whose_entries_all_amend(self) -> None:
+        both = BACK_POINTERS.replace("(D-002):", "(D-002 to D-003):").replace(
+            "· amends D-002", "· amends D-001 and D-002"
+        )
+        self.assertEqual(problems("decisions", mutate(base_files(), "DECISIONS.md", BACK_POINTER_BASE, both)), [])
+
+    def test_amendments_before_the_first_pointer_need_none(self) -> None:
+        # The earliest entry cited is D-003, so D-002's older superseding of D-001 needs no pointer.
+        later = BACK_POINTERS.replace("- **Amended 19 Nov (D-002):** superseded.\n", "")
+        self.assertEqual(problems("decisions", mutate(base_files(), "DECISIONS.md", BACK_POINTER_BASE, later)), [])
+
+    def test_lines_that_are_not_pointers(self) -> None:
+        for line in ("- **Amended by hand:** see D-002.", "- **Amendment (D-002):** x.", "- Amended 19 Nov (D-002)."):
+            with self.subTest(line=line):
+                files = mutate(base_files(), "DECISIONS.md", "- The first decision.", f"- The first decision.\n{line}")
+                self.assertEqual(problems("decisions", files), [])
+
     def test_decisions_with_no_date_and_several_statuses(self) -> None:
         files = mutate(
             base_files(),
@@ -644,6 +705,27 @@ class Helpers(unittest.TestCase):
     def test_split_cells_respects_escaped_pipes_only(self) -> None:
         self.assertEqual(d.split_cells("| a | `b \\| c` | d |"), ["a", "`b \\| c`", "d"])
         self.assertEqual(len(d.split_cells("| a | `b | c` | d |")), 4)
+
+    def test_heading_targets(self) -> None:
+        heading = ["Polls", "decided (lead; D-035 aside)", "2026-11-20", "amends D-023, D-048 and D-049"]
+        self.assertEqual(d.heading_targets(heading), [("amends", 23), ("amends", 48), ("amends", 49)])
+        self.assertEqual(
+            d.heading_targets(["T", "decided", "2026-11-19", "closes D-019's open part"]), [("closes", 19)]
+        )
+        self.assertEqual(
+            d.heading_targets(["T", "s", "2026-11-19", "supersedes D-009 and amends D-004"]),
+            [("supersedes", 9), ("amends", 4)],
+        )
+        # The title and the status are never read, and a heading with only a title names nothing.
+        self.assertEqual(d.heading_targets(["Title amends D-038", "proposed, amends D-035", "2026-11-20"]), [])
+        self.assertEqual(d.heading_targets(["Title only"]), [])
+
+    def test_pointer_citations(self) -> None:
+        self.assertEqual(d.pointer_citations("- **Amended 20 Nov (D-070 to D-072):** x"), [70, 71, 72])
+        self.assertEqual(d.pointer_citations("- **Amended 20 Nov (D-067, D-074):** x"), [67, 74])
+        self.assertEqual(d.pointer_citations("  - **Amended 20 Nov 2026 (D-070):** x"), [70])
+        self.assertIsNone(d.pointer_citations("- **Amended by hand:** see D-070"))
+        self.assertIsNone(d.pointer_citations("- **Amendment (D-070):** x"))
 
     def test_declared_statuses(self) -> None:
         self.assertEqual(d.declared_statuses(DECISIONS, "Status"), ["decided", "proposed", "open"])

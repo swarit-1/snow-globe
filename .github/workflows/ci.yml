@@ -8,13 +8,16 @@
 # Every job runs the `make test-<suite>` target that `make test` runs locally, so CI runs the same
 # commands as the laptop, for every suite in the Makefile's TEST_SUITES except the LAPTOP_ONLY_SUITES
 # (docs/checks' `ci-suites` check fails if the two drift apart). The one laptop-only suite is
-# speech (app/speech-macos, `swift test`): it needs macOS 26 with Xcode 26.2, and there is no macOS
+# speech (app/speech-macos: `swift test`, then `scripts/build.sh --no-test`'s release build,
+# signing, symbol and link checks, D-075): it needs macOS 26 with Xcode 26.2, and there is no macOS
 # job here. A macOS runner bills at a higher rate than Linux on a private repository, and no runner
 # image with that toolchain has been checked, so adding one is the owner's call; until then
 # `make test` on the laptop is the only place it runs. There are no secrets and no AWS
 # credentials, and nothing here calls NPS, NOAA, AWS or a paid service:
 #   - each Python suite runs ruff check, ruff format --check and pytest; tests marked `network`
-#     are deselected, and pytest runs behind a dead proxy;
+#     are deselected, and pytest runs behind a dead proxy. The Makefile's `-m "not network"`
+#     replaces capture's own `-m`, so its `slow` fake-clock schedule tests run here too, on
+#     purpose (D-075);
 #   - Rust runs cargo fmt --check, Terraform fmt -check; the renderer has no formatter configured;
 #   - docs/checks runs with the runner's python3 (standard library only), then workers/common's
 #     locked ruff checks its code; infra's cost-script ruff step uses that same locked ruff;

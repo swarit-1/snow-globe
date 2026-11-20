@@ -11,8 +11,9 @@ DECISIONS.md, PRD_PROGRESS.md and PRD.md keep changing:
 - the calendar's arithmetic (length = offset span, slack = the header's % of length), and each
   milestone's dates and offsets agree between PLAN.md, PRD_PROGRESS.md and PRD.md §16;
 - DECISIONS.md is append-only through git history, its D-ids run 001, 002, ... without gaps, its
-  headings carry a declared status and dates that never go backwards or into the future, and a
-  "supersedes D-n" points back to an earlier entry;
+  headings carry a declared status and dates that never go backwards or into the future, every D-id
+  after "supersedes" or "amends" points back to an earlier entry, and the "**Amended … (D-m):**"
+  back-pointers inside amended entries agree with those headings;
 - every D-n, ticket id and PRD § reference in the repo resolves; tickets are unique, sit under their
   milestone and carry a declared status;
 - the spend ledger adds up and matches CLAUDE.md's "Spend so far";
@@ -821,10 +822,108 @@ def _decision_headings(text: str) -> list[tuple[int, str, int, list[str]]]:
     return out
 
 
+AMEND_VERB = re.compile(r"\b(supersedes|amends|closes|reverses|replaces)\b")
+# A back-pointer inside an amended entry: '- **Amended 20 Nov (D-070):** ...', citing one or more
+# later entries ('D-067, D-074', 'D-070 to D-072').
+AMENDED_POINTER = re.compile(r"^\s*[-*]\s+\*\*Amended\b[^()*]*\((D-\d{3}[^)]*)\):?\*\*")
+D_SPAN = re.compile(r"D-(\d{3})(?:\s+to\s+D-(\d{3}))?")
+
+
+def heading_targets(parts: Sequence[str]) -> list[tuple[str, int]]:
+    """(verb, D number) for every entry a D heading names after 'supersedes', 'amends', 'closes',
+    'reverses' or 'replaces': each D-id after the verb, up to the next verb or the end of its
+    ' · ' part ('amends D-023, D-048'; 'closes D-019's open part'). Only the parts after the title
+    and the status are read, so a D-id in either of those is never a target."""
+    out = []
+    for part in parts[2:]:
+        pieces = AMEND_VERB.split(part)  # [before, verb, after, verb, after, ...]
+        for i in range(1, len(pieces) - 1, 2):
+            out.extend((pieces[i], int(ref)) for ref in re.findall(r"D-(\d{3})", pieces[i + 1]))
+    return out
+
+
+def pointer_citations(line: str) -> list[int] | None:
+    """The D numbers an '**Amended … (D-a, D-b to D-c):**' line cites, ranges expanded; None when
+    the line is not such a pointer."""
+    m = AMENDED_POINTER.match(line)
+    if not m:
+        return None
+    cited: list[int] = []
+    for low, high in D_SPAN.findall(m.group(1)):
+        cited.extend(range(int(low), int(high or low) + 1))
+    return cited
+
+
+def check_decision_pointers(text: str) -> list[Problem]:
+    """Back-pointers in DECISIONS.md agree with the headings that amend.
+
+    An '**Amended <date> (D-m):**' line inside entry D-n cites only later entries whose headings
+    name D-n after supersedes, amends, closes, reverses or replaces. Once pointers exist, the earliest
+    entry any of them cites starts the convention: from it on, every entry a heading names that way
+    carries a pointer back to that heading's entry. Entries before it need none, and a file with no
+    pointer at all requires none, so dropping every pointer is as consistent as keeping all of them."""
+    headings = _decision_headings(text)
+    if not headings:
+        return []
+    lines = text.split("\n")
+    targets = {num: heading_targets(parts) for _, _, num, parts in headings}
+    where = {num: f"DECISIONS.md:{n}" for n, _, num, _ in headings}
+    bounds = [n for n, *_ in headings] + [len(lines) + 1]
+    cited_by: dict[int, set[int]] = {}  # entry -> the entries its pointers cite and that amend it
+    problems = []
+    for i, (n, did, num, _) in enumerate(headings):
+        cited_by[num] = set()
+        for k in range(n + 1, bounds[i + 1]):
+            line = lines[k - 1]
+            if line.startswith("## "):  # the spend ledger, or any other H2 after the last entry
+                break
+            for ref in pointer_citations(line) or []:
+                at = f"DECISIONS.md:{k}"
+                if ref not in targets:
+                    problems.append(
+                        Problem("decisions", at, f"{did}'s pointer cites D-{ref:03d}, which is not an entry")
+                    )
+                elif ref <= num:
+                    problems.append(
+                        Problem("decisions", at, f"{did}'s pointer cites D-{ref:03d}, which is not a later entry")
+                    )
+                elif num not in {t for _, t in targets[ref]}:
+                    problems.append(
+                        Problem(
+                            "decisions",
+                            at,
+                            f"{did}'s pointer cites D-{ref:03d}, whose heading does not name {did} after "
+                            "supersedes, amends, closes, reverses or replaces",
+                        )
+                    )
+                else:
+                    cited_by[num].add(ref)
+    every = [ref for refs in cited_by.values() for ref in refs]
+    if not every:
+        return problems
+    start = min(every)
+    for num in sorted(targets):
+        if num < start:
+            continue
+        for verb, ref in targets[num]:
+            if ref in cited_by and ref < num and num not in cited_by[ref]:
+                problems.append(
+                    Problem(
+                        "decisions",
+                        where[ref],
+                        f"D-{num:03d} {verb} D-{ref:03d}, but D-{ref:03d} has no '**Amended … (D-{num:03d}):**' "
+                        f"line pointing to it (pointers run from D-{start:03d} on)",
+                    )
+                )
+    return problems
+
+
 def check_decisions(repo: Repo, today: dt.date | None = None) -> list[Problem]:
     """DECISIONS.md: D-ids run D-001, D-002, ... in order; every heading reads
     '## D-NNN — title · status · ...' with a declared status word; heading dates are real, never
-    go backwards and are not in the future; 'supersedes/amends/closes D-n' points back."""
+    go backwards and are not in the future; every D-id after 'supersedes/amends/closes' points back;
+    and the '**Amended … (D-m):**' back-pointers agree with those headings
+    (`check_decision_pointers`)."""
     if not repo.has("DECISIONS.md"):
         return [Problem("decisions", "DECISIONS.md", "missing")]
     text = repo.read("DECISIONS.md")
@@ -874,10 +973,10 @@ def check_decisions(repo: Repo, today: dt.date | None = None) -> list[Problem]:
                     Problem("decisions", where, f"{did} is dated {own}, before the entry above it ({last_date})")
                 )
             last_date = own
-        for part in parts[2:]:
-            for verb, ref in re.findall(r"\b(supersedes|amends|closes|reverses|replaces)\s+D-(\d{3})", part):
-                if int(ref) >= num:
-                    problems.append(Problem("decisions", where, f"{did} {verb} D-{ref}, which is not an earlier entry"))
+        for verb, ref in heading_targets(parts):
+            if ref >= num:
+                problems.append(Problem("decisions", where, f"{did} {verb} D-{ref:03d}, which is not an earlier entry"))
+    problems.extend(check_decision_pointers(text))
     return problems
 
 
