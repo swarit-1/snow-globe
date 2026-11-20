@@ -329,13 +329,15 @@ def _versions(backend: EphemerisBackend, renderer: str | None) -> dict[str, Any]
 def auto_forecast(
     viewpoint_id: str, issue_time: datetime, valid_time: datetime, *, root: Path
 ) -> tuple[Path, dict[str, Any]]:
-    """Backfill the run whose *modelled* availability precedes the issue time (network).
+    """Backfill the run whose availability precedes the issue time (network).
 
     Uses lookout-forecast, imported here only: install it with ``uv sync --group forecast``,
     or run :mod:`.pair_forecast` in lookout-forecast's own environment and pass the file. The
-    run is chosen by lookout-forecast's ``select_run_for_issue`` with its ``LagModel``, as for
-    every archived run (PRD §8.3); only the scene's fields and the two bracketing hours are
-    extracted, under :data:`.pair_forecast.DEFAULT_MAX_MB` of GRIB (CLAUDE.md "NOAA").
+    run is chosen by :func:`.pair_forecast.choose_run`: lookout-forecast's
+    ``select_run_for_issue`` with its ``LagModel`` and ``listed_availability``, as for every
+    archived run (PRD §8.3): modelled, but never before the run's own S3 stamps (D-054). Only
+    the scene's fields and the two bracketing hours are extracted, under
+    :data:`.pair_forecast.DEFAULT_MAX_MB` of GRIB (CLAUDE.md "NOAA").
     """
     from .pair_forecast import PairForecastError, fetch_pair_forecast
 

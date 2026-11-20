@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from itertools import pairwise
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from lookout_common.jsonl import REASON_INVALID_JSON, REASON_NOT_OBJECT, REASON_UNTERMINATED
 from lookout_common.timeutil import isoformat_z, parse_iso_utc
@@ -36,10 +36,12 @@ __all__ = [
     "Logs",
     "Reader",
     "ReportOptions",
+    "Request",
     "Window",
     "clip",
     "close_time",
     "floor_hour",
+    "floor_ms",
     "gap_stats",
     "hours",
     "iso",
@@ -48,6 +50,7 @@ __all__ = [
     "merge",
     "number",
     "parse_log",
+    "provable_spans",
     "read_logs",
     "rounded",
     "run_id",
@@ -80,7 +83,10 @@ class ReportOptions:
 
     clock_hours: float = 72.0
     capture_gap_s: float = 540.0
+    #: The loop's interval: an outage, and a restart's excess, lose their gap less one of it.
     capture_interval_s: float = 300.0
+    #: PRD §15.3 and CLAUDE.md: a camera is polled at most every 5 minutes.
+    min_poll_gap_s: float = 300.0
     forecast_gap_s: float = 900.0
     forecast_tick_s: float = 300.0
     #: Dates a cycle never written when no complete live run is in the logs read: D-027's
@@ -129,6 +135,22 @@ class Logs:
     bad: list[dict[str, Any]] = field(default_factory=list)
     files_read: list[str] = field(default_factory=list)
     files_skipped: list[str] = field(default_factory=list)
+
+
+class Request(NamedTuple):
+    """One logged request to nps.gov (PRD §15.3), with the bounds on when nps.gov received it.
+
+    ``send`` is the send as capture's scheduler counted it (:func:`.capture.send_time`): it
+    orders a camera's requests and gives the send-to-send figures. nps.gov received the request
+    no earlier than ``earliest`` and no later than ``latest`` (:func:`.capture.earliest_receipt`,
+    :func:`.capture.latest_receipt`), whatever the network did, which is what makes
+    :func:`provable_spans` a bound at nps.gov. ``earliest`` is None when the record cannot place
+    the send (no ``sent_at`` and no usable ``elapsed_ms``).
+    """
+
+    send: datetime
+    earliest: datetime | None
+    latest: datetime
 
 
 # --- values -----------------------------------------------------------------------------------
@@ -277,6 +299,42 @@ def max_in_window(times: Iterable[datetime], width_s: float) -> tuple[int, datet
         if j - i > best:
             best, best_start = j - i, start
     return best, best_start
+
+
+def floor_ms(seconds: float) -> float:
+    """``seconds`` rounded *down* to the millisecond, for a lower bound shown to 3 decimals.
+
+    Rounding to nearest could show a bound of 299.9996 s as 300.000 s while it counts as under
+    300 s. The 1 ns allowance absorbs binary error in values that are whole microseconds.
+    """
+    return math.floor(seconds * 1000.0 + 1e-6) / 1000.0
+
+
+def provable_spans(
+    requests: Iterable[Request], count: int
+) -> list[tuple[float | None, Request, Request]]:
+    """For each run of ``count`` consecutive requests (in send order), the least span at nps.gov.
+
+    PRD §15.3's rules are about what nps.gov sees. It received the run's first request no later
+    than ``first.latest`` and its last no earlier than ``last.earliest``, so it saw them at least
+    ``last.earliest - first.latest`` apart, whatever the network did. ``count`` 2 gives the gap
+    between consecutive polls (the 5-minute rule); ``count`` 5 the span of 5 consecutive image
+    GETs (the cap of 4 in any rolling hour holds when no 5 fall within 3600 s). Returns
+    ``(seconds, first, last)`` for every run, oldest first, with ``seconds`` None when the last
+    request's send cannot be placed (``last.earliest`` is None): such a run proves nothing.
+    Fewer than ``count`` requests give none.
+    """
+    if count < 2:
+        raise ValueError("a span needs at least 2 requests")
+    ordered = sorted(requests, key=lambda request: (request.send, request.latest))
+    return [
+        (
+            None if last.earliest is None else (last.earliest - first.latest).total_seconds(),
+            first,
+            last,
+        )
+        for first, last in zip(ordered, ordered[count - 1 :], strict=False)
+    ]
 
 
 # --- reading ----------------------------------------------------------------------------------

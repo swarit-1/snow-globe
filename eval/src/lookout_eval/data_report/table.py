@@ -37,17 +37,24 @@ def _status(figure: Mapping[str, Any]) -> str:
 
 
 def _clock_lines(report: Mapping[str, Any]) -> list[str]:
-    """PLAN.md's clock (capture outages) first, then the both-jobs proposal (report.py)."""
+    """The gate rule's clock first, then PLAN.md's capture-only figure and each job's own."""
     clock = report["clock"]
-    both, forecast = clock["both_jobs_proposed"], clock["by_job"]["forecast"]
+    plan, by_job, parts = clock["plan_md_capture_only"], clock["by_job"], clock["parts_lost_h"]
+    capture, forecast = by_job["capture"], by_job["forecast"]
     return [
-        f"{clock['required_h']:g} h clock (PLAN.md M0.5 gate: the capture loop's outages extend "
-        f"it): {clock['covered_h']:.2f} h covered of {clock['elapsed_h']:.2f} h elapsed; "
-        f"{clock['lost_h']:.2f} h lost; {_status(clock)}",
-        f"  both jobs (proposed, not a recorded rule; PRD §16 asks for worker and capture logs): "
-        f"{both['covered_h']:.2f} h covered; {both['lost_h']:.2f} h lost (the union of capture "
-        f"{clock['lost_h']:.2f} h and forecast {forecast['lost_h']:.2f} h); {_status(both)}",
-        f"  forecast alone: {forecast['covered_h']:.2f} h covered; {_status(forecast)}",
+        f"{clock['required_h']:g} h clock, gate rule (the lead's of 20 Nov, settling D-061: the "
+        "union of both jobs' outages and each capture restart's excess): "
+        f"{clock['covered_h']:.2f} h covered of {clock['elapsed_h']:.2f} h elapsed; "
+        f"{clock['lost_h']:.2f} h lost (capture outages {parts['capture_outages']:.3f} h, "
+        f"restart excess {parts['capture_restart_excess']:.3f} h, forecast outages "
+        f"{parts['forecast_outages']:.3f} h, an overlap counted once); {_status(clock)}",
+        f"  PLAN.md's capture-only figure (capture outages alone; a restart that is not an "
+        f"outage loses nothing): {plan['covered_h']:.2f} h covered; {plan['lost_h']:.2f} h lost; "
+        f"{_status(plan)}",
+        f"  capture alone (outages and restart excess): {capture['covered_h']:.2f} h covered; "
+        f"{capture['lost_h']:.2f} h lost; {_status(capture)}",
+        f"  forecast alone: {forecast['covered_h']:.2f} h covered; {forecast['lost_h']:.2f} h "
+        f"lost; {_status(forecast)}",
     ]
 
 
@@ -66,7 +73,7 @@ def _capture_lines(capture: Mapping[str, Any]) -> list[str]:
         gaps = row["poll_gap_s"]
         longest = gaps["longest"]["s"] if gaps["longest"] else None
         shortest = gaps["shortest_on_send_times"]
-        min_gap = "-" if shortest is None else f"{shortest['s']:.1f} s"
+        min_gap = "-" if shortest is None else f"{shortest['s']:.3f} s"
         frames = row["frames"]
         lines.append(
             f"{vp:<28}{row['polls']:>6}{row['image_gets']:>6}{frames['full_size']:>6}"
@@ -85,8 +92,56 @@ def _capture_lines(capture: Mapping[str, Any]) -> list[str]:
                     f"  {vp} {kind}: {check['on_disk_logged_after_window']} fetched in the window "
                     "and logged only after it (an hourly frame promoted later)"
                 )
+    lines.append(
+        "  bases: longest gap and min send gap are send to send (sent_at, else t - elapsed_ms), "
+        "as capture's scheduler spaced the polls; GETs/h is the most image GETs sent in any "
+        "rolling hour (send times)"
+    )
     lines.extend(notes or ["  disk: every logged frame and thumbnail is on disk, none unlogged"])
     return lines + later
+
+
+def _seconds(shortest: Mapping[str, Any] | None) -> str:
+    return "-" if shortest is None else f"{shortest['s']:.3f} s"
+
+
+def _polite_lines(report: Mapping[str, Any]) -> list[str]:
+    """PRD §15.3 as nps.gov saw it: the provable bounds per camera (capture.py docstring)."""
+    rules = report["rules"]
+    per_window = rules["max_gets_per_rolling_hour"] + 1
+    poll_limit, hour = rules["min_poll_gap_s"], rules["rolling_window_s"]
+    lines = [
+        "Polite collection at nps.gov (PRD §15.3): the least gap or span nps.gov can have seen, "
+        "whatever the network did, and how many pairs or windows are unproven",
+        f"{'viewpoint':<28}{'poll pairs':>11}{'least gap':>13}{'unproven':>10}"
+        f"{f'{per_window}-GET windows':>16}{'least span':>14}{'unproven':>10}",
+    ]
+    unbounded = []
+    for vp, row in report["capture"]["viewpoints"].items():
+        polls, gets = row["poll_gap_at_nps"], row["image_gets_at_nps"]
+        lines.append(
+            f"{vp:<28}{polls['measured']:>11}{_seconds(polls['shortest']):>13}"
+            f"{polls['unproven']:>10}{gets['measured']:>16}{_seconds(gets['shortest']):>14}"
+            f"{gets['unproven']:>10}"
+        )
+        if polls["unbounded"] or gets["unbounded"]:
+            unbounded.append(
+                f"  {vp}: {polls['unbounded']} poll pairs and {gets['unbounded']} GET windows are "
+                "unproven because a request's send cannot be placed (no sent_at, no usable "
+                "elapsed_ms)"
+            )
+    lines.append(
+        f"  unproven: not provably {poll_limit:g} s ({hour:g} s for {per_window} GETs) apart at "
+        "nps.gov, because the least gap (span) is under it or a send cannot be placed; that is "
+        "not the same as shown closer"
+    )
+    lines.append(
+        "  bases: least gap = the next poll's earliest receipt - the previous poll's latest; "
+        f"least span = the {per_window}th GET's earliest receipt - the 1st's latest, over every "
+        f"{per_window} consecutive GETs. earliest = sent_at, else t - elapsed_ms - 0.05 ms; "
+        "latest = answered_at, else t + 1 ms (t is written after the answer, to the ms)"
+    )
+    return lines + unbounded
 
 
 def _forecast_lines(report: Mapping[str, Any]) -> list[str]:
@@ -121,10 +176,31 @@ def _forecast_lines(report: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+def _excess_rows(report: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Each capture restart that lost time, as an outage row (from the camera that set it)."""
+    rows = []
+    for row in report["capture"]["restarts"]:
+        gap = row["longest_poll_gap"]
+        if gap is None or not row["lost_s"]:
+            continue
+        rows.append(
+            {
+                "job": "capture",
+                "kind": f"restart excess ({gap['viewpoint_id']}'s polls)",
+                "start_utc": gap["from_utc"],
+                "end_utc": gap["to_utc"],
+                "gap_s": gap["s"],
+                "lost_s": row["lost_s"],
+                "ongoing": gap["ongoing"],
+            }
+        )
+    return rows
+
+
 def _outage_lines(report: Mapping[str, Any]) -> list[str]:
-    rows = [*report["capture"]["outages"], *report["forecast"]["outages"]]
+    rows = [*report["capture"]["outages"], *_excess_rows(report), *report["forecast"]["outages"]]
     lines = [
-        "Outages (lost = the part that extends the clock)",
+        "Outages and restart excess (lost = the part that extends the gate rule's clock)",
         f"{'job':<10}{'start':<16}{'end':<16}{'gap':>12}{'lost':>12}  note",
     ]
     for row in rows:
@@ -146,10 +222,18 @@ def _restart_lines(report: Mapping[str, Any]) -> list[str]:
     lines = ["Starts, stops and settings changes"]
     for row in capture["restarts"]:
         outage = ", an outage" if row["an_outage"] else ""
+        gaps = row["poll_gaps_s"]
+        excess = (
+            f"; excess {row['excess_s']:.3f} s (polls {min(gaps.values()):.3f}-"
+            f"{max(gaps.values()):.3f} s apart across it, longest "
+            f"{row['longest_poll_gap']['viewpoint_id']})"
+            if gaps
+            else "; excess - (no camera polled before it)"
+        )
         lines.append(
             f"  capture restart: stopped after {_short(row['stopped_after_utc'])}, started "
             f"{_short(row['started_utc'])} ({row['duration_s']:.1f} s; passes "
-            f"{row['pass_gap_s']:.1f} s apart{outage}): {'; '.join(row['evidence'])}"
+            f"{row['pass_gap_s']:.1f} s apart{outage}{excess}): {'; '.join(row['evidence'])}"
         )
     for row in forecast["settings_changes"]:
         lines.append(
@@ -195,6 +279,7 @@ def format_report(report: Mapping[str, Any]) -> str:
         ],
         _clock_lines(report),
         _capture_lines(report["capture"]),
+        _polite_lines(report),
         _forecast_lines(report),
         _outage_lines(report),
         _restart_lines(report),

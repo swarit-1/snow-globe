@@ -46,6 +46,15 @@ passed the file with `--forecast` and the printed summary with `--forecast-summa
 extract the same way (`pair_forecast.py`). The commands are in
 [docs/evidence/m05-backtest-pair.md](../docs/evidence/m05-backtest-pair.md).
 
+Since D-054 the choice lists each candidate run (one S3 listing request each, counted in the summary's
+`choice_transfer`) and never dates an archived hour before its own trusted S3 stamps, as the extractor
+does when it writes the file. That needs lookout-forecast 0.2.0 or later (in the repo since 08a996c); the
+running jobs' snapshot (034c46b) holds 0.1.0, which `pair_forecast` refuses. With the lag model of its
+day the M0.5 pair's choice is unchanged by the floor (a test replays the two runs' recorded listings).
+Today's lag model, with the survey lags of D-053, would choose another run for it (2024011418, its
+f25/f26 modelled at 19:31:36Z, before the 19:45Z issue time), floor or no floor; the recorded pair keeps
+the run it was made with.
+
 ## Modules (`src/lookout_eval/`)
 
 | Module | PRD | What it does |
@@ -64,11 +73,11 @@ extract the same way (`pair_forecast.py`). The commands are in
 | `forecast_io.py` | §8.3 | Reads lookout-forecast run files: interpolation, availability, datums, winds, the summit ray |
 | `scene.py` | §9.2, §9.5 | SceneSpec for renderer 0.2.0 (`run_init_utc`, plate id and hashes); schema plus cross-field checks; the renderer's own `validateScene()` under Node (`renderer_validate.mjs`) |
 | `backtest_pair.py`, `cli.py` | §16 M0.5 | The v−1 pair and the `lookout-eval` console script. Record and scene under `scores/pairs/<viewpoint>/`, render under `renders/pairs/<viewpoint>/`; every input's hash, image time and availability; wall time per stage; `--tag` for repeat runs |
-| `pair_forecast.py` | §8.3, §16 M0.5 | The pair's HRRR run: lookout-forecast's own `select_run_for_issue` and `LagModel`, then its `Extractor` for only the scene's fields and the two bracketing hours, under a 60 MB GRIB cap. A reused file must record the availability the choice gives. Runs inside lookout-forecast's environment (`python -m lookout_eval.pair_forecast`) |
+| `pair_forecast.py` | §8.3, §13.9, §16 M0.5 | The pair's HRRR run: lookout-forecast's own `select_run_for_issue`, `LagModel` and `listed_availability` (0.2.0 or later, D-054), so an archived hour is never chosen before its own S3 stamps; then its `Extractor` for only the scene's fields and the two bracketing hours, under a 60 MB GRIB cap. A reused file must record the availability the choice gives; a refusal says which side differs and suggests re-extracting only when that would help. Runs inside lookout-forecast's environment (`python -m lookout_eval.pair_forecast`) |
 | `landmark_boxes.py`, `landmark_boxes_v1.json` | §13.3, §16 M0.5 | By-eye landmark boxes in normalised image coordinates, drawn on the plate; they fit any resolution of the drawn frame's aspect ratio only; not in the viewpoint manifest; replaced by the M2 pose solve |
 | `pair_score.py` | §13.4, §13.5 | One pair's P1 cell (event "visible"; partial masked; in-cloud excluded, hidden in the sensitivity) as a one-pair `Contingency`, plus the ratio error |
 | `registration.py` | §8.6 | How far a frame's aim differs from the plate's (phase correlation of gradient images): a diagnostic in the pair record; the Same view gate itself stays "not checked" |
-| `data_report/` | §16 M0.5, §15.3 | `lookout-eval data-report`: the M0.5 gate's log evidence from `$LOOKOUT_DATA_DIR`, read-only. Per viewpoint: polls, image GETs, frames and thumbnails by storage policy (checked against the disk), rate caps, errors, poll gaps on send times, the most GETs in a rolling hour, and the distinct live HRRR runs with their hours and fields; outages, restarts, exclusions and the 72 h clock. Never opens an image, `archive/` or `quarantine/` |
+| `data_report/` | §16 M0.5, §15.3 | `lookout-eval data-report`: the M0.5 gate's log evidence from `$LOOKOUT_DATA_DIR`, read-only. Per viewpoint: polls, image GETs, frames and thumbnails by storage policy (checked against the disk), rate caps, errors, poll gaps send to send, the most GETs in a rolling hour, the bounds at nps.gov (the least poll gap and 5-GET span nps.gov can have seen, and the pairs and windows not provably 300 s or 3600 s apart), and the distinct live HRRR runs with their hours and fields; outages, restarts and their excess, exclusions and the 72 h clock by the gate rule. Never opens an image, `archive/` or `quarantine/` |
 
 ## Choices worth knowing
 
@@ -187,9 +196,29 @@ in full in `data_report/__init__.py`:
   it, and no live run in the logs loses the whole window. With no per-tick record, these are lower bounds.
 - **Restarts:** a `capture_version` or runner change, a `loop_stopped` record, or two pass starts under
   295 s apart (the 300 s interval less a 5 s tolerance); for the stand-in, a change of fields or hours.
-- **The 72 h clock:** as PLAN.md states it, covered = elapsed − the capture loop's lost time. Beside it the
-  report gives a proposed both-jobs figure (the union of both jobs' lost time, for PRD §16's "worker and
-  capture logs"), which PLAN.md and DECISIONS.md do not record yet, and each job's own figure.
+  A capture restart's **excess** is the longest any camera went from its last poll before the restart to
+  its first poll after (send to send), less one 300 s interval, when positive. It is lost from that
+  camera's last poll + 300 s to its next poll; a camera not polled again yet is measured to the window's
+  end. A poll is before the restart when its record was written by the old loop's last record (its
+  `loop_stopped` record, else its last record, of the old version and runner, before the new loop's first
+  pass start). So a new loop that polls at once is split right, and so is one that sleeps in its first
+  pass when a `loop_stopped` record or a version or runner change tells the loops apart. The 02:39
+  restart of 20 Nov: polls 483.080–485.471 s apart, excess 185.471 s (Acadia).
+- **Polite collection at nps.gov** (PRD §15.3; the lead's rule of 20 Nov): nps.gov received a request no
+  earlier than its send and no later than its answer. From the records' millisecond stamps, the earliest
+  receipt is `sent_at` (capture 0.2.1), else t − `elapsed_ms` − 0.05 ms (`elapsed_ms` is rounded to
+  0.1 ms; this assumes the Mac did not sleep mid-request), and none for a record with neither; the
+  latest is `answered_at` (rounded up), else t + 1 ms (t is written after the answer, truncated). So
+  nps.gov saw two consecutive polls at least earliest(N+1) − latest(N) apart, and 5 consecutive image
+  GETs over at least earliest(5th) − latest(1st). The report gives the shortest of each per camera and
+  counts the **unproven** pairs and windows: not provably 300 s (3600 s) apart, because the bound is
+  under the limit (`under_limit`) or a send cannot be placed (`unbounded`). Unproven is not shown
+  closer. The send-to-send columns stay beside them, and the tables and `rules.bases` name each
+  figure's basis. Bounds are shown rounded down to the millisecond.
+- **The 72 h clock:** covered = elapsed − lost. The headline is the **gate rule**, the lead's decision of
+  20 Nov that settles D-061: lost = the union of both jobs' outages and each capture restart's excess.
+  Beside it, labelled: PLAN.md's capture-only figure (the capture outages alone) and each job's own
+  (capture: outages and restart excess; forecast: outages). Report `schema_version` 2.
 - **State files** (`state/capture/<id>.json`, the fetcher lock) are read as they are when the report runs
   (`state_now`), not as of `--until`. The home directory is printed as `~`.
 
@@ -277,8 +306,8 @@ all (renderer timing, three runs, SwiftShader).
   - per-layer cloud bases from model levels instead of the pressure-band mapping in `scene.py`, and the
     `PRES:cloud base` cross-check before `HGT:cloud base` is used (the M0.5 pair's camera cell had a
     phantom 1.6–2.0 km base under a ~10 km one; harmless there only because low cover was 0 %);
-  - an explicit hour list in lookout-forecast (`ExtractOptions.hours`), so `pair_forecast.py` can stop
-    substituting `lookout_forecast.extract.run_hours` for one call;
+  - `pair_forecast.py` should use lookout-forecast 0.2.0's explicit hour list (`ExtractOptions.hours`,
+    `plan_run(hours=)`, D-053) and stop substituting `lookout_forecast.extract.run_hours` for one call;
   - `pair_forecast.py` should let the extractor write to a scratch storage and copy only the forecast
     file into `forecast/hrrr/`: today an archived extraction also adds a `run` event to the live
     `forecast_log/` and a state marker (the M0.5 pair's are line 475 of `forecast_log/2026-11-19.jsonl`

@@ -1,16 +1,19 @@
 """The data report's assembly and the 72 h clock (PRD §16 M0.5; PLAN.md M0.5 gate).
 
-**The clock, as PLAN.md states it:** it starts when the loop took over all 8 cameras, and the
-capture loop's outages extend it, as outages extend the sealed window (PLAN.md's 8.2 h for
-19 Nov is this reading). So covered = elapsed − the capture outages' lost time
-(:mod:`.capture`), and the gate closes when covered reaches 72 h; until then the earliest close
-is the moment covered would reach 72 h if nothing more is lost.
+**The clock** starts when the loop took over all 8 cameras, and lost time extends it, as
+outages extend the sealed window. Covered = elapsed − lost, and the gate closes when covered
+reaches 72 h; until then the earliest close is the moment covered would reach 72 h if nothing
+more is lost.
 
-**Both jobs, proposed beside it:** PRD §16 asks for "≥ 72 h of worker and capture logs", which
-can be read to count the forecast stand-in's outages (:mod:`.forecast`) too: lost = the union
-of both jobs' lost time, an overlap counted once. Neither PLAN.md nor DECISIONS.md records
-that rule yet, so the report gives it as a proposal, with each job's own figure, and the lead
-chooses.
+**The gate rule** (the headline): the lead's decision of 20 Nov, which settles D-061, takes the
+stricter reading of PRD §16's "≥ 72 h of worker and capture logs". Lost = the union of the
+capture loop's outages, the forecast stand-in's outages (:mod:`.forecast`) and each capture
+restart's excess (:func:`.capture.restart_excess`: the longest any camera went from its last
+poll before the restart to its first after, less one 300 s interval), an overlap counted once.
+
+**Beside it, labelled:** PLAN.md's capture-only figure (the capture loop's outages alone, the
+reading behind PLAN.md's 8.2 h for 19 Nov, which counts no restart that is not an outage), and
+each job's own: capture (outages and restart excess) and forecast (outages).
 """
 
 from __future__ import annotations
@@ -47,28 +50,75 @@ from .forecast import forecast_section
 
 __all__ = ["SCHEMA_VERSION", "build_report", "clock"]
 
-SCHEMA_VERSION = 1
+#: 2: the clock's headline is the gate rule (it was PLAN.md's capture-only figure, now
+#: ``plan_md_capture_only``); restarts carry their excess; per camera, the bounds at nps.gov.
+SCHEMA_VERSION = 2
 
-#: The clock rule PLAN.md states, and the one proposed beside it (module docstring).
-CLOCK_RULE = (
-    "PLAN.md M0.5 gate: the clock runs from the loop's start and the capture loop's outages "
-    "extend it (PLAN.md's 8.2 h for 19 Nov is this rule): covered = elapsed - the capture "
-    "outages' lost time; the gate needs {hours:g} h covered"
+#: The clock's rules (module docstring).
+GATE_RULE = (
+    "gate rule (the lead's decision of 20 Nov, settling D-061; PRD §16's worker and capture "
+    "logs): lost = the union of the capture loop's outages, the forecast stand-in's outages "
+    "and each capture restart's excess (the longest any camera went from its last poll before "
+    "the restart to its first after, less one {interval:g} s interval), an overlap counted "
+    "once; covered = elapsed - lost; the gate needs {hours:g} h covered"
 )
-BOTH_JOBS_RULE = (
-    "proposed, not recorded in PLAN.md or DECISIONS.md: PRD §16 asks for 72 h of worker and "
-    "capture logs, so lost = the union of the capture and forecast outages' lost time (an "
-    "overlap counts once)"
+PLAN_RULE = (
+    "PLAN.md's capture-only figure, for comparison: lost = the capture loop's outages alone "
+    "(gaps over {gap:g} s between passes, less one {interval:g} s interval; PLAN.md's 8.2 h for "
+    "19 Nov is this reading); a restart that is not an outage loses nothing"
 )
+CAPTURE_RULE = "capture alone: its outages and its restarts' excess (the gate rule's capture part)"
+FORECAST_RULE = "forecast alone: the stand-in's outages (the gate rule's forecast part)"
+#: The time basis of each per-camera figure (:mod:`.capture`), printed in the report's rules.
+BASES = {
+    "send": (
+        "sent_at when logged (capture 0.2.1), else t - elapsed_ms, else t: the send as "
+        "capture's scheduler counted it"
+    ),
+    "earliest_receipt": (
+        "the earliest nps.gov can have received a request: sent_at (truncated to the ms, read "
+        "before the request), else t - elapsed_ms - 0.05 ms (elapsed_ms is rounded to 0.1 ms; "
+        "this assumes t was read right after the request's timer stopped, as capture does, "
+        "and that the Mac did not sleep mid-request, since elapsed_ms is on the monotonic "
+        "clock); a record with neither has none"
+    ),
+    "latest_receipt": (
+        "the latest nps.gov can have received a request, its answer: answered_at (rounded up "
+        "to the ms), else t + 1 ms (t is written after the answer, truncated to the ms)"
+    ),
+    "poll_gap_s": "send to send: how capture's scheduler spaced the polls",
+    "max_image_gets_in_rolling_hour": "send times, half-open rolling windows",
+    "poll_gap_at_nps": (
+        "earliest receipt of the next poll - latest receipt of the previous, over consecutive "
+        "polls: the least gap nps.gov can have seen; unproven counts the pairs not provably "
+        "min_poll_gap_s apart (under_limit: a least gap under it; unbounded: the next poll's "
+        "send cannot be placed). Unproven is not shown closer"
+    ),
+    "image_gets_at_nps": (
+        "earliest receipt of the 5th - latest receipt of the 1st, over every 5 consecutive "
+        "image GETs: the least span nps.gov can have seen; unproven counts the windows not "
+        "provably rolling_window_s apart (under_limit, unbounded as for polls)"
+    ),
+    "restart_excess": (
+        "the longest any camera went from its last poll before the restart to its first after, "
+        "send to send, less one capture_interval_s; a poll is before the restart when its "
+        "record was written by the old loop's last record (the row's stopped_after_utc)"
+    ),
+}
 
 
 def clock(
     window: Window,
     capture: Sequence[Interval],
+    restarts: Sequence[Interval],
     forecast: Sequence[Interval],
     options: ReportOptions,
 ) -> dict[str, Any]:
-    """The 72 h clock as PLAN.md states it, the both-jobs figure proposed, and each job's own."""
+    """The 72 h clock by the gate rule, with PLAN.md's figure and each job's own beside it.
+
+    ``capture`` and ``forecast`` are the intervals the two jobs' outages lost, ``restarts``
+    those the capture restarts' excess lost (module docstring).
+    """
     required = options.clock_hours * 3600.0
 
     def figure(intervals: Sequence[Interval]) -> dict[str, Any]:
@@ -87,14 +137,28 @@ def clock(
         }
 
     return {
-        "rule": CLOCK_RULE.format(hours=options.clock_hours),
+        "rule": GATE_RULE.format(hours=options.clock_hours, interval=options.capture_interval_s),
         "start_utc": iso(window.since),
         "until_utc": iso(window.until),
         "required_h": options.clock_hours,
         "elapsed_h": hours(window.seconds),
-        **figure(capture),
-        "both_jobs_proposed": {"rule": BOTH_JOBS_RULE, **figure([*capture, *forecast])},
-        "by_job": {"capture": figure(capture), "forecast": figure(forecast)},
+        **figure([*capture, *restarts, *forecast]),
+        "plan_md_capture_only": {
+            "rule": PLAN_RULE.format(
+                gap=options.capture_gap_s, interval=options.capture_interval_s
+            ),
+            **figure(capture),
+        },
+        "by_job": {
+            "capture": {"rule": CAPTURE_RULE, **figure([*capture, *restarts])},
+            "forecast": {"rule": FORECAST_RULE, **figure(forecast)},
+        },
+        # Each part on its own, inside the window; the union above counts an overlap once.
+        "parts_lost_h": {
+            "capture_outages": hours(measure(clip(capture, window))),
+            "capture_restart_excess": hours(measure(clip(restarts, window))),
+            "forecast_outages": hours(measure(clip(forecast, window))),
+        },
     }
 
 
@@ -150,7 +214,7 @@ def build_report(
     )
     ids.update(reader.folders("frames"), reader.folders("thumbs"))
     ordered = sorted(ids)
-    capture, capture_lost = capture_section(
+    capture, capture_lost, restart_lost = capture_section(
         reader, capture_logs, window, ordered, opts, exclusions, now=made.astimezone(UTC)
     )
     forecast, forecast_lost = forecast_section(
@@ -165,16 +229,31 @@ def build_report(
     for row in capture["outages"]:
         exclusions.add(
             "outages",
-            f"capture outage: its lost time extends the {opts.clock_hours:g} h clock",
+            f"capture outage: its lost time extends the {opts.clock_hours:g} h clock "
+            "(the gate rule and PLAN.md's figure)",
             None,
             start=row["start_utc"],
             end=row["end_utc"],
             lost_s=row["lost_s"],
         )
+    for row in capture["restarts"]:
+        gap = row["longest_poll_gap"]
+        if gap is not None and row["lost_s"] > 0:
+            exclusions.add(
+                "outages",
+                f"capture restart excess: its lost time extends the {opts.clock_hours:g} h "
+                "clock (the gate rule)",
+                None,
+                start=gap["from_utc"],
+                end=gap["to_utc"],
+                lost_s=row["lost_s"],
+                viewpoint_id=gap["viewpoint_id"],
+            )
     for row in forecast["outages"]:
         exclusions.add(
             "outages",
-            "forecast outage: its lost time extends the both-jobs clock (proposed)",
+            f"forecast outage: its lost time extends the {opts.clock_hours:g} h clock "
+            "(the gate rule)",
             None,
             start=row["start_utc"],
             end=row["end_utc"],
@@ -198,9 +277,11 @@ def build_report(
             "forecast_outage_delay_s": opts.forecast_gap_s,
             "forecast_tick_s": opts.forecast_tick_s,
             "forecast_fallback_lag_s": opts.forecast_fallback_lag_s,
+            "min_poll_gap_s": opts.min_poll_gap_s,
             "rolling_window_s": opts.rolling_window_s,
             "max_gets_per_rolling_hour": opts.max_gets_per_rolling_hour,
             "clock_hours": opts.clock_hours,
+            "bases": BASES,
         },
         "inputs": {
             "capture_log": capture_logs.files_read,
@@ -209,7 +290,7 @@ def build_report(
             "unreadable_count": len(reader.unreadable),
             "unreadable": reader.unreadable[:REF_LIMIT],
         },
-        "clock": clock(window, capture_lost, forecast_lost, opts),
+        "clock": clock(window, capture_lost, restart_lost, forecast_lost, opts),
         "capture": capture,
         "forecast": forecast,
         "exclusions": exclusions.to_list(),

@@ -5,10 +5,16 @@ availability modelled)". This module does that for one pair with lookout-forecas
 code, and nothing else:
 
 - **Choice** (:func:`choose_run`): lookout-forecast's ``select_run_for_issue`` with its
-  ``LagModel`` read from the live lag log in ``forecast_log/``. It returns the newest run
-  whose bracketing forecast hours were available by the issue time; an archived run's
-  availability is modelled as run start + the lag model's lag (p95 per cycle and hour once
-  20 lags are logged, else a conservative 120 min). The choice records which rule applied.
+  ``LagModel`` read from the live lag log in ``forecast_log/`` and its
+  ``listed_availability`` (lookout-forecast 0.2.0, D-054). It returns the newest run whose
+  bracketing forecast hours were available by the issue time. An archived hour's
+  availability is modelled as run start + the lag model's lag (rule 1: p95 per cycle and
+  hour once 20 lags are logged; rule 2: the later of the hour's pooled p95 and the cell's
+  largest lag; else a conservative 120 min), but never before the hour's own trusted S3
+  stamps: each candidate run is listed (one ListObjectsV2 request a run), an hour whose
+  stamps are later than the model takes them (``archived-s3-lastmodified``), and an hour not
+  on S3 skips the run. The extractor applies the same rule when it writes the file. The
+  choice records which rule applied and the stamp floor (``availability_model``).
 - **Extraction** (:func:`extract_hours`): lookout-forecast's ``Extractor`` for one
   viewpoint, the fields the v−1 scene reads (:data:`SCENE_FIELDS`) and only the two
   bracketing hours, under a GRIB byte cap (default 60 MB) that the extractor checks against
@@ -24,14 +30,18 @@ result is checked against them. If the substitution stopped working, the planner
 extractor would see every hour of the run (f00–f48 for a 00/06/12/18Z run): the planned
 hours would differ from the two asked for, and the byte cap would refuse the run, before
 anything is downloaded (both are tested).
-TODO(M1.5): lookout-forecast should accept an explicit hour list (``ExtractOptions.hours``).
+TODO(M1.5): use lookout-forecast 0.2.0's explicit hour list (``ExtractOptions.hours``,
+``plan_run(hours=)``, D-053), which the pair now requires anyway, instead of the substitution.
 
 **Availability is checked against the file.** The pair's leakage check uses the availability
 the forecast file records for the bracketing hours, while the choice here is made with the lag
 model as it is now. A reused file was written with the model of its day, which can move as
-lags accumulate, so the summary is refused (:class:`PairForecastError`) unless the file's
-recorded availability of the two hours equals the choice's; the summary carries it as
-``file.availability_utc``.
+lags accumulate, or by lookout-forecast 0.1.0, before the stamp floor, so the summary is
+refused (:class:`PairForecastError`) unless the file's recorded availability of the two hours
+equals the choice's; the summary carries it as ``file.availability_utc``. The refusal names
+each side's source, lag and stamp floor, and says what would make them agree: re-extracting a
+reused archived file, never a file written in the same call or a live run's file, which
+re-extraction would write the same way again.
 
 Besides the forecast file (``forecast/hrrr/<viewpoint>/<run>z.json``), the extractor writes
 what it always writes: its state marker (``state/forecast/hrrr/<run>z.json``), one ``run``
@@ -41,8 +51,11 @@ TODO(M1.5): read the lag log from the live data dir but let the extractor write 
 storage, then copy only the forecast file into ``forecast/hrrr/``.
 
 This module imports only the standard library, lookout-common and lookout-forecast, so it
-runs inside lookout-forecast's environment, which has ecCodes. The M0.5 pair ran it from the
-frozen snapshot of committed code that the background jobs use::
+runs inside lookout-forecast's environment, which has ecCodes. It needs lookout-forecast 0.2.0
+or later (``listed_availability``; committed in 08a996c), and refuses an older one. The M0.5
+pair ran it, before the stamp floor, from the frozen snapshot of committed code that the
+background jobs use; that snapshot (034c46b) holds lookout-forecast 0.1.0, so a new run needs a
+snapshot of a later commit::
 
     cd workers/forecast
     PYTHONPATH=$RT/workers/forecast/src:$RT/workers/common/src:<repo>/eval/src \\
@@ -51,7 +64,9 @@ frozen snapshot of committed code that the background jobs use::
         --viewpoint grand-canyon.yavapai --valid 2024-01-15T19:45:00Z --lead 24
 
 ``--plan-only`` reads the listing and the two ``.idx`` inventories (45,515 bytes for run
-2024011412) and writes nothing.
+2024011412) and writes nothing. Since the stamp floor, the choice also lists each candidate run
+it weighs: for the M0.5 pair 2024011418 and 2024011412, two requests (their recorded listings
+are 24,393 bytes each). The summary counts those apart, as ``choice_transfer``.
 """
 
 from __future__ import annotations
@@ -194,22 +209,121 @@ def stored_availability(doc: Mapping[str, Any], hours: Sequence[int]) -> datetim
 
 
 def choose_run(
-    issue_time: datetime, valid_time: datetime, *, storage: Any, lag_model: Any | None = None
+    issue_time: datetime,
+    valid_time: datetime,
+    *,
+    storage: Any,
+    bucket: Any,
+    lag_model: Any | None = None,
 ) -> tuple[Any, Any]:
-    """lookout-forecast's run choice for (issue, valid): ``(RunChoice, LagModel)``.
+    """lookout-forecast's run choice for (issue, valid): ``(RunChoice, LagModel)`` (PRD §8.3).
 
-    Every hour is modelled (an archived run), with the lag model read from ``storage``'s
-    forecast log unless one is given. Raises :class:`PairForecastError` when no run within
-    the selector's look-back covers the valid time.
+    Every hour is an archived run's: modelled with the lag model, read from ``storage``'s
+    forecast log unless one is given, but never before the hour's own trusted S3 stamps
+    (D-054; PRD §13.9: an early time would leak a run into a prediction issued before it was
+    published). ``listed_availability(bucket)`` lists each candidate run once, so a run whose
+    stamps are later than the model is chosen by its stamps, or skipped for an older run if
+    they are later than the issue time; an hour not on S3 skips the run. That is the rule the
+    extractor applies when it writes the run, so a file it writes records the choice's
+    availability. Raises :class:`PairForecastError` when no run within the selector's
+    look-back covers the valid time, or when lookout-forecast predates the stamp floor (0.1.0
+    has no ``listed_availability``).
     """
-    availability = _forecast_modules()["availability"]
+    modules = _forecast_modules()
+    availability = modules["availability"]
+    listed = getattr(availability, "listed_availability", None)
+    if listed is None:
+        raise PairForecastError(
+            f"lookout-forecast {modules['version']} has no listed_availability: the pair's "
+            "choice needs 0.2.0 or later, which never dates an archived hour before its own S3 "
+            "stamps (D-054)"
+        )
     model = lag_model if lag_model is not None else availability.LagModel.from_storage(storage)
-    choice = availability.select_run_for_issue(issue_time, valid_time, lag_model=model)
+    choice = availability.select_run_for_issue(
+        issue_time, valid_time, lag_model=model, availability=listed(bucket)
+    )
     if choice is None:
         raise PairForecastError(
-            "no HRRR run covers the valid time with modelled availability by the issue time"
+            "no HRRR run covers the valid time with availability by the issue time (modelled, "
+            "and never before the run's own S3 stamps)"
         )
     return choice, model
+
+
+def _hour_note(entry: Mapping[str, Any] | None) -> str:
+    """How one recorded hour (or the choice's deciding hour) got its availability."""
+    if not entry:
+        return "not recorded"
+    model = entry.get("availability_model") or {}
+    lag = model.get("lag_s")
+    if "s3_floor_utc" not in model:
+        floor = "S3 floor not recorded"  # written before the stamp floor, or a live hour
+    elif model["s3_floor_utc"] is None:
+        floor = "no trusted S3 stamp"
+    else:
+        floor = f"S3 floor {model['s3_floor_utc']}"
+    return ", ".join(
+        [
+            str(entry.get("availability_source") or "source not recorded"),
+            f"model {model.get('method')} {lag:g} s"
+            if isinstance(lag, int | float)
+            else "no model",
+            floor,
+        ]
+    )
+
+
+def _mismatch(
+    key: str,
+    how: str,
+    doc: Mapping[str, Any],
+    hours: Sequence[int],
+    stored: datetime,
+    choice: Mapping[str, Any],
+) -> str:
+    """Why a forecast file's availability differs from the choice's, and what would fix it.
+
+    Re-extracting helps only a reused archived file: one written with another lag model, or by
+    lookout-forecast 0.1.0, before the stamp floor (D-054). A file written in this call used
+    the same model and the same rule, and a live run's file is dated by its stamps alone;
+    re-extracting either would write the same availability again.
+    """
+    from lookout_common.timeutil import isoformat_z
+
+    recorded = {
+        int(entry["fh"]): entry
+        for entry in doc.get("hours") or []
+        if isinstance(entry, Mapping) and entry.get("fh") is not None
+    }
+    deciding = max(
+        (fh for fh in hours if recorded.get(int(fh), {}).get("availability_utc")),
+        key=lambda fh: _utc(recorded[int(fh)]["availability_utc"]),
+        default=hours[-1],
+    )
+    text = (
+        f"{key} ({how}) records f{hours[0]:02d}-f{hours[-1]:02d} available at "
+        f"{isoformat_z(stored)} (f{deciding:02d}: {_hour_note(recorded.get(int(deciding)))}), but "
+        f"the choice gives {choice['availability_utc']} ({_hour_note(choice)}); a pair's leakage "
+        "check uses the file's value. "
+    )
+    if doc.get("live") is True:
+        return text + (
+            "The extractor dated the run as live (within its live window of the run start), by "
+            "its S3 stamps alone; re-extracting would write the same. A backtest pair needs an "
+            "archived run"
+        )
+    if how == "written":
+        return text + (
+            "The extractor wrote it in this call with the same lag model and the same stamp "
+            "rule, so re-extracting would write the same; the two can differ only if the run's "
+            "S3 stamps changed between the choice's listing and the extractor's. Choose again "
+            "before pairing it"
+        )
+    return text + (
+        "It was written with another lag model, or before the stamp floor (lookout-forecast "
+        "0.1.0): re-extract the run (the extractor's force option), which records the choice's "
+        "availability, before pairing it with a summary"
+    )
 
 
 def extract_hours(
@@ -276,15 +390,18 @@ def fetch_pair_forecast(
     field_names: Sequence[str] = SCENE_FIELDS,
     max_mb: float = DEFAULT_MAX_MB,
     plan_only: bool = False,
+    extractor_options: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Choose the run for (valid − lead, valid) and extract its two bracketing hours.
 
-    Returns a JSON-ready summary: the choice (with the availability rule), the plan, the
-    extractor's run event, the forecast file's path, SHA-256 and recorded availability, the
-    code that ran and wall times. An existing forecast file that already holds these fields
-    and hours is reused (the extractor skips it and says so), but only when the availability
-    it records for the two hours equals the choice's (see the module docstring); otherwise
-    :class:`PairForecastError`.
+    Returns a JSON-ready summary: the choice (with the availability rule and stamp floor),
+    the listing requests the choice made (``choice_transfer``), the plan, the extractor's run
+    event, the forecast file's path, SHA-256 and recorded availability, the code that ran and
+    wall times. An existing forecast file that already holds these fields and hours is reused
+    (the extractor skips it and says so), but only when the availability it records for the
+    two hours equals the choice's (see the module docstring); otherwise
+    :class:`PairForecastError`, saying why they differ. ``extractor_options`` go to the
+    ``Extractor`` (:func:`extract_hours`; tests pass a small grid, a cache folder and a clock).
     """
     from lookout_common.manifest import load_manifests
     from lookout_common.paths import forecast_key
@@ -293,24 +410,25 @@ def fetch_pair_forecast(
     modules = _forecast_modules()
     hrrr = modules["hrrr"]
     issue_time = valid_time - timedelta(hours=lead_hours)
-    started = time.monotonic()
-    choice, model = choose_run(issue_time, valid_time, storage=storage)
-    chose_s = time.monotonic() - started
-    hours = sorted({choice.fh_lo, choice.fh_hi})
-    key = forecast_key(hrrr.STORAGE_SOURCE, viewpoint_id, choice.run_start_utc)
-    # A file that already holds these fields and hours is reused: never download twice.
-    reused = not plan_only and modules["extract"].run_covered(
-        storage,
-        choice.run_start_utc,
-        viewpoint_ids=[viewpoint_id],
-        field_names=list(field_names),
-        hours=hours,
-    )
-    opened = None
-    if bucket is None:
-        opened = modules["HrrrBucket"]()
-        bucket = opened.__enter__()
-    try:
+    with contextlib.ExitStack() as stack:
+        if bucket is None:
+            bucket = stack.enter_context(modules["HrrrBucket"]())
+        ledger = getattr(bucket, "ledger", None)  # lookout-forecast's HrrrBucket counts requests
+        before = ledger.snapshot() if ledger is not None else None
+        started = time.monotonic()
+        choice, model = choose_run(issue_time, valid_time, storage=storage, bucket=bucket)
+        chose_s = time.monotonic() - started
+        choice_transfer = ledger.since(before) if ledger is not None else None
+        hours = sorted({choice.fh_lo, choice.fh_hi})
+        key = forecast_key(hrrr.STORAGE_SOURCE, viewpoint_id, choice.run_start_utc)
+        # A file that already holds these fields and hours is reused: never download twice.
+        reused = not plan_only and modules["extract"].run_covered(
+            storage,
+            choice.run_start_utc,
+            viewpoint_ids=[viewpoint_id],
+            field_names=list(field_names),
+            hours=hours,
+        )
         t0 = time.monotonic()
         done = extract_hours(
             storage=storage,
@@ -323,26 +441,20 @@ def fetch_pair_forecast(
             max_mb=max_mb,
             lag_model=model,
             plan_only=plan_only or reused,
+            extractor_options=extractor_options,
         )
         extract_s = time.monotonic() - t0
-    finally:
-        if opened is not None:
-            opened.__exit__(None, None, None)
     file_info = None
     if not plan_only:
         if not storage.exists(key):
             raise PairForecastError(f"the extractor wrote no {key}")
         data = storage.get_bytes(key)
-        stored = stored_availability(json.loads(data), hours)
-        chosen = choice.to_dict()["availability_utc"]
-        if stored != _utc(chosen):
+        doc = json.loads(data)
+        stored = stored_availability(doc, hours)
+        chosen = choice.to_dict()
+        if stored != _utc(chosen["availability_utc"]):
             how = "reused" if reused else "written"
-            raise PairForecastError(
-                f"{key} ({how}) records f{hours[0]:02d}-f{hours[-1]:02d} available at "
-                f"{isoformat_z(stored)}, but the lag model now gives {chosen}; a pair's "
-                "leakage check uses the file's value. Re-extract the run (the extractor's "
-                "force option) before pairing it with a summary"
-            )
+            raise PairForecastError(_mismatch(key, how, doc, hours, stored, chosen))
         file_info = {
             "key": key,
             "path": str(storage.path(key)),
@@ -357,6 +469,7 @@ def fetch_pair_forecast(
         "issue_time_utc": isoformat_z(issue_time),
         "lead_nominal_h": lead_hours,
         "choice": choice.to_dict(),
+        "choice_transfer": choice_transfer,
         "hours": hours,
         "fields": list(field_names),
         "max_mb": max_mb,

@@ -5,10 +5,22 @@ Counted records are ``worker: capture`` records of a scheduled runner inside the
 
 - **polls**: ``request`` records of the poll stage (``json`` at the ARD cameras, ``head`` at
   Rainier), failed ones included; **image GETs**: ``request`` records of stage ``image``;
-- **gaps between polls**, on send times (:func:`send_time`: the record's ``sent_at`` from
+- **gaps between polls**, send to send (:func:`send_time`: the record's ``sent_at`` from
   capture 0.2.1, else ``t − elapsed_ms``, since the record is written after the answer): the
-  longest, and the shortest, which PRD §15.3's 5-minute rule bounds;
-- **the most image GETs in any rolling hour** (half-open 3600 s windows; the rule is 4);
+  longest, and the shortest, which is how capture's scheduler spaces polls;
+- **the most image GETs in any rolling hour**, on send times (half-open 3600 s windows; the
+  rule is 4);
+- **the polite-collection evidence at nps.gov** (PRD §15.3; the lead's rule of 20 Nov, which
+  settles D-048's open question): nps.gov received a request no earlier than its send and no
+  later than its answer. :func:`earliest_receipt` and :func:`latest_receipt` bound those from
+  the record's millisecond stamps (``sent_at``, else ``t − elapsed_ms`` less 0.05 ms;
+  ``answered_at``, else ``t`` + 1 ms). So the least gap nps.gov can have seen between two
+  consecutive polls is ``earliest(N+1) − latest(N)`` (``poll_gap_at_nps``), and the least
+  span of 5 consecutive image GETs is ``earliest(5th) − latest(1st)`` (``image_gets_at_nps``:
+  5 GETs within 3600 s would break the cap of 4 in any rolling hour). A pair or window whose
+  bound is under the limit, or whose last request has no earliest receipt, is *unproven*:
+  not shown to be at least 300 s (3600 s) apart at nps.gov, which is not the same as shown
+  to be closer;
 - **frames stored**, by the policy that applied (PRD §8.7, D-028): capture 0.1.0 kept every
   download at full size with no thumbnail (``legacy-every``); 0.2.0 keeps every frame at the
   design-P cameras (``every``) and, elsewhere, only the frame nearest each UTC hour
@@ -21,14 +33,19 @@ Counted records are ``worker: capture`` records of a scheduled runner inside the
   made (``state_now``): a state file holds only its latest state, so for a ``--until`` in the
   past this block describes the time of reading, not the window's end.
 
-Outages and restarts come from the pass records (package docstring).
+Outages and restarts come from the pass records (package docstring). A restart's *excess*
+(the gate rule's lost time for it, :func:`restart_excess`) comes from the poll records: the
+longest any camera went from its last poll before the restart to its first poll after, less
+one 300 s interval. A poll is before the restart when its record was written by the old loop's
+last record (:func:`stopped_after`).
 """
 
 from __future__ import annotations
 
+import bisect
 import statistics
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from itertools import pairwise
@@ -44,23 +61,40 @@ from .common import (
     Logs,
     Reader,
     ReportOptions,
+    Request,
     Window,
     clip,
+    floor_ms,
     gap_stats,
     iso,
     max_in_window,
     measure,
     number,
+    provable_spans,
     rounded,
     sorted_counter,
     timestamp,
 )
 
-__all__ = ["POLL_STAGES", "Pass", "capture_exclusion", "capture_section", "send_time"]
+__all__ = [
+    "POLL_STAGES",
+    "Pass",
+    "capture_exclusion",
+    "capture_section",
+    "earliest_receipt",
+    "latest_receipt",
+    "restart_excess",
+    "send_time",
+    "stopped_after",
+]
 
 #: ``request`` stages that are a poll: the ARD cameras' JSON GET, Rainier's HEAD.
 POLL_STAGES: frozenset[str] = frozenset({"json", "head"})
 IMAGE_STAGE = "image"
+#: Capture writes ``t`` and ``sent_at`` to the millisecond, truncated (``isoformat_z``).
+STAMP_RESOLUTION = timedelta(milliseconds=1)
+#: Capture logs ``elapsed_ms`` rounded to 0.1 ms, so it can be up to 0.05 ms short.
+ELAPSED_ROUNDING = timedelta(microseconds=50)
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,21 +122,71 @@ class Pass:
         )
 
 
+def _elapsed_ms(record: Mapping[str, Any]) -> float | None:
+    """The record's ``elapsed_ms`` when it is a finite number >= 0 (not a bool), else None."""
+    value = number(record.get("elapsed_ms"))
+    return value if value is not None and value >= 0 else None
+
+
 def send_time(line: Line) -> datetime:
-    """When a request was sent: its ``sent_at``, or else ``t`` minus ``elapsed_ms``.
+    """When a request was sent, as capture's scheduler counted it: ``sent_at``, else ``t`` minus
+    ``elapsed_ms``, else ``t``.
 
     Capture 0.2.1 writes ``sent_at``, the clock reading it also stamps the poll and the image
     GET with, so gaps read from it are the ones capture's scheduler kept, to the millisecond.
     Older records have only ``t``, written after the answer; ``t`` minus ``elapsed_ms`` is
     within about 1 ms of the send (measured: -1.0 to +0.9 ms in capture's 8 h schedule test).
+    A record with neither is placed at ``t``, after its answer: close enough for the
+    send-to-send columns and a restart's excess, never a bound at nps.gov
+    (:func:`earliest_receipt`).
     """
     sent = timestamp(line.record.get("sent_at"))
     if sent is not None:
         return sent
-    elapsed = number(line.record.get("elapsed_ms"))
-    return (
-        line.t - timedelta(milliseconds=elapsed) if elapsed is not None and elapsed > 0 else line.t
-    )
+    elapsed = _elapsed_ms(line.record)
+    return line.t - timedelta(milliseconds=elapsed) if elapsed is not None else line.t
+
+
+def earliest_receipt(line: Line) -> datetime | None:
+    """The earliest nps.gov can have received a request (PRD §15.3), or None if the record
+    cannot say.
+
+    - ``sent_at`` (capture 0.2.1): a clock reading taken right before the request, truncated
+      to the millisecond, so never later than the send.
+    - Else ``t`` − ``elapsed_ms`` − 0.05 ms. Capture reads ``t`` right after the request's
+      timer stops and truncates it, and rounds ``elapsed_ms`` to 0.1 ms. The moment between
+      the two readings is not logged: a few statements in capture 0.1.0 to 0.2.1 (measured:
+      median 0.9 us, at most 0.4 ms in 10^6 stand-alone runs of that code, 20 Nov). This
+      also assumes the Mac did not sleep during the request: ``elapsed_ms`` is on the
+      monotonic clock, which does not count sleep, so a request that spanned a sleep would
+      be placed too late.
+    - Else None: with no ``sent_at`` and no ``elapsed_ms`` (a number >= 0), only ``t`` is
+      left, written after the answer, which would place the send up to the whole request
+      (a 30 s timeout) too late.
+    """
+    sent = timestamp(line.record.get("sent_at"))
+    if sent is not None:
+        return sent
+    elapsed = _elapsed_ms(line.record)
+    if elapsed is None:
+        return None
+    return line.t - timedelta(milliseconds=elapsed) - ELAPSED_ROUNDING
+
+
+def latest_receipt(line: Line) -> datetime:
+    """The latest nps.gov can have received a request: no later than its answer (PRD §15.3).
+
+    ``answered_at`` when capture logs it (0.2.1: one clock reading once the response was read
+    in full or the request failed, rounded *up* to the millisecond). Else ``t`` + 1 ms:
+    capture reads ``t`` after the answer, but truncates it to the millisecond, so the reading
+    behind it can be up to 1 ms later than the stamp.
+    """
+    answered = timestamp(line.record.get("answered_at"))
+    return answered if answered is not None else line.t + STAMP_RESOLUTION
+
+
+def _request(line: Line) -> Request:
+    return Request(send_time(line), earliest_receipt(line), latest_receipt(line))
 
 
 def capture_exclusion(line: Line, window: Window, runners: frozenset[str]) -> str | None:
@@ -150,10 +234,22 @@ def _thumb_key(record: Any) -> str | None:
     return value if isinstance(value, str) and value.startswith("thumbs/") else None
 
 
+def _poll_request(line: Line, runners: frozenset[str]) -> bool:
+    """A scheduled runner's poll: the JSON GET at an ARD camera or the HEAD at Rainier."""
+    r = line.record
+    return (
+        r.get("event") == "request"
+        and r.get("worker") == "capture"
+        and r.get("runner") in runners
+        and r.get("stage") in POLL_STAGES
+        and isinstance(r.get("viewpoint_id"), str)
+    )
+
+
 @dataclass(slots=True)
 class _Camera:
-    polls: list[datetime] = field(default_factory=list)
-    gets: list[datetime] = field(default_factory=list)
+    polls: list[Request] = field(default_factory=list)
+    gets: list[Request] = field(default_factory=list)
     get_status: Counter[str] = field(default_factory=Counter)
     failed_requests: int = 0
     events: Counter[str] = field(default_factory=Counter)
@@ -191,9 +287,9 @@ class _Camera:
         if event == "request":
             stage, status = r.get("stage"), r.get("status")
             if stage in POLL_STAGES:
-                self.polls.append(send_time(line))
+                self.polls.append(_request(line))
             elif stage == IMAGE_STAGE:
-                self.gets.append(send_time(line))
+                self.gets.append(_request(line))
                 self.get_status[str(status)] += 1
             if r.get("error") or not (isinstance(status, int) and 200 <= status < 400):
                 self.failed_requests += 1
@@ -271,15 +367,119 @@ def _outages(
     return rows, lost
 
 
+def restart_excess(
+    split: datetime,
+    polls: Mapping[str, Sequence[tuple[datetime, datetime]]],
+    window: Window,
+    options: ReportOptions,
+) -> tuple[dict[str, Any], list[Interval]]:
+    """A capture restart's excess: what the gate rule loses for it, and the interval lost.
+
+    The lead's rule for the 72 h clock (20 Nov; settles D-061): each camera's gap runs from
+    its last poll before the restart to its first poll after, and the excess is the longest of
+    those gaps less one ``capture_interval_s``, when positive. The interval lost is that
+    camera's last poll + one interval to its next poll, clipped to the window. A poll is
+    before the restart when its record was written at or before ``split``, the old loop's last
+    record (:func:`stopped_after`); a record's ``t`` follows its answer, so the new loop's
+    first poll comes after the split even when it was sent within milliseconds of the new
+    pass's start. A camera with no poll after the restart in the logs read is measured to the
+    window's end (``ongoing``); one with no poll before it is left out. ``polls`` are each
+    camera's polls as ``(t, send)``, sorted by ``t``, from every log read (the last poll before
+    a restart can be before ``since``). Gaps are send to send (:func:`send_time`), as the
+    ``longest`` poll gap is.
+    """
+    interval = timedelta(seconds=options.capture_interval_s)
+    gaps: dict[str, tuple[datetime, datetime, bool]] = {}
+    for vp, rows in polls.items():
+        index = bisect.bisect_right(rows, split, key=lambda row: row[0])
+        if index == 0:
+            continue  # no poll before the restart in the logs read
+        last = rows[index - 1][1]
+        after = rows[index][1] if index < len(rows) else None
+        end = after if after is not None else max(window.until, last)
+        gaps[vp] = (last, end, end >= window.until)
+    fields: dict[str, Any] = {
+        "poll_gaps_s": {
+            vp: round((end - last).total_seconds(), 3)
+            for vp, (last, end, _) in sorted(gaps.items())
+        },
+        "longest_poll_gap": None,
+        "excess_s": 0.0,
+        "lost_s": 0.0,
+    }
+    if not gaps:
+        return fields, []
+    vp, (last, end, ongoing) = max(gaps.items(), key=lambda item: item[1][1] - item[1][0])
+    gap = (end - last).total_seconds()
+    lost = clip([(last + interval, end)], window)
+    fields.update(
+        longest_poll_gap={
+            "viewpoint_id": vp,
+            "s": round(gap, 3),
+            "from_utc": iso(last),
+            "to_utc": iso(end),
+            "ongoing": ongoing,
+        },
+        excess_s=round(max(0.0, gap - options.capture_interval_s), 3),
+        lost_s=round(measure(lost), 3),
+    )
+    return fields, lost
+
+
+def _version(line: Line) -> str:
+    return str(line.record.get("capture_version") or "unknown")
+
+
+def _runner(line: Line) -> str:
+    return str(line.record.get("runner") or "unknown")
+
+
+def stopped_after(a: Pass, b: Pass, scheduled: Sequence[Line], stops: Sequence[Line]) -> datetime:
+    """The old loop's last record before the restart between passes ``a`` and ``b``.
+
+    It splits each camera's polls into before and after (:func:`restart_excess`). It is the
+    last ``loop_stopped`` record between the passes (a loop writes one as it exits), else the
+    last record of ``a``'s ``capture_version`` and runner before ``b``'s start (its ``t`` less
+    ``duration_s``), else ``a``'s own ``t``.
+
+    ``duration_s`` is on the monotonic clock, which does not count sleep, so when the new
+    loop's first pass spanned a sleep its computed start falls after the polls it made before
+    the sleep. A ``loop_stopped`` record, or a change of version or runner, still tells the
+    two loops' records apart; with neither, those polls count as the old loop's.
+    TODO(M1): split at a pass's wall-clock start, or a ``loop_started`` record, once capture
+    logs one (neither 0.2.0 nor 0.2.1 does).
+    """
+    stopped = [s.t for s in stops if a.t <= s.t <= b.start]
+    if stopped:
+        return max(stopped)
+    old = [
+        line.t
+        for line in scheduled
+        if a.t <= line.t < b.start and _version(line) == a.version and _runner(line) == a.runner
+    ]
+    return max(old, default=a.t)
+
+
 def _restarts(
-    passes: Sequence[Pass], counted: Sequence[Line], window: Window, options: ReportOptions
-) -> list[dict[str, Any]]:
-    """Loop stops and starts seen in the log (see the package docstring for the signs)."""
-    stops = [line for line in counted if line.record.get("event") == "loop_stopped"]
+    passes: Sequence[Pass],
+    scheduled: Sequence[Line],
+    window: Window,
+    options: ReportOptions,
+    polls: Mapping[str, Sequence[tuple[datetime, datetime]]],
+) -> tuple[list[dict[str, Any]], list[Interval]]:
+    """Loop stops and starts seen in the log (package docstring), and what their excess lost.
+
+    A restart is listed when its new loop's first pass starts inside the window, or when its
+    excess (:func:`restart_excess`) loses time inside it (a restart just before ``since``).
+    ``scheduled`` are the scheduled runners' capture records of every log read, so a
+    ``loop_stopped`` record or the old loop's last record can be before ``since``.
+    """
+    stops = [line for line in scheduled if line.record.get("event") == "loop_stopped"]
     shortest = options.capture_interval_s - options.restart_tolerance_s
     rows: list[dict[str, Any]] = []
+    lost: list[Interval] = []
     for a, b in pairwise(passes):
-        if b.start not in window:
+        if b.start >= window.until:
             continue
         evidence = []
         if a.version != b.version:
@@ -299,20 +499,18 @@ def _restarts(
         )
         if not evidence:
             continue
-        old = [
-            line.t
-            for line in counted
-            if a.t <= line.t < b.start
-            and str(line.record.get("capture_version") or "unknown") == a.version
-        ]
-        stopped_after = max(old, default=a.t)
+        split = stopped_after(a, b, scheduled, stops)
+        excess, excess_lost = restart_excess(split, polls, window, options)
+        if b.start not in window and not excess_lost:
+            continue  # before the window, and its excess loses nothing inside it
+        lost.extend(excess_lost)
         rows.append(
             {
                 "job": "capture",
                 "kind": "restart",
-                "stopped_after_utc": iso(stopped_after),
+                "stopped_after_utc": iso(split),
                 "started_utc": iso(b.start),
-                "duration_s": round((b.start - stopped_after).total_seconds(), 3),
+                "duration_s": round((b.start - split).total_seconds(), 3),
                 "from_version": a.version,
                 "to_version": b.version,
                 "last_pass_utc": iso(a.t),
@@ -320,9 +518,10 @@ def _restarts(
                 "pass_gap_s": round((b.t - a.t).total_seconds(), 3),
                 "an_outage": (b.t - a.t).total_seconds() > options.capture_gap_s,
                 "evidence": evidence,
+                **excess,
             }
         )
-    return rows
+    return rows, lost
 
 
 def _day_in_range(name: str, window: Window) -> bool:
@@ -412,6 +611,39 @@ def _camera_state(reader: Reader, viewpoint_id: str, now: datetime) -> dict[str,
     }
 
 
+def _at_nps(requests: Sequence[Request], count: int, limit_s: float) -> dict[str, Any]:
+    """The least spans of ``count`` consecutive requests at nps.gov, and how many are unproven.
+
+    ``measured`` runs (:func:`.common.provable_spans`), the ``shortest`` least span (rounded
+    down to the ms, with the two bounds it runs between), and ``unproven``: the runs not
+    provably at least ``limit_s`` apart at nps.gov. They are the ``under_limit`` runs, whose
+    least possible span is under ``limit_s`` (exactly ``limit_s`` is not under), and the
+    ``unbounded`` ones, whose last request's record cannot place its send. An unproven run is
+    not shown to have kept the rule; it is not shown to have broken it either.
+    """
+    spans = provable_spans(requests, count)
+    bounded = [(seconds, first, last) for seconds, first, last in spans if seconds is not None]
+    shortest = min(bounded, key=lambda span: span[0], default=None)
+    under = sum(1 for seconds, _, _ in bounded if seconds < limit_s)
+    unbounded = len(spans) - len(bounded)
+    return {
+        "measured": len(spans),
+        "shortest": (
+            None
+            if shortest is None
+            else {
+                "s": floor_ms(shortest[0]),
+                "first_answer_bound_utc": iso(shortest[1].latest),
+                "last_send_bound_utc": iso(shortest[2].earliest),
+            }
+        ),
+        "unproven": under + unbounded,
+        "under_limit": under,
+        "unbounded": unbounded,
+        "limit_s": limit_s,
+    }
+
+
 def _camera_row(
     reader: Reader,
     vp: str,
@@ -421,8 +653,10 @@ def _camera_row(
     now: datetime,
     later: set[str],
 ) -> dict[str, Any]:
-    polls = gap_stats(cam.polls)
-    most, most_from = max_in_window(cam.gets, options.rolling_window_s)
+    polls = gap_stats(request.send for request in cam.polls)
+    most, most_from = max_in_window(
+        (request.send for request in cam.gets), options.rolling_window_s
+    )
     by_policy = sorted(cam.policies.values(), key=lambda acc: acc["first_utc"])
     return {
         "polls": len(cam.polls),
@@ -462,6 +696,12 @@ def _camera_row(
             "rule_max": options.max_gets_per_rolling_hour,
             "within_rule": most <= options.max_gets_per_rolling_hour,
         },
+        # PRD §15.3 as nps.gov saw it: "measured" consecutive pairs (5-GET windows), and the
+        # "unproven" ones, not provably at least the rule's limit apart (module docstring).
+        "poll_gap_at_nps": _at_nps(cam.polls, 2, options.min_poll_gap_s),
+        "image_gets_at_nps": _at_nps(
+            cam.gets, options.max_gets_per_rolling_hour + 1, options.rolling_window_s
+        ),
         "events": sorted_counter(cam.events),
         "runners": sorted_counter(cam.runners),
         "state_now": _camera_state(reader, vp, now),
@@ -477,11 +717,12 @@ def capture_section(
     exclusions: Exclusions,
     *,
     now: datetime,
-) -> tuple[dict[str, Any], list[Interval]]:
-    """The capture part of the report, and the intervals its outages lost (for the clock).
+) -> tuple[dict[str, Any], list[Interval], list[Interval]]:
+    """The capture part of the report, and what its outages and its restarts' excess lost.
 
-    ``now`` is when the report is made: the state files and the fetcher lock are read as
-    they are then.
+    Returns ``(section, outage_lost, restart_lost)``: the intervals the clock counts
+    (:mod:`.report`). ``now`` is when the report is made: the state files and the fetcher
+    lock are read as they are then.
     """
     runners = options.scheduled_runners
     counted: list[Line] = []
@@ -510,6 +751,19 @@ def capture_section(
         else:
             without_viewpoint[str(event)] += 1
     outages, lost = _outages(passes, window, options)
+    # Every log read, not only the window: a restart's last poll before it can predate since.
+    scheduled = [
+        line
+        for line in logs.lines
+        if line.record.get("worker") == "capture" and line.record.get("runner") in runners
+    ]
+    polls: dict[str, list[tuple[datetime, datetime]]] = {}
+    for line in scheduled:
+        if _poll_request(line, runners):
+            polls.setdefault(str(line.record["viewpoint_id"]), []).append((line.t, send_time(line)))
+    for rows in polls.values():
+        rows.sort()
+    restarts, restart_lost = _restarts(passes, scheduled, window, options, polls)
     spacing = [(b.t - a.t).total_seconds() for a, b in pairwise(in_window)]
     lock = reader.json("state/locks/nps-fetcher.lock")
     section = {
@@ -532,11 +786,11 @@ def capture_section(
             for vp in sorted(cams)
         },
         "outages": outages,
-        "restarts": _restarts(passes, counted, window, options),
+        "restarts": restarts,
         "current_fetcher_lock": (
             {key: lock.get(key) for key in ("pid", "command", "started_at")}
             if isinstance(lock, dict)
             else None
         ),
     }
-    return section, lost
+    return section, lost, restart_lost

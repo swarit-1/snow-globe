@@ -21,12 +21,15 @@ from lookout_common.timeutil import isoformat_z
 from lookout_eval import cli
 from lookout_eval.data_report import REPORT_KIND, ReportOptions, build_report, format_report
 from lookout_eval.data_report.common import (
+    Request,
     Window,
     clip,
     close_time,
+    floor_ms,
     max_in_window,
     measure,
     merge,
+    provable_spans,
     without_home,
 )
 from lookout_eval.data_report.forecast import KIND_LATE, KIND_NO_RUN
@@ -365,8 +368,11 @@ def test_counts_per_viewpoint_and_what_is_excluded(tmp_path: Path) -> None:
     assert exclusion(rep, "capture_log", "archive event")["events"] == {"archive_request": 1}
     once = exclusion(rep, "capture_log", "runner 'cli-once'")
     assert once["count"] == 1 and once["refs"][0]["ref"] == "capture_log/2026-11-19.jsonl:3"
-    assert rep["capture"]["outages"] == []
-    assert rep["clock"]["lost_h"] == 0.0 and rep["clock"]["covered_h"] == 2.0
+    assert rep["capture"]["outages"] == [] and rep["capture"]["restarts"] == []
+    plan = rep["clock"]["plan_md_capture_only"]
+    assert plan["lost_h"] == 0.0 and plan["covered_h"] == 2.0
+    # The gate rule counts the forecast job too, and this data dir has no forecast record.
+    assert rep["clock"]["lost_h"] == 2.0 and rep["clock"]["by_job"]["forecast"]["lost_h"] == 2.0
 
 
 def test_poll_gaps_are_measured_on_send_times(tmp_path: Path) -> None:
@@ -419,6 +425,133 @@ def test_rolling_hour_count_in_the_report(tmp_path: Path) -> None:
     assert most["window_from_utc"] == z(at(100) - timedelta(milliseconds=200))
 
 
+def test_provable_spans_and_floor_ms() -> None:
+    a, b, c = (Request(at(s), at(s), at(s + 0.5)) for s in (0.0, 300.0, 600.2))
+    assert provable_spans([c, a, b], 2) == [(299.5, a, b), (299.7, b, c)]  # in send order
+    assert provable_spans([c, a, b], 3) == [(599.7, a, c)]
+    assert provable_spans([a, b], 3) == [] and provable_spans([], 2) == []
+    with pytest.raises(ValueError, match="at least 2"):
+        provable_spans([a, b], 1)
+    # A request whose send cannot be placed (earliest None) proves nothing as a run's last.
+    d = Request(at(900.0), None, at(900.5))
+    assert provable_spans([a, b, c, d], 2)[-1] == (None, c, d)
+    assert provable_spans([d, a], 2) == [(None, a, d)]  # still ordered by the scheduler's send
+    # Rounded down, so a bound never shows above its value (299.9996 s is not 300.000 s), and
+    # 1 us short of 300 s is under it (the allowance absorbs float error, not microseconds).
+    assert floor_ms(299.9996) == 299.999 and floor_ms(299.59) == 299.59 and floor_ms(300.0) == 300.0
+    assert floor_ms(299.999999) == 299.999
+
+
+def test_poll_gaps_at_nps_run_from_the_previous_answer(tmp_path: Path) -> None:
+    """The lead's rule (20 Nov): nps.gov saw two polls at least earliest(N+1) - latest(N)
+    apart. Review finding: the stamps are milliseconds, so the bounds widen by what the stamp
+    can hide. latest = answered_at (rounded up by capture), else t + 1 ms (t is written after
+    the answer but truncated); earliest = sent_at (truncated, before the send), else
+    t - elapsed_ms - 0.05 ms (elapsed_ms is rounded to 0.1 ms). Exactly 300 s is not under."""
+    data = Data(tmp_path / "d")
+    data.capture(
+        *passes_every(20, 7200),
+        poll(at(100.0), ACADIA, elapsed_ms=50.0),  # latest 100.001 (t + 1 ms)
+        # earliest 400.0 (sent_at): 299.999 s, under (it was 300.0 s on t alone)
+        poll(at(401.0), ACADIA, sent_at=z(at(400.0)), answered_at=z(at(400.9))),
+        poll(at(701.3), ACADIA, sent_at=z(at(700.9)), answered_at=z(at(701.2))),  # 300.0, not
+        # earliest 1002.0 - 0.8 - 0.00005 = 1001.19995: 299.99995 s after 701.2, under
+        poll(at(1002.0), ACADIA, elapsed_ms=800.0),
+        poll(at(1302.5), ACADIA, elapsed_ms=0.0),  # earliest 1302.49995: 300.499 s after 1002.001
+    )
+    row = report(data)["capture"]["viewpoints"][ACADIA]
+    assert row["poll_gap_at_nps"] == {
+        "measured": 4,
+        "shortest": {
+            "s": 299.999,
+            "first_answer_bound_utc": z(at(100.001)),
+            "last_send_bound_utc": z(at(400.0)),
+        },
+        "unproven": 2,
+        "under_limit": 2,
+        "unbounded": 0,
+        "limit_s": 300.0,
+    }
+    # Send to send (the scheduler's sends: sent_at, else t - elapsed_ms), never under 300.05 s.
+    assert row["poll_gap_s"]["shortest_on_send_times"]["s"] == 300.05
+
+
+def test_a_request_without_sent_at_or_elapsed_ms_proves_nothing(tmp_path: Path) -> None:
+    """Review finding: a poll logged with no sent_at and no elapsed_ms (here a 30 s
+    ReadTimeout) was placed at its t, after its answer, so its gap at nps.gov came out 329.9 s
+    though nps.gov can have seen it 299.9 s after the previous answer. Such a pair is now
+    unbounded, and unproven; the send-to-send column still places it at t."""
+    data = Data(tmp_path / "d")
+    timeout = cap(
+        at(430.0), "request", ACADIA, stage="json", method="GET", status=None, error="ReadTimeout"
+    )  # sent at 400.0 in truth, 299.9 s after the first poll's answer (100.1)
+    data.capture(
+        *passes_every(20, 7200),
+        poll(at(100.1), ACADIA, elapsed_ms=100.0),
+        timeout,
+        poll(at(800.1), ACADIA, elapsed_ms=100.0),  # earliest 799.99995: 369.999 s after 430.001
+        poll(at(1200.0), ACADIA, elapsed_ms=-1.0),  # not a duration: no bound either
+        poll(at(1600.0), ACADIA, elapsed_ms=True),  # a bool is not a number
+        poll(at(2000.0), ACADIA, elapsed_ms="100.0"),
+    )
+    rep = report(data)
+    row = rep["capture"]["viewpoints"][ACADIA]
+    nps = row["poll_gap_at_nps"]
+    assert (nps["measured"], nps["unproven"], nps["under_limit"], nps["unbounded"]) == (5, 4, 0, 4)
+    # The one pair with a bound runs from the timeout's answer (t + 1 ms) to the next send.
+    assert nps["shortest"] == {
+        "s": 369.998,
+        "first_answer_bound_utc": z(at(430.001)),
+        "last_send_bound_utc": z(at(799.99995)),
+    }
+    assert row["poll_gap_s"]["shortest_on_send_times"]["s"] == 330.0  # the timeout placed at t
+    text = format_report(rep)
+    assert f"{ACADIA:<28}{5:>11}{'369.998 s':>13}{4:>10}" in text
+    assert f"  {ACADIA}: 4 poll pairs and 0 GET windows are unproven because a request's send" in (
+        text
+    )
+
+
+def test_image_get_spans_at_nps_cover_five_consecutive_gets(tmp_path: Path) -> None:
+    """Send times keep 5 GETs 3600.05 s apart, but the first took 0.2 s to answer, so nps.gov
+    may have seen all 5 within 3599.849 s (the bounds widened for the millisecond stamps):
+    within the rule on send times, not provably at nps.gov. A span of exactly 3600 s is not
+    under the rolling hour."""
+    data = Data(tmp_path / "d")
+    sends = [100.0, 1000.0, 1900.0, 2800.0, 3700.05]  # every GET answers 0.2 s later
+    data.capture(
+        *passes_every(20, 7200),
+        *(get(at(s + 0.2), REYES) for s in sends),
+        get(at(4600.4), REYES, sent_at=z(at(4600.201))),  # 3600.0 s after 1000.201
+    )
+    row = report(data)["capture"]["viewpoints"][REYES]
+    assert row["max_image_gets_in_rolling_hour"]["count"] == 4
+    assert row["max_image_gets_in_rolling_hour"]["within_rule"] is True
+    assert row["image_gets_at_nps"] == {
+        "measured": 2,
+        "shortest": {  # 3700.05 - 0.00005 - (100.2 + 0.001) = 3599.84895, rounded down
+            "s": 3599.848,
+            "first_answer_bound_utc": z(at(100.201)),
+            "last_send_bound_utc": z(at(3700.04995)),
+        },
+        "unproven": 1,  # the second window, 4600.201 - 1000.201 = 3600.0 s, is not under
+        "under_limit": 1,
+        "unbounded": 0,
+        "limit_s": 3600.0,
+    }
+    rep = report(data)
+    bases = rep["rules"]["bases"]
+    assert bases["image_gets_at_nps"].startswith("earliest receipt of the 5th - latest receipt")
+    assert "else t + 1 ms" in bases["latest_receipt"]
+    assert "else t - elapsed_ms - 0.05 ms" in bases["earliest_receipt"]
+    text = format_report(rep)
+    assert "Polite collection at nps.gov (PRD §15.3)" in text
+    assert f"{REYES:<28}{0:>11}{'-':>13}{0:>10}{2:>16}{'3599.848 s':>14}{1:>10}" in text
+    assert "least gap = the next poll's earliest receipt - the previous poll's latest" in text
+    assert "unproven: not provably 300 s (3600 s for 5 GETs) apart" in text
+    assert "longest gap and min send gap are send to send" in text
+
+
 def test_capture_outages_extend_the_clock(tmp_path: Path) -> None:
     data = Data(tmp_path / "d")
     # Passes every 300 s, a 2 h hole (the Mac asleep), passes again, then nothing for 1000 s.
@@ -439,12 +572,20 @@ def test_capture_outages_extend_the_clock(tmp_path: Path) -> None:
     assert clock["covered_h"] == round((until_s - lost) / 3600, 3)
     assert clock["met"] is False
     assert clock["earliest_close_utc"] == z(at(72 * 3600 + lost))
-    assert clock["rule"].startswith("PLAN.md M0.5 gate")
+    assert clock["rule"].startswith("gate rule (the lead's decision of 20 Nov, settling D-061")
     assert clock["by_job"]["capture"]["lost_h"] == clock["lost_h"]
-    # A stand-in that wrote every run on time adds nothing to the both-jobs figure.
+    # A stand-in that wrote every run on time adds nothing: the gate rule is PLAN.md's figure.
     assert clock["by_job"]["forecast"]["lost_h"] == 0.0 and rep["forecast"]["outages"] == []
-    assert clock["both_jobs_proposed"]["lost_h"] == clock["lost_h"]
-    assert clock["both_jobs_proposed"]["rule"].startswith("proposed, not recorded")
+    plan = clock["plan_md_capture_only"]
+    assert plan["lost_h"] == clock["lost_h"] and plan["earliest_close_utc"] == z(
+        at(72 * 3600 + lost)
+    )
+    assert plan["rule"].startswith("PLAN.md's capture-only figure")
+    assert clock["parts_lost_h"] == {
+        "capture_outages": round(lost / 3600, 3),
+        "capture_restart_excess": 0.0,
+        "forecast_outages": 0.0,
+    }
     assert exclusion(rep, "outages", "capture outage")["count"] == 2
 
 
@@ -461,6 +602,7 @@ def test_a_capture_gap_straddling_since_loses_only_its_part_inside(tmp_path: Pat
 def test_the_clock_is_met_once_enough_is_covered(tmp_path: Path) -> None:
     data = Data(tmp_path / "d")
     data.capture(*passes_every(10, 3611), *passes_every(5410, 14400))
+    healthy_forecast(data, at(14400))
     rep = report(data, hours=4.0, options=ReportOptions(clock_hours=2.0))
     # Lost: 3610 + 300 .. 5410 = 1500 s, so 2 h are covered at 7200 + 1500 s.
     assert rep["clock"]["met"] is True
@@ -524,6 +666,308 @@ def test_a_loop_stopped_record_without_a_version_change_is_a_restart(tmp_path: P
     assert rows[0]["stopped_after_utc"] == z(at(1900)) and rows[0]["an_outage"] is True
     assert rows[0]["evidence"] == [f"loop_stopped at {z(at(1900))}: KeyboardInterrupt"]
     assert [(r["gap_s"], r["lost_s"]) for r in rep["capture"]["outages"]] == [(1200.0, 900.0)]
+
+
+def _restart_like_20_nov(data: Data, *, until_s: float = 7200.0) -> None:
+    """The 02:39 restart's shape (D-049): the old loop polls 3 cameras every 300 s, the last
+    pass starting at 1500 s; the new loop's first pass, at 1660 s, finds every camera not yet
+    due; its next pass, at 1985 s, polls them 485.0, 486.0 and 486.5 s after their last polls
+    (send to send: every poll's send is its t - 100 ms)."""
+    records = []
+    for s in range(0, 1501, 300):  # the old loop, capture 0.1.0
+        records += [poll(at(s + 1.0), ACADIA), poll(at(s + 2.0), RAINIER), poll(at(s + 3.0), REYES)]
+        records.append(pass_(at(s + 10.0)))
+    records.append(pass_(at(1660.01), duration=0.01, capture_version=V2))  # polls nothing
+    s = 1985.0
+    while s + 10.0 < until_s:  # the new loop, capture 0.2.0, every 325 s
+        records += [
+            poll(at(s + 1.0), ACADIA, capture_version=V2),
+            poll(at(s + 3.0), RAINIER, capture_version=V2),
+            poll(at(s + 4.5), REYES, capture_version=V2),
+            pass_(at(s + 10.0), capture_version=V2),
+        ]
+        s += 325.0
+    data.capture(*sorted(records, key=lambda r: r["t"]))
+
+
+def test_a_restart_s_excess_is_the_longest_camera_gap_less_one_interval(tmp_path: Path) -> None:
+    """The lead's gate rule (20 Nov, settling D-061): a restart loses the longest any camera
+    went from its last poll before it to its first after, less one 300 s interval. Passes
+    150 s apart are no outage, so PLAN.md's capture-only figure loses nothing."""
+    data = Data(tmp_path / "d")
+    _restart_like_20_nov(data)
+    healthy_forecast(data, at(7200))
+    rep = report(data)
+    (row,) = rep["capture"]["restarts"]
+    assert row["an_outage"] is False and row["pass_gap_s"] == 150.01
+    assert row["poll_gaps_s"] == {ACADIA: 485.0, RAINIER: 486.0, REYES: 486.5}
+    assert row["longest_poll_gap"] == {
+        "viewpoint_id": REYES,
+        "s": 486.5,
+        "from_utc": z(at(1502.9)),
+        "to_utc": z(at(1989.4)),
+        "ongoing": False,
+    }
+    assert row["excess_s"] == 186.5 and row["lost_s"] == 186.5
+    assert rep["capture"]["outages"] == []
+    clock = rep["clock"]
+    excess_h = round(186.5 / 3600, 3)
+    assert clock["lost_h"] == excess_h and clock["by_job"]["capture"]["lost_h"] == excess_h
+    assert clock["parts_lost_h"]["capture_restart_excess"] == excess_h
+    assert clock["earliest_close_utc"] == z(at(72 * 3600 + 186.5))
+    assert clock["plan_md_capture_only"]["lost_h"] == 0.0
+    assert clock["plan_md_capture_only"]["earliest_close_utc"] == z(at(72 * 3600))
+    excess = exclusion(rep, "outages", "capture restart excess")
+    assert excess["refs"] == [
+        {"start": z(at(1502.9)), "end": z(at(1989.4)), "lost_s": 186.5, "viewpoint_id": REYES}
+    ]
+    text = format_report(rep)
+    assert f"restart excess ({REYES}'s polls)" in text
+    assert "excess 186.500 s (polls 485.000-486.500 s apart across it, longest" in text
+
+
+def test_a_restart_that_is_also_an_outage_is_counted_once(tmp_path: Path) -> None:
+    """Passes 1200 s apart across a stop: the outage loses 1810+300 .. 3010 s; the restart's
+    excess, from the camera's polls (1801 .. 3001.9 s), overlaps it and adds only its edge."""
+    data = Data(tmp_path / "d")
+    records = []
+    for s in range(1800 - 300 * 6, 1801, 300):
+        records += [poll(at(s + 1.1), ACADIA), pass_(at(s + 10.0))]
+    records.append(cap(at(1900), "loop_stopped", None, error="KeyboardInterrupt"))
+    for s in range(3000, 7200, 300):
+        records += [poll(at(s + 2.0), ACADIA), pass_(at(s + 10.0))]
+    data.capture(*sorted(records, key=lambda r: r["t"]))
+    healthy_forecast(data, at(7200))
+    rep = report(data)
+    (row,) = rep["capture"]["restarts"]
+    assert row["an_outage"] is True and row["excess_s"] == 900.9  # 3001.9 - 1801.0 - 300
+    assert [(r["gap_s"], r["lost_s"]) for r in rep["capture"]["outages"]] == [(1200.0, 900.0)]
+    # Outage 2110 .. 3010 s, excess 2101 .. 3001.9 s: their union is 2101 .. 3010 s.
+    assert rep["clock"]["lost_h"] == round(909.0 / 3600, 3)
+    assert rep["clock"]["plan_md_capture_only"]["lost_h"] == round(900.0 / 3600, 3)
+    parts = rep["clock"]["parts_lost_h"]
+    assert parts["capture_outages"] == 0.25 and parts["capture_restart_excess"] == 0.25
+
+
+def test_a_restart_before_since_counts_its_excess_inside_the_window(tmp_path: Path) -> None:
+    data = Data(tmp_path / "d")
+    _restart_like_20_nov(data)
+    healthy_forecast(data, at(7200))
+    since = at(1700)  # after the new loop's first pass, before the excess (1802.9 .. 1989.4 s)
+    rep = build_report(data.root, since=since, until=at(7200), now=at(7200))
+    (row,) = rep["capture"]["restarts"]
+    assert row["started_utc"] == z(at(1660)) and row["lost_s"] == 186.5
+    assert rep["clock"]["parts_lost_h"]["capture_restart_excess"] == round(186.5 / 3600, 3)
+    # From 1900 s the excess is only partly inside: 1900 .. 1989.4 s.
+    later = build_report(data.root, since=at(1900), until=at(7200), now=at(7200))
+    assert later["capture"]["restarts"][0]["lost_s"] == 89.4
+    # From 2000 s it loses nothing inside the window, so it is not listed.
+    assert (
+        build_report(data.root, since=at(2000), until=at(7200), now=at(7200))["capture"]["restarts"]
+        == []
+    )
+
+
+def test_a_loop_stopped_record_before_since_still_marks_the_restart(tmp_path: Path) -> None:
+    """The only sign is a ``loop_stopped`` record before the window: the same version, pass
+    starts 300 s apart. The new loop's first pass (1800 s) polls nothing; Acadia's next poll
+    comes 625 s after its last, so the excess runs 1800.9 .. 2125.9 s, 225.9 s of it inside a
+    window from 1900 s."""
+    data = Data(tmp_path / "d")
+    records = []
+    for s in range(0, 1501, 300):
+        records += [poll(at(s + 1.0), ACADIA), pass_(at(s + 10.0))]
+    records.append(cap(at(1520), "loop_stopped", None, error="SIGTERM"))
+    records.append(pass_(at(1800.01), duration=0.01))
+    for s in range(2125, 7200, 325):
+        records += [poll(at(s + 1.0), ACADIA), pass_(at(s + 10.0))]
+    data.capture(*sorted(records, key=lambda r: r["t"]))
+    rep = build_report(data.root, since=at(1900), until=at(7200), now=at(7200))
+    (row,) = rep["capture"]["restarts"]
+    assert row["evidence"] == [f"loop_stopped at {z(at(1520))}: SIGTERM"]
+    assert row["stopped_after_utc"] == z(at(1520)) and row["an_outage"] is False
+    assert (row["excess_s"], row["lost_s"]) == (325.0, 225.9)
+
+
+def test_a_restart_with_no_poll_after_it_yet_is_measured_to_the_window_end(
+    tmp_path: Path,
+) -> None:
+    data = Data(tmp_path / "d")
+    _restart_like_20_nov(data, until_s=1900.0)  # the logs end before the new loop polls
+    # The window ends at 1900 s: the new loop has not polled yet (its next pass is at 1985 s).
+    rep = build_report(data.root, since=T0, until=at(1900), now=at(1900))
+    (row,) = rep["capture"]["restarts"]
+    gap = row["longest_poll_gap"]
+    assert gap["viewpoint_id"] == ACADIA and gap["ongoing"] is True  # the oldest last poll
+    assert gap["to_utc"] == z(at(1900)) and row["excess_s"] == 99.1  # 1900 - 1500.9 - 300
+    assert row["poll_gaps_s"] == {ACADIA: 399.1, RAINIER: 398.1, REYES: 397.1}
+    assert row["lost_s"] == row["excess_s"]
+    # Read later, the logs hold the next polls: the gap is the real one, and still ongoing at
+    # the window's end; only the part inside the window is lost.
+    data2 = Data(tmp_path / "e")
+    _restart_like_20_nov(data2)
+    rep2 = build_report(data2.root, since=T0, until=at(1900), now=at(7200))
+    gap2 = rep2["capture"]["restarts"][0]["longest_poll_gap"]
+    assert gap2["viewpoint_id"] == REYES and gap2["to_utc"] == z(at(1989.4))
+    assert gap2["ongoing"] is True and rep2["capture"]["restarts"][0]["lost_s"] == 97.1
+
+
+def _old_loop_then(
+    data: Data,
+    *new: dict[str, Any],
+    new_from: float,
+    until_s: float = 7200.0,
+    new_loop: Mapping[str, Any] | None = None,
+) -> None:
+    """The old loop (0.1.0, cli-loop) polls Acadia every 300 s, its last pass written at 1510 s
+    (its last record; the last poll sent at 1500.9 s); then ``new`` records, then the new loop
+    (``new_loop``'s fields, default capture 0.2.0) polling Acadia and passing every 300 s from
+    ``new_from``."""
+    fields = dict(new_loop or {"capture_version": V2})
+    records: list[dict[str, Any]] = []
+    for s in range(0, 1501, 300):
+        records += [poll(at(s + 1.0), ACADIA), pass_(at(s + 10.0))]
+    records += new
+    s = new_from
+    while s + 10.0 < until_s:
+        records += [poll(at(s + 1.0), ACADIA, **fields), pass_(at(s + 10.0), **fields)]
+        s += 300.0
+    data.capture(*sorted(records, key=lambda r: r["t"]))
+    healthy_forecast(data, at(until_s))
+
+
+def test_a_new_loop_that_polls_at_once_is_split_at_the_old_loop_s_last_record(
+    tmp_path: Path,
+) -> None:
+    """Review finding: the new loop's first pass start is its t less duration_s, rounded to
+    0.01 s, so a poll sent 1 ms after the pass began could fall before that start and count as
+    the old loop's. Here the pass began at 1660.000 s, polled Acadia at once (sent 1660.001 s)
+    and was written at 1660.504 s with duration 0.5 s ("started" 1660.004 s). Split at the old
+    loop's last record (1510 s), Acadia went 1500.9 -> 1660.001 s: 159.101 s, no excess."""
+    data = Data(tmp_path / "d")
+    _old_loop_then(
+        data,
+        poll(at(1660.101), ACADIA, capture_version=V2),
+        pass_(at(1660.504), duration=0.5, capture_version=V2),
+        new_from=1960.0,
+    )
+    rep = report(data)
+    (row,) = rep["capture"]["restarts"]
+    assert row["started_utc"] == z(at(1660.004)) and row["stopped_after_utc"] == z(at(1510.0))
+    assert row["poll_gaps_s"] == {ACADIA: 159.101}
+    assert (row["excess_s"], row["lost_s"]) == (0.0, 0.0)
+    assert rep["clock"]["parts_lost_h"]["capture_restart_excess"] == 0.0
+
+
+@pytest.mark.parametrize(
+    ("change", "new_loop"),
+    [("capture_version", {"capture_version": V2}), ("runner", {"runner": "lambda"})],
+)
+def test_a_new_loop_that_sleeps_in_its_first_pass_is_split_at_the_old_loop_s_last_record(
+    tmp_path: Path, change: str, new_loop: dict[str, Any]
+) -> None:
+    """Review finding: duration_s is on the monotonic clock, which does not count sleep. The
+    new loop polls Acadia at 1700.0 s, the Mac sleeps 900 s, and the pass is written at
+    2601.0 s with duration 1.1 s, so it seems to start at 2599.9 s, after that poll. The
+    changed version (or runner) tells the loops apart: the restart's gap for Acadia is
+    1500.9 -> 1700.0 s (no excess); the sleep is the outage between the passes (lost
+    1810 .. 2601 s), not excess on top of it (1810 .. 2900.9 s)."""
+    data = Data(tmp_path / "d")
+    _old_loop_then(
+        data,
+        poll(at(1700.1), ACADIA, **new_loop),
+        pass_(at(2601.0), duration=1.1, **new_loop),
+        new_from=2900.0,
+        new_loop=new_loop,
+    )
+    rep = report(data)
+    (row,) = rep["capture"]["restarts"]
+    assert row["evidence"][0].startswith(change)
+    assert row["poll_gaps_s"] == {ACADIA: 199.1}
+    assert (row["excess_s"], row["lost_s"]) == (0.0, 0.0)
+    outages = rep["capture"]["outages"]
+    assert [(r["start_utc"], r["end_utc"], r["lost_s"]) for r in outages] == [
+        (z(at(1510.0)), z(at(2601.0)), 791.0)
+    ]
+    assert rep["clock"]["lost_h"] == round(791.0 / 3600, 3)
+
+
+def test_a_restart_after_a_loop_stopped_record_is_split_at_the_stop(tmp_path: Path) -> None:
+    """The same version on both sides, so only the loop_stopped record (1520 s, the old loop's
+    last words) tells the loops apart; the new loop's first pass slept as above. Split at the
+    stop, Acadia went 1500.9 -> 1700.0 s; split at the computed start it would seem to go
+    1700.0 -> 2900.9 s."""
+    data = Data(tmp_path / "d")
+    records: list[dict[str, Any]] = []
+    for s in range(0, 1501, 300):
+        records += [poll(at(s + 1.0), ACADIA), pass_(at(s + 10.0))]
+    records += [
+        cap(at(1520.0), "loop_stopped", None, error="ForeignFetcherError: x"),
+        poll(at(1700.1), ACADIA),
+        pass_(at(2601.0), duration=1.1),
+    ]
+    for s in range(2900, 7200, 300):
+        records += [poll(at(s + 1.0), ACADIA), pass_(at(s + 10.0))]
+    data.capture(*sorted(records, key=lambda r: r["t"]))
+    healthy_forecast(data, at(7200))
+    (row,) = report(data)["capture"]["restarts"]
+    assert row["evidence"] == [f"loop_stopped at {z(at(1520.0))}: ForeignFetcherError: x"]
+    assert row["stopped_after_utc"] == z(at(1520.0))
+    assert row["poll_gaps_s"] == {ACADIA: 199.1} and row["excess_s"] == 0.0
+
+
+def test_the_old_loop_s_last_poll_is_before_the_restart(tmp_path: Path) -> None:
+    """The old loop is killed mid-pass right after polling Acadia (sent 1800.9 s), so that
+    poll is its last record; the new loop polls Acadia next at 2250.9 s. A poll written at the
+    split itself is the old loop's: the gap is 450.0 s, excess 150.0 s."""
+    data = Data(tmp_path / "d")
+    _old_loop_then(
+        data,
+        poll(at(1801.0), ACADIA),
+        pass_(at(1950.01), duration=0.01, capture_version=V2),  # polls nothing
+        new_from=2250.0,
+    )
+    (row,) = report(data)["capture"]["restarts"]
+    assert row["stopped_after_utc"] == z(at(1801.0)) and row["duration_s"] == 149.0
+    assert row["poll_gaps_s"] == {ACADIA: 450.0}
+    assert (row["excess_s"], row["lost_s"]) == (150.0, 150.0)
+
+
+def test_a_cli_once_poll_does_not_measure_a_restart(tmp_path: Path) -> None:
+    """Review finding (no test pinned it): only the scheduled runners' polls are the
+    continuous record, as everywhere in the report, so a ``lookout-capture once`` poll during
+    the restart does not shorten its gap (485.0 s from 1500.9 s, not 199.0 s)."""
+    data = Data(tmp_path / "d")
+    _old_loop_then(
+        data,
+        pass_(at(1660.01), duration=0.01, capture_version=V2),
+        poll(at(1700.0), ACADIA, runner="cli-once", capture_version=V2),
+        new_from=1985.0,
+    )
+    (row,) = report(data)["capture"]["restarts"]
+    assert row["poll_gaps_s"] == {ACADIA: 485.0} and row["excess_s"] == 185.0
+
+
+def test_a_camera_first_polled_after_a_restart_is_left_out(tmp_path: Path) -> None:
+    """Review finding (no test pinned it): a camera the old loop never polled has no gap
+    across the restart; only Acadia's counts."""
+    data = Data(tmp_path / "d")
+    _old_loop_then(
+        data,
+        pass_(at(1660.01), duration=0.01, capture_version=V2),
+        poll(at(1987.0), REYES, capture_version=V2),
+        new_from=1985.0,
+    )
+    (row,) = report(data)["capture"]["restarts"]
+    assert row["poll_gaps_s"] == {ACADIA: 485.0}
+    assert row["longest_poll_gap"]["viewpoint_id"] == ACADIA
+
+
+def test_pass_starts_exactly_295_s_apart_are_one_loop(tmp_path: Path) -> None:
+    """Pass starts under 295 s apart mark a restart; exactly 295 s is not under."""
+    data = Data(tmp_path / "d")
+    data.capture(pass_(at(10.0)), pass_(at(305.0)), *passes_every(610, 7200))
+    assert report(data)["capture"]["restarts"] == []
 
 
 def test_one_loop_with_jitter_is_not_a_restart(tmp_path: Path) -> None:
@@ -887,10 +1331,11 @@ def test_late_runs_are_a_forecast_outage_until_the_next_run_written(tmp_path: Pa
     assert rep["forecast"]["runs_late"] == ["2026111913", "2026111914"]
     late_flags = {r["run"]: r["late"] for r in rep["forecast"]["runs"]}
     assert late_flags["2026111913"] and not late_flags["2026111912"]
-    # Capture ran throughout: PLAN.md's clock lost nothing; the both-jobs figure is the forecast's.
+    # Capture ran throughout: PLAN.md's figure lost nothing; the gate rule's is the forecast's.
     clock = rep["clock"]
-    assert clock["lost_h"] == 0.0 and clock["by_job"]["capture"]["lost_h"] == 0.0
-    assert clock["both_jobs_proposed"]["lost_h"] == clock["by_job"]["forecast"]["lost_h"] > 0
+    assert clock["plan_md_capture_only"]["lost_h"] == 0.0
+    assert clock["by_job"]["capture"]["lost_h"] == 0.0
+    assert clock["lost_h"] == clock["by_job"]["forecast"]["lost_h"] > 0
     assert KIND_LATE in format_report(rep)
     assert exclusion(rep, "outages", "forecast outage")["count"] == 1
 
@@ -995,8 +1440,8 @@ def test_a_stand_in_dead_since_before_the_window_is_an_ongoing_outage(tmp_path: 
         for r in forecast["outages"]
     ] == [(KIND_LATE, z(hour(12) + timedelta(seconds=3300)), z(until), 5 * 3600.0, True, True)]
     clock = rep["clock"]
-    assert clock["by_job"]["forecast"]["lost_h"] == 5.0 and clock["lost_h"] == 0.0
-    assert clock["both_jobs_proposed"]["lost_h"] == 5.0
+    assert clock["by_job"]["forecast"]["lost_h"] == 5.0
+    assert clock["plan_md_capture_only"]["lost_h"] == 0.0 and clock["lost_h"] == 5.0
     assert forecast["cycles_waiting"] == ["2026111917"]  # due 17:55, not overdue at 18:00
 
 
@@ -1012,7 +1457,8 @@ def test_no_live_run_in_the_logs_loses_the_whole_window(tmp_path: Path) -> None:
     ]
     assert forecast["records_counted"] == {"error": 1}
     assert forecast["lag_for_cycles_never_written"]["source"].startswith("D-027")
-    assert rep["clock"]["lost_h"] == 0.0 and rep["clock"]["both_jobs_proposed"]["covered_h"] == 0.0
+    assert rep["clock"]["plan_md_capture_only"]["lost_h"] == 0.0
+    assert rep["clock"]["covered_h"] == 0.0
     # With no forecast record at all, the same.
     empty = Data(tmp_path / "e")
     empty.capture(*passes_every(20, 7200))
@@ -1041,14 +1487,15 @@ def test_union_counts_an_overlap_once(tmp_path: Path) -> None:
     hourly_runs(data, cycles(SCAN_FROM, hour(16)), late={hour(14): 3632.0, hour(15): 27.0})
     rep = report(data, hours=5.0)
     clock = rep["clock"]
-    assert clock["lost_h"] == round(6917 / 3600, 3)
+    plan = clock["plan_md_capture_only"]
+    assert plan["lost_h"] == round(6917 / 3600, 3)
     assert clock["by_job"]["forecast"]["lost_h"] == round(3330 / 3600, 3)
-    both = clock["both_jobs_proposed"]
-    assert both["lost_h"] == round(8447 / 3600, 3)  # 13:34:43-15:55:30, not 6917 + 3330 s
-    assert both["earliest_close_utc"] == z(at(72 * 3600 + 8447))
-    assert clock["earliest_close_utc"] == z(at(72 * 3600 + 6917))
+    assert clock["lost_h"] == round(8447 / 3600, 3)  # 13:34:43-15:55:30, not 6917 + 3330 s
+    assert clock["earliest_close_utc"] == z(at(72 * 3600 + 8447))
+    assert plan["earliest_close_utc"] == z(at(72 * 3600 + 6917))
     text = format_report(rep)
-    assert "72 h clock (PLAN.md M0.5 gate" in text and "both jobs (proposed" in text
+    assert "72 h clock, gate rule (the lead's of 20 Nov" in text
+    assert "PLAN.md's capture-only figure" in text and "forecast alone" in text
 
 
 # --- reading ------------------------------------------------------------------------------------
@@ -1125,7 +1572,7 @@ def test_cli_prints_json_or_a_table(
     out = tmp_path / "report.json"
     assert cli.main([*args, "--json", str(out), "--capture-gap-s", "600"]) == 0
     text = capsys.readouterr().out
-    assert "72 h clock (PLAN.md M0.5 gate" in text and "2.00 h covered" in text
+    assert "72 h clock, gate rule" in text and "2.00 h covered" in text  # PLAN.md's figure
     assert "Exclusions" in text
     assert json.loads(out.read_text())["rules"]["capture_outage_gap_s"] == 600.0
     assert cli.main(["data-report", "--since", z(T0), "--until", z(T0)]) == 2
