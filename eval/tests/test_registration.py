@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from lookout_eval.registration import estimate_shift
+from snow_globe_eval.registration import estimate_shift
 
 
 def _texture(width: int = 720, height: int = 480, seed: int = 7) -> np.ndarray:

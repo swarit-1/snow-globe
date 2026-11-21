@@ -1,4 +1,5 @@
-"""Shared fixtures: clean LOOKOUT_* environment, a temp data dir, real manifests, a fake bucket."""
+"""Shared fixtures: a clean SNOW_GLOBE_* environment, a temp data dir, real manifests, a fake
+bucket."""
 
 from __future__ import annotations
 
@@ -8,11 +9,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from lookout_common.manifest import load_manifests
-from lookout_common.storage import LocalStorage
+from snow_globe_common.manifest import load_manifests
+from snow_globe_common.storage import LocalStorage
 
-from lookout_forecast.bucket import HrrrBucket
-from lookout_forecast.grid import HRRR_CONUS
+from snow_globe_forecast.bucket import HrrrBucket
+from snow_globe_forecast.grid import HRRR_CONUS
 
 from .fakebucket import FakeBucket, sub_grid
 
@@ -27,19 +28,19 @@ RAINIER = "rainier.paradise-mountain"
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Drop LOOKOUT_*, AWS_* and HERBIE_* variables from the developer's shell."""
+    """Drop SNOW_GLOBE_*, LOOKOUT_* (deprecated names), AWS_* and HERBIE_* shell variables."""
     for name in list(os.environ):
-        if name.startswith(("LOOKOUT_", "AWS_", "HERBIE_")):
+        if name.startswith(("SNOW_GLOBE_", "LOOKOUT_", "AWS_", "HERBIE_")):
             monkeypatch.delenv(name, raising=False)
-    monkeypatch.setenv("LOOKOUT_MANIFEST_DIR", str(MANIFESTS))
+    monkeypatch.setenv("SNOW_GLOBE_MANIFEST_DIR", str(MANIFESTS))
 
 
 @pytest.fixture
 def data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A fresh data dir, exported as LOOKOUT_DATA_DIR."""
-    root = tmp_path / "lookout-data"
+    """A fresh data dir, exported as SNOW_GLOBE_DATA_DIR."""
+    root = tmp_path / "snow-globe-data"
     root.mkdir()
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(root))
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(root))
     return root
 
 

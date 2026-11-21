@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from synth import START, VP, hourly_records, label_by, make_store
 
-from lookout_eval.baselines import (
+from snow_globe_eval.baselines import (
     AnalogWeights,
     DevCase,
     RaySample,
@@ -22,8 +22,8 @@ from lookout_eval.baselines import (
     s_rule,
     state_is_visible,
 )
-from lookout_eval.frames import FrameRecord
-from lookout_eval.leakage import HeldOut, LeakageError
+from snow_globe_eval.frames import FrameRecord
+from snow_globe_eval.leakage import HeldOut, LeakageError
 
 TZ = "America/Los_Angeles"
 

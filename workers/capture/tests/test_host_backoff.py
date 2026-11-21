@@ -7,11 +7,11 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
-from lookout_common.storage import LocalStorage
+from snow_globe_common.storage import LocalStorage
 
-from lookout_capture.archive_queue import make_entry
-from lookout_capture.host_backoff import HOST_STATE_KEY, extend_host_hold, host_hold_until
-from lookout_capture.state import parse_time
+from snow_globe_capture.archive_queue import make_entry
+from snow_globe_capture.host_backoff import HOST_STATE_KEY, extend_host_hold, host_hold_until
+from snow_globe_capture.state import parse_time
 
 from .conftest import fixture_json
 from .test_archive import _client

@@ -71,6 +71,12 @@ class DocsInvariants(unittest.TestCase):
     def test_ci_runs_every_make_test_suite(self) -> None:
         self.assert_clean("ci-suites")
 
+    def test_no_command_creates_the_new_data_folder_early(self) -> None:
+        self.assert_clean("data-dir-commands")
+
+    def test_no_old_name_outside_the_deliberate_keeps(self) -> None:
+        self.assert_clean("old-names")
+
     def test_every_check_has_a_test(self) -> None:
         names = {
             "links",
@@ -89,6 +95,8 @@ class DocsInvariants(unittest.TestCase):
             "notices",
             "appendix-a",
             "ci-suites",
+            "data-dir-commands",
+            "old-names",
         }
         self.assertEqual(set(doccheck.CHECKS), names)
 

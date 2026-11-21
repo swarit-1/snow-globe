@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import pytest
-from lookout_common.manifest import great_circle_km, initial_bearing_deg
+from snow_globe_common.manifest import great_circle_km, initial_bearing_deg
 
-from lookout_forecast.grid import HRRR_CONUS
-from lookout_forecast.points import destination, flat_indices, sample_points
+from snow_globe_forecast.grid import HRRR_CONUS
+from snow_globe_forecast.points import destination, flat_indices, sample_points
 
 from .conftest import RAINIER
 

@@ -3,12 +3,12 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleIdentifier</key>
-  <string>dev.lookout.spike-m1</string>
+  <string>dev.snowglobe.spike-m1</string>
   <key>LSUIElement</key>
   <true/>
   <key>NSMicrophoneUsageDescription</key>
-  <string>The Lookout M1 spike opens the microphone while you hold the hotkey to time audio capture and on-device dictation. Audio is never stored or sent.</string>
+  <string>The Snow Globe M1 spike opens the microphone while you hold the hotkey to time audio capture and on-device dictation. Audio is never stored or sent.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
-  <string>The Lookout M1 spike checks that on-device dictation returns partial results. Audio and text are never stored or sent.</string>
+  <string>The Snow Globe M1 spike checks that on-device dictation returns partial results. Audio and text are never stored or sent.</string>
 </dict>
 </plist>

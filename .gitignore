@@ -22,9 +22,9 @@ client_secret*.json
 .pypirc
 .claude/settings.local.json
 
-# Data lives outside the repo, under $LOOKOUT_DATA_DIR (CLAUDE.md "Data"). These catch strays:
+# Data lives outside the repo, under $SNOW_GLOBE_DATA_DIR (CLAUDE.md "Data"). These catch strays:
 # voice fixtures, camera frames, plates, thumbnails, renders and traces (PRD §9.1, §15.1).
-# The owner's voice recordings belong in $LOOKOUT_DATA_DIR/fixtures/voice/ (PRD §12, §15.2), so
+# The owner's voice recordings belong in $SNOW_GLOBE_DATA_DIR/fixtures/voice/ (PRD §12, §15.2), so
 # a fixtures/voice/ or fixtures/audio/ folder is ignored at any depth (bench/, app/, ...), and so is
 # every common raw or compressed audio format a speech harness writes.
 **/fixtures/audio/
@@ -34,7 +34,7 @@ data/archive/
 data/plates/
 data/thumbs/
 data/traces/
-# lookout-core writes traces to $LOOKOUT_DATA_DIR/traces/ and refuses a data dir inside a git
+# snow-globe-core writes traces to $SNOW_GLOBE_DATA_DIR/traces/ and refuses a data dir inside a git
 # work tree; this catches one at the root. Anchored, so source or fixture folders named traces
 # (app/core/src/traces/, renderer/test/traces/) stay visible.
 /traces/
@@ -54,7 +54,7 @@ data/traces/
 *.webm
 *.weba
 
-# Forecast downloads belong in $LOOKOUT_DATA_DIR/cache, never in the repo. Partial and subset
+# Forecast downloads belong in $SNOW_GLOBE_DATA_DIR/cache, never in the repo. Partial and subset
 # downloads (*.grib2.part, *.subset.grib2) are covered; .idx inventories are small text fixtures.
 *.grib
 *.grib2

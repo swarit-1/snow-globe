@@ -1,4 +1,4 @@
-# Lookout: one entry point for tests, benchmarks, the backtest, scoring and the worker commands
+# Snow Globe: one entry point for tests, benchmarks, the backtest, scoring and the worker commands
 # (PRD §12: one Make target each for test, bench, backtest and score; CLAUDE.md "Commands").
 #
 # `make help` lists every target with one line each.
@@ -38,7 +38,7 @@
 #
 # Targets marked NETWORK in `make help` do contact NPS or NOAA. They are never part of `make test`.
 # The NPS ones (capture-*, archive-check) must never run while another NPS fetcher runs, such as
-# the lead's `lookout-capture loop`: every lookout-capture command except `status` takes a
+# the lead's `snow-globe-capture loop`: every snow-globe-capture command except `status` takes a
 # host-wide lock and exits with status 3 ("refused, another fetcher is active") before sending
 # anything (CLAUDE.md "Polite collection", D-021, D-023). The NOAA ones (forecast-latest,
 # forecast-tick) must never run while the lead's local forecast stand-in runs: until the AWS jobs
@@ -57,9 +57,28 @@ TERRAFORM ?= terraform
 # The docs checks use the standard library only, so any python3 >= 3.9 runs them in isolated mode.
 PYTHON ?= python3
 
+# The data dir, resolved as the workers resolve it (workers/common's paths.data_dir, D-080):
+# $SNOW_GLOBE_DATA_DIR, else the deprecated $LOOKOUT_DATA_DIR (blank counts as unset), else
+# ~/snow-globe-data if it exists, else ~/lookout-data if it exists (the folder's name before the
+# rename), else ~/snow-globe-data. Symlinks are followed (`test -e`; $(wildcard) would also match
+# a dangling one) and nothing is created. While both folders exist and are different folders
+# (something made ~/snow-globe-data before the rename's live switch), every target except `help`
+# stops with an error, as the workers refuse then. The build caches below live under it.
+SG_DATA_DIR_NEW := $(HOME)/snow-globe-data
+SG_DATA_DIR_OLD := $(HOME)/lookout-data
+SG_DATA_DIR := $(or $(strip $(SNOW_GLOBE_DATA_DIR)),$(strip $(LOOKOUT_DATA_DIR)),$(shell \
+	new='$(SG_DATA_DIR_NEW)' old='$(SG_DATA_DIR_OLD)'; \
+	if [ -e "$$new" ] && [ -e "$$old" ] && ! [ "$$new" -ef "$$old" ]; then echo AMBIGUOUS; \
+	elif [ -e "$$new" ] || [ ! -e "$$old" ]; then echo "$$new"; else echo "$$old"; fi))
+ifeq ($(SG_DATA_DIR),AMBIGUOUS)
+ifneq ($(filter-out help,$(or $(MAKECMDGOALS),help)),)
+$(error both $(SG_DATA_DIR_NEW) and $(SG_DATA_DIR_OLD) exist and are different folders, so the data dir is ambiguous (D-080): until the rename's live switch the data is in $(SG_DATA_DIR_OLD), and after it $(SG_DATA_DIR_OLD) is a symlink to $(SG_DATA_DIR_NEW). Set SNOW_GLOBE_DATA_DIR to the folder you mean, and tell the lead which one is stray)
+endif
+endif
+
 # Rust build output stays out of the iCloud-synced repo (CLAUDE.md "Rust"). Exported, so every
 # cargo call made from here (including maturin building oculus-core for eval) uses it.
-export CARGO_TARGET_DIR ?= $(or $(LOOKOUT_DATA_DIR),$(HOME)/lookout-data)/cache/cargo-target
+export CARGO_TARGET_DIR ?= $(SG_DATA_DIR)/cache/cargo-target
 
 # iCloud sets the `hidden` flag on the venvs' .pth files and Python 3.13 skips hidden .pth files,
 # so every Python command imports the sources through PYTHONPATH (CLAUDE.md "Python").
@@ -89,7 +108,7 @@ OFFLINE_ENV ?= HTTP_PROXY=$(DEAD_PROXY) HTTPS_PROXY=$(DEAD_PROXY) ALL_PROXY=$(DE
 TEST_SUITES ?= common capture forecast eval renderer rust speech infra docs bench
 LAPTOP_ONLY_SUITES := speech
 
-# How infra/test.sh installs the Terraform provider (LOOKOUT_TF_INIT, infra/tf_providers.sh): auto
+# How infra/test.sh installs the Terraform provider (SNOW_GLOBE_TF_INIT, infra/tf_providers.sh): auto
 # (offline from the plugin cache when it matches the lock file, else the registry), offline (never
 # the registry; fails at once if the cache can't serve) or registry (always the registry).
 TF_INIT ?= auto
@@ -124,13 +143,13 @@ endef
 
 # app/speech-macos (Swift 6.2, macOS 26): `swift test`, with the build output outside the
 # iCloud-synced repo, where the package's README puts it, then `scripts/build.sh --no-test` (D-075;
-# about 10 s on top of an existing build). build.sh always builds under
-# ${LOOKOUT_DATA_DIR:-$HOME/lookout-data}/cache/speech-macos, whatever SPEECH_SCRATCH says, and
+# about 10 s on top of an existing build). build.sh always builds under <data dir>/cache/speech-macos
+# (the data dir resolved as SG_DATA_DIR is, by build.sh itself), whatever SPEECH_SCRATCH says, and
 # deletes the temporary folders it makes under $TMPDIR. Both steps run, and either failing fails
 # the suite. Off macOS, or without the Xcode tools (checked with `xcode-select -p`, because the
 # /usr/bin/swift shim would offer to install them in a window), the suite prints SKIP and passes.
 SWIFT ?= swift
-SPEECH_SCRATCH ?= $(or $(LOOKOUT_DATA_DIR),$(HOME)/lookout-data)/cache/speech-macos
+SPEECH_SCRATCH ?= $(SG_DATA_DIR)/cache/speech-macos
 # Extra `swift test` options, such as --filter (none by default).
 SWIFT_TEST_ARGS ?=
 
@@ -153,30 +172,32 @@ BENCH_CHECKS = rc=0; \
 
 # Run from workers/common: the viewpoint manifests against the JSON schema.
 VIEWPOINTS_CHECK = echo "== viewpoints: manifests against the schema" && \
-	PYTHONPATH=$(PYPATH_common) $(UV) run --no-sync lookout-viewpoints-check ../../viewpoints/manifests
+	PYTHONPATH=$(PYPATH_common) $(UV) run --no-sync snow-globe-viewpoints-check ../../viewpoints/manifests
 
 # Worker commands (NETWORK unless the target says otherwise).
-CAPTURE_RUN = cd $(DIR_capture) && PYTHONPATH=$(PYPATH_capture) $(UV) run --locked lookout-capture
+CAPTURE_RUN = cd $(DIR_capture) && PYTHONPATH=$(PYPATH_capture) $(UV) run --locked snow-globe-capture
 CAPTURE_ARGS ?=
 ARCHIVE_CHECK_ARGS ?=
 
 # The light forecast profile, the same as the lead's local stand-in for the forecast Lambda
-# (~/lookout-data/cache/runtime/bin/forecast_loop.sh, D-030) since 02:39 UTC on 20 Nov: 8 fields
+# (<data dir>/cache/runtime/bin/forecast_loop.sh, D-030) since 02:39 UTC on 20 Nov: 8 fields
 # (the 7 of 19 Nov plus PRES:cloud base, D-026), f00-f02, at most 40 MB of GRIB per run. Measured:
 # 23.8-25.0 MB of GRIB for each of the 19 runs the stand-in extracted with it on 20 Nov (its
 # forecast_log run events, up to 08:57 UTC). Keep it the stand-in's: with fewer fields, a run that
 # a target here extracts first is extracted again by the stand-in; with more, the target extracts
 # again what the stand-in wrote. Either way that run is downloaded twice and its run and lag events
 # are logged twice (workers/forecast/README.md, "Field-set changes"). Each value can be overridden
-# from the environment or the command line. Without them the CLI refuses a whole run (exit 4).
-LOOKOUT_FORECAST_FIELDS ?= VIS:surface,HGT:cloud ceiling,HGT:cloud base,PRES:cloud base,LCDC:low cloud layer,MCDC:middle cloud layer,HCDC:high cloud layer,HGT:surface
-LOOKOUT_FORECAST_MAX_FH ?= 2
-LOOKOUT_FORECAST_MAX_MB ?= 40
-FORECAST_PROFILE = LOOKOUT_FORECAST_FIELDS='$(LOOKOUT_FORECAST_FIELDS)' \
-	LOOKOUT_FORECAST_MAX_FH='$(LOOKOUT_FORECAST_MAX_FH)' LOOKOUT_FORECAST_MAX_MB='$(LOOKOUT_FORECAST_MAX_MB)'
+# from the environment or the command line, under the SNOW_GLOBE_ name or, as before the rename,
+# the LOOKOUT_ one (D-080). Without them the CLI refuses a whole run (exit 4).
+FORECAST_FIELDS_DEFAULT := VIS:surface,HGT:cloud ceiling,HGT:cloud base,PRES:cloud base,LCDC:low cloud layer,MCDC:middle cloud layer,HCDC:high cloud layer,HGT:surface
+SNOW_GLOBE_FORECAST_FIELDS ?= $(if $(LOOKOUT_FORECAST_FIELDS),$(LOOKOUT_FORECAST_FIELDS),$(FORECAST_FIELDS_DEFAULT))
+SNOW_GLOBE_FORECAST_MAX_FH ?= $(or $(LOOKOUT_FORECAST_MAX_FH),2)
+SNOW_GLOBE_FORECAST_MAX_MB ?= $(or $(LOOKOUT_FORECAST_MAX_MB),40)
+FORECAST_PROFILE = SNOW_GLOBE_FORECAST_FIELDS='$(SNOW_GLOBE_FORECAST_FIELDS)' \
+	SNOW_GLOBE_FORECAST_MAX_FH='$(SNOW_GLOBE_FORECAST_MAX_FH)' SNOW_GLOBE_FORECAST_MAX_MB='$(SNOW_GLOBE_FORECAST_MAX_MB)'
 FORECAST_RUN = cd $(DIR_forecast) && $(FORECAST_PROFILE) PYTHONPATH=$(PYPATH_forecast) $(UV) run --locked
 FORECAST_ARGS ?=
-# `lookout-forecast tick` options: --json, or --uncapped (refused by default without a per-run cap).
+# `snow-globe-forecast tick` options: --json, or --uncapped (refused by default without a per-run cap).
 FORECAST_TICK_ARGS ?=
 # Until the AWS jobs are live, the lead's local stand-in (D-030) is the only writer of forecast/hrrr/
 # and forecast_log/. forecast-latest and forecast-tick write both too (files, run and lag events),
@@ -193,11 +214,11 @@ FORECAST_GUARD = if [ -n '$(FORECAST_STANDIN_RE)' ] && pgrep -f '$(FORECAST_STAN
 	echo "  forecast/hrrr/ and forecast_log/ (D-030). FORECAST_STANDIN_RE= skips this check." >&2; \
 	exit 5; fi
 
-# The backtest pair (eval/README.md): the forecast group brings lookout-forecast for --forecast auto.
+# The backtest pair (eval/README.md): the forecast group brings snow-globe-forecast for --forecast auto.
 EVAL_RUN = cd $(DIR_eval) && PYTHONPATH=$(PYPATH_eval):../workers/forecast/src $(UV) run --locked
 BACKTEST_ARGS ?=
 EPHEM_ARGS ?=
-# `lookout-eval data-report` options: --since/--until ISO times, --json [PATH], the gap thresholds.
+# `snow-globe-eval data-report` options: --since/--until ISO times, --json [PATH], the gap thresholds.
 DATA_REPORT_ARGS ?=
 BENCH_ROUNDS ?=
 
@@ -211,7 +232,7 @@ BENCH_ROUNDS ?=
 ##@ General
 
 help: ## List every target with one line each
-	@echo "Lookout make targets. NETWORK = contacts NPS or NOAA; never part of make test."
+	@echo "Snow Globe make targets. NETWORK = contacts NPS or NOAA; never part of make test."
 	@awk 'BEGIN {FS = ":.*## "} \
 		/^##@ / {printf "\n%s\n", substr($$0, 5); next} \
 		/^[a-zA-Z0-9_-]+:.*## / {printf "  %-17s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -273,13 +294,13 @@ test-speech: ## app/speech-macos: swift test, then scripts/build.sh --no-test (s
 # a symlink to workers/common's locked ruff (refreshed on every run, outside the repo): the laptop
 # and CI then judge infra/cost with the pinned ruff, as `make lint` and `make fmt-check` do, and
 # nothing else on PATH changes (python3 stays the same).
-RUFF_ONLY_DIR ?= $(or $(LOOKOUT_DATA_DIR),$(HOME)/lookout-data)/cache/make-tools/ruff-only
+RUFF_ONLY_DIR ?= $(SG_DATA_DIR)/cache/make-tools/ruff-only
 
 test-infra: ## infra/test.sh: terraform fmt, validate, mocked test, static and script checks; TF_INIT=auto|offline|registry
-	@echo "== infra: infra/test.sh (LOOKOUT_TF_INIT=$(TF_INIT); ruff of $(DIR_common))"
+	@echo "== infra: infra/test.sh (SNOW_GLOBE_TF_INIT=$(TF_INIT); ruff of $(DIR_common))"
 	@(cd $(DIR_common) && $(UV) sync --locked) || exit 1; \
 	mkdir -p "$(RUFF_ONLY_DIR)" && ln -sfn "$(CURDIR)/$(DIR_common)/.venv/bin/ruff" "$(RUFF_ONLY_DIR)/ruff" || exit 1; \
-	PATH="$(RUFF_ONLY_DIR):$$PATH" LOOKOUT_TF_INIT='$(TF_INIT)' bash infra/test.sh
+	PATH="$(RUFF_ONLY_DIR):$$PATH" SNOW_GLOBE_TF_INIT='$(TF_INIT)' bash infra/test.sh
 
 infra-providers: ## No network: can test-infra's terraform init run offline here? (infra/tf_providers.sh status)
 	@bash infra/tf_providers.sh status
@@ -303,9 +324,9 @@ test-bench: ## bench/: utterance-script tests, check.py --no-parser, ruff check 
 	$(UV) sync --locked || exit 1; \
 	$(BENCH_CHECKS)
 
-# The whole script check against the real parser (bench/README.md, D-075): build lookout-parse in
+# The whole script check against the real parser (bench/README.md, D-075): build snow-globe-parse in
 # release mode, offline and locked, into the target dir outside iCloud, then run check.py on that
-# binary (--bin, so $LOOKOUT_PARSE can't point it elsewhere). check.py needs Python 3.11 or later,
+# binary (--bin, so $SNOW_GLOBE_PARSE can't point it elsewhere). check.py needs Python 3.11 or later,
 # so it runs on workers/common's interpreter (uv's 3.13), as test-bench does. Exit 1: the parser's
 # output has drifted from scripted.tsv, or a stored verdict is stale; exit 2: the binary is missing
 # or older than its sources. Not part of make test or CI: CI's bench job sets up no Rust toolchain
@@ -313,13 +334,13 @@ test-bench: ## bench/: utterance-script tests, check.py --no-parser, ruff check 
 # app/core's parser or time rules, to the manifests, or to the script.
 BENCH_PARSE_TARGET_DIR = $(abspath $(CARGO_TARGET_DIR))
 
-bench-script: ## Offline: build lookout-parse (cargo --release --offline --locked), then check.py with the real parser
-	@echo "== app: cargo build --release --offline --locked -p lookout-core --bin lookout-parse (CARGO_TARGET_DIR=$(BENCH_PARSE_TARGET_DIR))"
-	@cd app && CARGO_TARGET_DIR="$(BENCH_PARSE_TARGET_DIR)" $(CARGO) build --release --offline --locked -p lookout-core --bin lookout-parse
-	@echo "== bench: check.py --bin $(BENCH_PARSE_TARGET_DIR)/release/lookout-parse (Python of $(DIR_common))"
+bench-script: ## Offline: build snow-globe-parse (cargo --release --offline --locked), then check.py with the real parser
+	@echo "== app: cargo build --release --offline --locked -p snow-globe-core --bin snow-globe-parse (CARGO_TARGET_DIR=$(BENCH_PARSE_TARGET_DIR))"
+	@cd app && CARGO_TARGET_DIR="$(BENCH_PARSE_TARGET_DIR)" $(CARGO) build --release --offline --locked -p snow-globe-core --bin snow-globe-parse
+	@echo "== bench: check.py --bin $(BENCH_PARSE_TARGET_DIR)/release/snow-globe-parse (Python of $(DIR_common))"
 	@cd $(DIR_common) || exit 1; \
 	$(UV) sync --locked || exit 1; \
-	$(UV) run --no-sync python -I -B $(BENCH_DIR)/utterances/check.py --bin "$(BENCH_PARSE_TARGET_DIR)/release/lookout-parse"
+	$(UV) run --no-sync python -I -B $(BENCH_DIR)/utterances/check.py --bin "$(BENCH_PARSE_TARGET_DIR)/release/snow-globe-parse"
 
 ##@ Benchmarks, backtest and scores
 
@@ -331,20 +352,21 @@ bench-parse: ## Parse latency, PRD §10.1 (cargo run --release --example parse_b
 bench-renderer: ## Renderer frame times, headless: SwiftShader and, if available, Chromium's GPU path (pnpm bench)
 	cd renderer && $(PNPM) install --frozen-lockfile --prefer-offline && $(KEEP_AWAKE) $(PNPM) bench
 
-backtest: ## One v-1 backtest pair (lookout-eval backtest-pair); render to $LOOKOUT_DATA_DIR/renders/pairs/; NETWORK with --forecast auto
+backtest: ## One v-1 backtest pair (snow-globe-eval backtest-pair); render to <data dir>/renders/pairs/; NETWORK with --forecast auto
 ifeq ($(strip $(BACKTEST_ARGS)),)
-	@echo "make backtest: set BACKTEST_ARGS to the lookout-eval backtest-pair options (eval/README.md). Required:" >&2
+	@echo "make backtest: set BACKTEST_ARGS to the snow-globe-eval backtest-pair options (eval/README.md). Required:" >&2
 	@echo "  --viewpoint <id> --valid <ISO time> --lead <hours> --truth <archived frame>" >&2
 	@echo "  --forecast <forecast/hrrr/... run JSON, or auto (NOAA, network)>" >&2
 	@echo "  --boxes v-1 (the committed by-eye landmark boxes), or one box: --landmark-box x0,y0,x1,y1" >&2
 	@echo "plus clear-day references (--reference or --references-file). Archived frames must be dated before" >&2
-	@echo "1 Jun 2026, never from the sealed window and never from ~/lookout-data/quarantine/ (CLAUDE.md, D-019," >&2
-	@echo "D-022, D-038); the pair refuses them, and 'lookout-eval heldout --check FRAME' vets one beforehand." >&2
-	@echo "The record and scene go to \$$LOOKOUT_DATA_DIR/scores/pairs/<viewpoint>/, the render, its metadata and" >&2
-	@echo "the renderer log to \$$LOOKOUT_DATA_DIR/renders/pairs/<viewpoint>/. All options: make backtest BACKTEST_ARGS=--help" >&2
+	@echo "1 Jun 2026, never from the sealed window and never from <data dir>/quarantine/ (CLAUDE.md, D-019," >&2
+	@echo "D-022, D-038); the pair refuses them, and 'snow-globe-eval heldout --check FRAME' vets one beforehand." >&2
+	@echo "The record and scene go to <data dir>/scores/pairs/<viewpoint>/, the render, its metadata and the" >&2
+	@echo "renderer log to <data dir>/renders/pairs/<viewpoint>/. The data dir here is $(SG_DATA_DIR)" >&2
+	@echo "(~/lookout-data until the rename's live switch, D-080). All options: make backtest BACKTEST_ARGS=--help" >&2
 	@exit 2
 else
-	$(EVAL_RUN) --group forecast lookout-eval backtest-pair $(BACKTEST_ARGS)
+	$(EVAL_RUN) --group forecast snow-globe-eval backtest-pair $(BACKTEST_ARGS)
 endif
 
 score: ## Score issued predictions (PRD §13.5): not built yet, TODO(M1.5); says so and exits 2
@@ -352,17 +374,17 @@ score: ## Score issued predictions (PRD §13.5): not built yet, TODO(M1.5); says
 	@echo "(PRD §11.2, §13.4-13.7) arrives with the walking skeleton. One pair today: make backtest" >&2
 	@exit 2
 
-ephem-check: ## Offline: oculus-core vs NPS SolarElevationAngle on a saved archive search (reads ~/lookout-data/samples)
-	$(EVAL_RUN) lookout-eval ephem-check $(EPHEM_ARGS)
+ephem-check: ## Offline: oculus-core vs NPS SolarElevationAngle on a saved archive search (reads <data dir>/samples)
+	$(EVAL_RUN) snow-globe-eval ephem-check $(EPHEM_ARGS)
 
 # Reads the real logs, so it is not part of make test (its unit tests are, in test-eval). It never
 # opens an image, archive/ or quarantine/, and writes a file only with --json PATH.
-data-report: ## Offline, read-only: M0.5 gate 1's 72 h log evidence per viewpoint (lookout-eval data-report DATA_REPORT_ARGS)
-	$(EVAL_RUN) lookout-eval data-report $(DATA_REPORT_ARGS)
+data-report: ## Offline, read-only: M0.5 gate 1's 72 h log evidence per viewpoint (snow-globe-eval data-report DATA_REPORT_ARGS)
+	$(EVAL_RUN) snow-globe-eval data-report $(DATA_REPORT_ARGS)
 
-##@ Capture: NPS. Never part of make test; never run a NETWORK one while the lead's `lookout-capture loop` (or any NPS fetcher) runs: exit 3 = refused by the one-fetcher lock
+##@ Capture: NPS. Never part of make test; never run a NETWORK one while the lead's `snow-globe-capture loop` (or any NPS fetcher) runs: exit 3 = refused by the one-fetcher lock
 
-capture-status: ## No network: persisted capture state per camera and today's event counts (lookout-capture status)
+capture-status: ## No network: persisted capture state per camera and today's event counts (snow-globe-capture status)
 	$(CAPTURE_RUN) status
 
 capture-once: ## NETWORK (nps.gov): one polite pass over the cameras that are due; exit 3 = another fetcher is active
@@ -376,24 +398,24 @@ archive-check: ## NETWORK (nps.gov archive): the M0.5 archive check, one request
 
 ##@ Forecast: NOAA HRRR, the stand-in's light profile (8 fields, f00-f02, at most 40 MB a run). NETWORK ones refuse while the lead's local forecast stand-in runs, the only forecast_log writer until AWS is live (D-030): Error 5
 
-forecast-status: ## No network: forecast files written, the lag model and the cache size (lookout-forecast status --offline)
-	$(FORECAST_RUN) lookout-forecast status --offline
+forecast-status: ## No network: forecast files written, the lag model and the cache size (snow-globe-forecast status --offline)
+	$(FORECAST_RUN) snow-globe-forecast status --offline
 
-# `lookout-forecast latest`: extracts the newest complete run and appends its run and lag events to
+# `snow-globe-forecast latest`: extracts the newest complete run and appends its run and lag events to
 # forecast_log, so it refuses while the stand-in runs (FORECAST_GUARD).
 forecast-latest: ## NETWORK (NOAA S3): extract the newest complete HRRR run, light profile (about 24 MB); refused while the stand-in runs
 	@$(FORECAST_GUARD)
-	$(FORECAST_RUN) lookout-forecast latest $(FORECAST_ARGS)
+	$(FORECAST_RUN) snow-globe-forecast latest $(FORECAST_ARGS)
 
-# `lookout-forecast tick`: one call of the handler the scheduled Lambda runs, which the lead's local
+# `snow-globe-forecast tick`: one call of the handler the scheduled Lambda runs, which the lead's local
 # stand-in also calls every 5 minutes. It writes forecast/hrrr/ files and forecast_log/ events as
 # the stand-in does, so it never runs beside it: it refuses while the stand-in runs
-# (FORECAST_GUARD). The light profile's LOOKOUT_FORECAST_MAX_MB caps each run; without a cap, tick
+# (FORECAST_GUARD). The light profile's SNOW_GLOBE_FORECAST_MAX_MB caps each run; without a cap, tick
 # refuses (exit 1) unless FORECAST_TICK_ARGS=--uncapped. Exit 1 if a run failed in the call, 4 if
 # every failure was a cap refusal.
-forecast-tick: ## NETWORK (NOAA S3): lookout-forecast tick, one call of the forecast Lambda handler; refused while the stand-in runs
+forecast-tick: ## NETWORK (NOAA S3): snow-globe-forecast tick, one call of the forecast Lambda handler; refused while the stand-in runs
 	@$(FORECAST_GUARD)
-	$(FORECAST_RUN) lookout-forecast tick $(FORECAST_TICK_ARGS)
+	$(FORECAST_RUN) snow-globe-forecast tick $(FORECAST_TICK_ARGS)
 
 ##@ Lint and format (no files are changed)
 

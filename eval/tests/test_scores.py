@@ -1,4 +1,4 @@
-"""Hand-computed checks for lookout_eval.scores (PRD §13.5, §13.7)."""
+"""Hand-computed checks for snow_globe_eval.scores (PRD §13.5, §13.7)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime, timedelta
 import numpy as np
 import pytest
 
-from lookout_eval.scores import (
+from snow_globe_eval.scores import (
     Contingency,
     _percentile_interval,
     _two_sided_p,

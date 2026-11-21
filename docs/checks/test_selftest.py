@@ -22,7 +22,7 @@ import tempfile
 import unittest
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import doccheck as d
 
@@ -416,6 +416,7 @@ def base_files() -> dict[str, str]:
         "THIRD_PARTY_NOTICES": NOTICES,
         "Makefile": MAKEFILE,
         ".github/workflows/ci.yml": CI_YML,
+        d.OLD_NAMES_FILE: json.dumps({"files": {}, "counts": {}}),
     }
 
 
@@ -560,6 +561,10 @@ class MutationsAreCaught(unittest.TestCase):
         ("ci-suites", ".github/workflows/ci.yml", "PYTHON=python3 test-docs", "PYTHON=python3 docs-check"),
         ("ci-suites", ".github/workflows/ci.yml", "- suite: common", "- suite: commons"),
         ("ci-suites", ".github/workflows/ci.yml", "run: echo done", "run: make test-speech"),
+        ("data-dir-commands", "docs/research/note.md", "```\n[not", "```\nmkdir -p $HOME/snow-globe-data\n[not"),
+        ("data-dir-commands", "docs/research/note.md", "```\n[not", "```\nls ~/snow-globe-data/x\n[not"),
+        ("old-names", "workers/x/src/mod.py", '"""Implements', '"""lookout_common implements'),
+        ("old-names", "Makefile", "TEST_SUITES ?=", "LOOKOUT_DATA_DIR ?= x\nTEST_SUITES ?="),
     )
 
     def test_each_mutation_is_caught(self) -> None:
@@ -1451,3 +1456,130 @@ class GitFixtures(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RenameChecks(unittest.TestCase):
+    """The rename's two checks (D-080): `data-dir-commands` and `old-names`."""
+
+    KEEPS: ClassVar[dict[str, Any]] = {
+        "files": {"DECISIONS.md": "the record", "tests/fixtures/*": "recorded fixtures"},
+        "counts": {
+            "src/env.py": {"lines": 1, "why": "the deprecated prefix, read as a fallback"},
+            "README.md": {"lines": 2, "why": "~/lookout-data in commands, right before and after the switch"},
+            "scripts/dd.sh": {"lines": 1, "why": "the resolver's old folder, read as a fallback"},
+        },
+    }
+
+    def files(self, **extra: str) -> dict[str, str]:
+        out = {
+            d.OLD_NAMES_FILE: json.dumps(self.KEEPS),
+            "DECISIONS.md": "## D-016 Lookout\nLOOKOUT_DATA_DIR=$HOME/snow-globe-data was not a thing\n",
+            "tests/fixtures/old_log.jsonl": '{"capture_version": "lookout-capture/0.2.1"}\n',
+            "src/env.py": 'PREFIX = "SNOW_GLOBE_"\nLEGACY_PREFIX = "LOOKOUT_"\n',
+            "README.md": "Snow Globe. Data in `~/snow-globe-data` after the switch.\n"
+            "Build: `cd app && CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target cargo build`\n"
+            "```sh\nT=~/lookout-data/cache/speech-macos/release/snow-globe-transcribe\n$T status\n```\n",
+            "scripts/dd.sh": 'local v new="$HOME/snow-globe-data" old="$HOME/lookout-data"\n',
+            "img/plate.png": "\x89PNG\x00\x00lookout $HOME/snow-globe-data",
+        }
+        out.update(extra)
+        return out
+
+    def found(self, check: str, files: dict[str, str]) -> list[tuple[str, str]]:
+        return [(p.where, p.message) for p in d.CHECKS[check](d.Repo.memory(files))]
+
+    def test_the_consistent_files_pass(self) -> None:
+        self.assertEqual(self.found("data-dir-commands", self.files()), [])
+        self.assertEqual(self.found("old-names", self.files()), [])
+
+    def test_a_hard_coded_new_folder_in_a_command_is_caught(self) -> None:
+        cases = {
+            "the shell form, in any file": ("src/build.py", 'cmd = "mkdir -p $HOME/snow-globe-data/cache"\n', 1),
+            "${HOME}": ("Makefile.inc", "X = ${HOME}/snow-globe-data/x\n", 1),
+            "$(HOME) in Make": ("sub.mk", "CACHE ?= $(HOME)/snow-globe-data/cache\n", 1),
+            "the tilde form in a fenced block": ("docs/a.md", "```sh\nls ~/snow-globe-data/state\n```\n", 2),
+            "the tilde form in an inline command": ("docs/b.md", "Run `strings -a ~/snow-globe-data/bin/x`.\n", 1),
+        }
+        for what, (path, text, line) in cases.items():
+            with self.subTest(what):
+                found = self.found("data-dir-commands", self.files(**{path: text}))
+                self.assertEqual([w for w, _ in found], [f"{path}:{line}"], found)
+                self.assertIn("lookout-data", found[0][1])
+
+    def test_mentions_kept_files_and_resolvers_are_not_commands(self) -> None:
+        not_commands = {
+            "a bare path in backticks": ("docs/c.md", "Recordings go to `~/snow-globe-data/fixtures/voice/`.\n"),
+            "prose": ("docs/d.md", "The switch moves the data to ~/snow-globe-data/ with a symlink back.\n"),
+            "a shell resolver's candidate": ("x.sh", '  local new="$HOME/snow-globe-data"\n'),
+            "the Makefile's resolver": ("Makefile", "SG_DATA_DIR_NEW := $(HOME)/snow-globe-data\n"),
+            "the record": ("docs/evidence/run.md", "```sh\nls $HOME/snow-globe-data\n```\n"),
+            "the switch": ("infra/ops/migrate-to-snow-globe.sh", 'NEW="$HOME/snow-globe-data"\n'),
+            "another folder": ("docs/e.md", "```sh\nls $HOME/snow-globe-data-old ~/snow-globe-database\n```\n"),
+        }
+        for what, (path, text) in not_commands.items():
+            with self.subTest(what):
+                self.assertEqual(self.found("data-dir-commands", self.files(**{path: text})), [])
+
+    def test_an_old_name_outside_the_keeps_is_caught_in_every_spelling(self) -> None:
+        for name in (
+            "lookout-capture once",
+            "import lookout_common",
+            "LOOKOUT_DATA_DIR=x",
+            "LookoutSpeech",
+            "dev.lookout.transcribe",
+            "lk_speech_start",
+            "LK_SPEECH_OK",
+            "lkMutantWrite",
+            "-module-name LKCheckMutants",
+        ):
+            with self.subTest(name):
+                found = self.found("old-names", self.files(**{"app/Sources/x.swift": f"// ok\nlet a = 1 // {name}\n"}))
+                self.assertEqual([w for w, _ in found], ["app/Sources/x.swift:2"], found)
+                self.assertIn(d.OLD_NAMES_FILE, found[0][1])
+        clean = "bulk_insert, walk_dir, look out for fog, SNOW_GLOBE_DATA_DIR, sg_speech_start\n"
+        self.assertEqual(self.found("old-names", self.files(**{"src/ok.py": clean})), [])
+
+    def test_lock_files_are_read_for_the_product_name_only(self) -> None:
+        lock = 'integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3R\nname = "lk_x"\n'
+        self.assertEqual(self.found("old-names", self.files(**{"renderer/pnpm-lock.yaml": lock})), [])
+        found = self.found("old-names", self.files(**{"workers/common/uv.lock": 'name = "lookout-common"\n'}))
+        self.assertEqual([w for w, _ in found], ["workers/common/uv.lock:1"])
+
+    def test_a_counted_file_must_match_its_count(self) -> None:
+        more = self.files(**{"src/env.py": 'LEGACY_PREFIX = "LOOKOUT_"\nPATH = "~/lookout-data"\n'})
+        fewer = self.files(**{"src/env.py": 'LEGACY_PREFIX = "SNOW_GLOBE_"\n'})
+        for files, n in ((more, 2), (fewer, 0)):
+            with self.subTest(lines=n):
+                found = self.found("old-names", files)
+                self.assertEqual(len(found), 1, found)
+                self.assertIn(f"{n} line(s) name an old name, {d.OLD_NAMES_FILE} keeps 1", found[0][1])
+
+    def test_the_list_itself_must_stay_true_and_readable(self) -> None:
+        gone = dict(self.files())
+        del gone["src/env.py"]
+        self.assertEqual(
+            self.found("old-names", gone),
+            [(d.OLD_NAMES_FILE, "keeps 1 line(s) in src/env.py, which is gone")],
+        )
+        stale = json.loads(json.dumps(self.KEEPS))
+        stale["files"]["docs/old/*"] = "nothing there"
+        self.assertEqual(
+            self.found("old-names", self.files(**{d.OLD_NAMES_FILE: json.dumps(stale)})),
+            [(d.OLD_NAMES_FILE, "keeps 'docs/old/*' whole, but no file matches it")],
+        )
+        no_reason = json.loads(json.dumps(self.KEEPS))
+        no_reason["counts"]["src/env.py"]["why"] = ""
+        for broken in (json.dumps(no_reason), "{", json.dumps({"files": {}})):
+            with self.subTest(broken=broken[:20]):
+                found = self.found("old-names", self.files(**{d.OLD_NAMES_FILE: broken}))
+                self.assertEqual([w for w, _ in found], [d.OLD_NAMES_FILE])
+                self.assertIn("unreadable", found[0][1])
+        missing = {k: v for k, v in self.files().items() if k != d.OLD_NAMES_FILE}
+        self.assertEqual([w for w, _ in self.found("old-names", missing)], [d.OLD_NAMES_FILE])
+
+    def test_binary_files_are_not_read(self) -> None:
+        self.assertNotIn("img/plate.png", d.scanned_files(d.Repo.memory(self.files())))
+
+    def test_markdown_commands(self) -> None:
+        text = "a `b c` and `d`\n```\nfenced one\n```\n~~~\nfenced two\n~~~\nafter\n"
+        self.assertEqual(list(d.markdown_commands(text)), [(1, "b c"), (3, "fenced one"), (6, "fenced two")])

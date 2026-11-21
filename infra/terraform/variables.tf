@@ -31,7 +31,7 @@ variable "region" {
 variable "project" {
   description = "Prefix for every resource name, and the value of the `project` tag."
   type        = string
-  default     = "lookout"
+  default     = "snow-globe"
 
   validation {
     condition     = can(regex("^[a-z][a-z0-9-]{1,20}$", var.project))
@@ -40,9 +40,9 @@ variable "project" {
 }
 
 variable "user_agent" {
-  description = "User-Agent the workers send (LOOKOUT_USER_AGENT). Never put the owner's name, email or GitHub handle in it (CLAUDE.md privacy rule)."
+  description = "User-Agent the workers send (SNOW_GLOBE_USER_AGENT). Never put the owner's name, email or GitHub handle in it (CLAUDE.md privacy rule)."
   type        = string
-  default     = "Lookout/0.1 (webcam research capture; fetch-on-change)"
+  default     = "SnowGlobe/0.1 (webcam research capture; fetch-on-change)"
 
   validation {
     condition     = length(var.user_agent) > 0 && !strcontains(var.user_agent, "@")
@@ -143,7 +143,7 @@ variable "log_noncurrent_version_days" {
 }
 
 variable "budget_scope_to_project_tag" {
-  description = "false (default): the budget counts every charge in the account, the safe choice for an account used only by Lookout. true: only charges tagged project=<project> count. That needs the `project` cost-allocation tag activated in the Billing console first, and untagged charges then go unseen."
+  description = "false (default): the budget counts every charge in the account, the safe choice for an account used only by Snow Globe. true: only charges tagged project=<project> count. That needs the `project` cost-allocation tag activated in the Billing console first, and untagged charges then go unseen."
   type        = bool
   default     = false
 }

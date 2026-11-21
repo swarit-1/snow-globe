@@ -1,4 +1,4 @@
-//! Bridge to app/speech-macos's Swift static library through its C ABI (`lookout_speech.h`;
+//! Bridge to app/speech-macos's Swift static library through its C ABI (`snow_globe_speech.h`;
 //! PRD §6.5 "Swift in-process static library, C ABI", §7.1 engine A1 `DictationTranscriber`;
 //! PLAN.md M1 1a check 6).
 //!
@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use m1_spike_common::clock::host_now_ns;
 use serde::Serialize;
 
-/// `lk_event_kind`.
+/// `sg_event_kind`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EventKind {
@@ -133,8 +133,8 @@ impl SpeechSink {
     }
 }
 
-/// The `lk_speech_cb` registered with `lk_speech_start`. `ctx` is the `SpeechSink` pointer the
-/// session passed in; it stays valid until `lk_speech_cancel` and `lk_speech_free` have returned.
+/// The `sg_speech_cb` registered with `sg_speech_start`. `ctx` is the `SpeechSink` pointer the
+/// session passed in; it stays valid until `sg_speech_cancel` and `sg_speech_free` have returned.
 ///
 /// # Safety
 /// `ctx` must be null or point to a live `SpeechSink`, and `text` must be null or a valid
@@ -163,7 +163,7 @@ pub unsafe extern "C" fn on_speech_event(
     }));
 }
 
-/// What `lk_speech_status` codes mean (lookout_speech.h).
+/// What `sg_speech_status` codes mean (snow_globe_speech.h).
 pub fn status_meaning(code: i32) -> &'static str {
     match code {
         0 => "ready",
@@ -179,31 +179,31 @@ pub fn status_meaning(code: i32) -> &'static str {
 mod ffi {
     use std::ffi::{c_char, c_void};
 
-    /// Opaque `lk_speech` session.
+    /// Opaque `sg_speech` session.
     #[repr(C)]
     #[derive(Debug)]
-    pub struct LkSpeech {
+    pub struct SgSpeech {
         _private: [u8; 0],
     }
 
-    /// `lk_speech_cb`. `lk_event_kind` is a C enum with values 0-3, passed as a 32-bit integer.
-    pub type LkSpeechCb = unsafe extern "C" fn(*mut c_void, u32, *const c_char, f64, f64, i32);
+    /// `sg_speech_cb`. `sg_event_kind` is a C enum with values 0-3, passed as a 32-bit integer.
+    pub type SgSpeechCb = unsafe extern "C" fn(*mut c_void, u32, *const c_char, f64, f64, i32);
 
-    // SAFETY: these declarations mirror app/speech-macos/include/lookout_speech.h exactly
+    // SAFETY: these declarations mirror app/speech-macos/include/snow_globe_speech.h exactly
     // (checked textually by build.rs when the header exists).
     unsafe extern "C" {
-        pub fn lk_speech_status(locale_bcp47: *const c_char) -> i32;
-        pub fn lk_speech_start(
+        pub fn sg_speech_status(locale_bcp47: *const c_char) -> i32;
+        pub fn sg_speech_start(
             locale_bcp47: *const c_char,
             sample_rate_hz: f64,
-            cb: Option<LkSpeechCb>,
+            cb: Option<SgSpeechCb>,
             ctx: *mut c_void,
-        ) -> *mut LkSpeech;
-        pub fn lk_speech_push_f32(s: *mut LkSpeech, mono: *const f32, frames: usize) -> i32;
-        pub fn lk_speech_finish(s: *mut LkSpeech) -> i32;
-        pub fn lk_speech_cancel(s: *mut LkSpeech);
-        pub fn lk_speech_free(s: *mut LkSpeech);
-        pub fn lk_speech_version() -> *const c_char;
+        ) -> *mut SgSpeech;
+        pub fn sg_speech_push_f32(s: *mut SgSpeech, mono: *const f32, frames: usize) -> i32;
+        pub fn sg_speech_finish(s: *mut SgSpeech) -> i32;
+        pub fn sg_speech_cancel(s: *mut SgSpeech);
+        pub fn sg_speech_free(s: *mut SgSpeech);
+        pub fn sg_speech_version() -> *const c_char;
     }
 }
 
@@ -212,12 +212,12 @@ pub fn library_linked() -> bool {
     cfg!(feature = "speech")
 }
 
-/// `lk_speech_version()`, or `None` when the library is not linked.
+/// `sg_speech_version()`, or `None` when the library is not linked.
 pub fn version() -> Option<String> {
     #[cfg(feature = "speech")]
     {
-        // SAFETY: lk_speech_version returns a static NUL-terminated string or null.
-        let p = unsafe { ffi::lk_speech_version() };
+        // SAFETY: sg_speech_version returns a static NUL-terminated string or null.
+        let p = unsafe { ffi::sg_speech_version() };
         if p.is_null() {
             return Some(String::new());
         }
@@ -230,13 +230,13 @@ pub fn version() -> Option<String> {
     }
 }
 
-/// `lk_speech_status(locale)`.
+/// `sg_speech_status(locale)`.
 pub fn status(locale: &str) -> Result<i32, String> {
     #[cfg(feature = "speech")]
     {
         let c = std::ffi::CString::new(locale).map_err(|e| e.to_string())?;
         // SAFETY: c is a valid NUL-terminated string for the call.
-        Ok(unsafe { ffi::lk_speech_status(c.as_ptr()) })
+        Ok(unsafe { ffi::sg_speech_status(c.as_ptr()) })
     }
     #[cfg(not(feature = "speech"))]
     {
@@ -251,9 +251,9 @@ pub struct Pusher {
     raw: *mut c_void,
 }
 
-// SAFETY: lk_speech_push_f32 is designed to be called from the audio thread while the control
-// thread owns the session (lookout_speech.h); the session outlives every push because the audio
-// stream is dropped before lk_speech_finish/cancel/free.
+// SAFETY: sg_speech_push_f32 is designed to be called from the audio thread while the control
+// thread owns the session (snow_globe_speech.h); the session outlives every push because the audio
+// stream is dropped before sg_speech_finish/cancel/free.
 unsafe impl Send for Pusher {}
 
 impl Pusher {
@@ -262,7 +262,7 @@ impl Pusher {
         #[cfg(feature = "speech")]
         {
             // SAFETY: raw is a live session (see the Send impl); mono is valid for its length.
-            unsafe { ffi::lk_speech_push_f32(self.raw.cast(), mono.as_ptr(), mono.len()) }
+            unsafe { ffi::sg_speech_push_f32(self.raw.cast(), mono.as_ptr(), mono.len()) }
         }
         #[cfg(not(feature = "speech"))]
         {
@@ -272,7 +272,7 @@ impl Pusher {
     }
 }
 
-/// One `lk_speech` session and the sink its callbacks write to.
+/// One `sg_speech` session and the sink its callbacks write to.
 #[derive(Debug)]
 pub struct SpeechSession {
     raw: *mut c_void,
@@ -285,16 +285,16 @@ pub struct SpeechSession {
 unsafe impl Send for SpeechSession {}
 
 impl SpeechSession {
-    /// `lk_speech_start(locale, sample_rate, on_speech_event, sink)`.
+    /// `sg_speech_start(locale, sample_rate, on_speech_event, sink)`.
     pub fn start(locale: &str, sample_rate_hz: f64, sink: Arc<SpeechSink>) -> Result<Self, String> {
         #[cfg(feature = "speech")]
         {
             let c = std::ffi::CString::new(locale).map_err(|e| e.to_string())?;
             let ctx = Arc::into_raw(sink);
             // SAFETY: c is valid for the call; ctx points to a live SpeechSink that is released
-            // only in close(), after lk_speech_cancel and lk_speech_free.
+            // only in close(), after sg_speech_cancel and sg_speech_free.
             let raw = unsafe {
-                ffi::lk_speech_start(
+                ffi::sg_speech_start(
                     c.as_ptr(),
                     sample_rate_hz,
                     Some(on_speech_event),
@@ -304,7 +304,7 @@ impl SpeechSession {
             if raw.is_null() {
                 // SAFETY: ctx came from Arc::into_raw above and the library holds no reference.
                 drop(unsafe { Arc::from_raw(ctx) });
-                return Err("lk_speech_start returned NULL".into());
+                return Err("sg_speech_start returned NULL".into());
             }
             Ok(Self {
                 raw: raw.cast(),
@@ -323,12 +323,12 @@ impl SpeechSession {
         Pusher { raw: self.raw }
     }
 
-    /// `lk_speech_finish`: key-up; the library flushes and then sends exactly one FINAL or ERROR.
+    /// `sg_speech_finish`: key-up; the library flushes and then sends exactly one FINAL or ERROR.
     pub fn finish(&self) -> i32 {
         #[cfg(feature = "speech")]
         {
             // SAFETY: raw is a live session until close().
-            unsafe { ffi::lk_speech_finish(self.raw.cast()) }
+            unsafe { ffi::sg_speech_finish(self.raw.cast()) }
         }
         #[cfg(not(feature = "speech"))]
         {
@@ -336,7 +336,7 @@ impl SpeechSession {
         }
     }
 
-    /// `lk_speech_cancel` (no callback after it returns), then `lk_speech_free`, then releases the
+    /// `sg_speech_cancel` (no callback after it returns), then `sg_speech_free`, then releases the
     /// sink reference held for the callbacks.
     pub fn close(mut self) {
         self.close_inner();
@@ -352,8 +352,8 @@ impl SpeechSession {
             // SAFETY: raw is a live session; after cancel returns no callback runs, so the sink
             // can be released after free.
             unsafe {
-                ffi::lk_speech_cancel(self.raw.cast());
-                ffi::lk_speech_free(self.raw.cast());
+                ffi::sg_speech_cancel(self.raw.cast());
+                ffi::sg_speech_free(self.raw.cast());
                 drop(Arc::from_raw(self.sink));
             }
         }
@@ -436,8 +436,8 @@ mod tests {
     /// bridge was written against (whitespace-insensitive). Skipped while the header is absent.
     #[test]
     fn header_matches_the_abi_when_present() {
-        let header =
-            m1_spike_common::paths::repo_root().join("app/speech-macos/include/lookout_speech.h");
+        let header = m1_spike_common::paths::repo_root()
+            .join("app/speech-macos/include/snow_globe_speech.h");
         let Ok(h) = std::fs::read_to_string(&header) else {
             eprintln!("skipped: {} not written yet", header.display());
             return;
@@ -445,18 +445,18 @@ mod tests {
         let squash = |s: &str| s.split_whitespace().collect::<String>();
         let h = squash(&h);
         for proto in [
-            "int32_t lk_speech_status(const char *locale_bcp47);",
-            "lk_speech *lk_speech_start(const char *locale_bcp47, double sample_rate_hz, lk_speech_cb cb, void *ctx);",
-            "int32_t lk_speech_push_f32(lk_speech *s, const float *mono, size_t frames);",
-            "int32_t lk_speech_finish(lk_speech *s);",
-            "void lk_speech_cancel(lk_speech *s);",
-            "void lk_speech_free(lk_speech *s);",
-            "const char *lk_speech_version(void);",
-            "typedef void (*lk_speech_cb)(void *ctx, lk_event_kind kind, const char *utf8_text, double audio_start_s, double audio_end_s, int32_t error_code);",
-            "LK_EV_READY = 0",
-            "LK_EV_PARTIAL = 1",
-            "LK_EV_FINAL = 2",
-            "LK_EV_ERROR = 3",
+            "int32_t sg_speech_status(const char *locale_bcp47);",
+            "sg_speech *sg_speech_start(const char *locale_bcp47, double sample_rate_hz, sg_speech_cb cb, void *ctx);",
+            "int32_t sg_speech_push_f32(sg_speech *s, const float *mono, size_t frames);",
+            "int32_t sg_speech_finish(sg_speech *s);",
+            "void sg_speech_cancel(sg_speech *s);",
+            "void sg_speech_free(sg_speech *s);",
+            "const char *sg_speech_version(void);",
+            "typedef void (*sg_speech_cb)(void *ctx, sg_event_kind kind, const char *utf8_text, double audio_start_s, double audio_end_s, int32_t error_code);",
+            "SG_EV_READY = 0",
+            "SG_EV_PARTIAL = 1",
+            "SG_EV_FINAL = 2",
+            "SG_EV_ERROR = 3",
         ] {
             assert!(
                 h.contains(&squash(proto)),

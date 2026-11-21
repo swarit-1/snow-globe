@@ -1,4 +1,6 @@
-# lookout-capture
+# snow-globe-capture
+
+Renamed from `lookout-capture` on 21 Nov 2026 (D-080). Capture 0.3.0 is 0.2.1 under the Snow Globe names: the console script is `snow-globe-capture`, the stamp in every record, sidecar and state is `snow-globe-capture/0.3.0`, and the default User-Agent is `SnowGlobe/0.1 (webcam research capture; fetch-on-change)`. Everything written before carries `lookout-capture/<version>` and is read as it is (`capture_release`). The running loop keeps the old names until the lead's switch after the M0.5 gate. Measurements below dated before 21 Nov were taken under the old names.
 
 Polite capture of the 8 NPS cameras in `viewpoints/manifests/` (PRD §8.6, §11.2, §15.3), PRD §8.7
 storage (thumbnails, and the frame nearest each hour), the NPS AirWebCams archive backfill (also
@@ -15,22 +17,22 @@ PYTHONPATH=src:../common/src .venv/bin/python -m pytest -q
 
 | Command | Network | What it does |
 |---|---|---|
-| `lookout-capture once [--only <id>]` | NPS live | One pass over the cameras that are due. Prints a JSON summary. |
-| `lookout-capture loop [--interval 300] [--jitter 30] [--archive-queue PATH] [--archive-budget 1000] [--archive-total-gb 5]` | NPS live (+ archive) | A pass every interval plus 0–jitter s. With `--archive-queue`, queued archive work runs between passes in the same process (below). The first Ctrl-C finishes the current camera and exits; a second interrupts at once. |
-| `lookout-capture status [--json] [--archive-queue PATH]` | none | Persisted state per camera (the frame policy the newest frame's writer used, marked `*` where this code would use another; frames staged; last hourly decision; store failures; thumbnails pending; the next poll and what it is counted from, `next_poll_basis`: a recorded answer, an answer bound, a reservation, or state from older code, where the next poll shown is what this code would do if it took over now), today's event counts, and the archive queue's progress. |
-| `lookout-capture archive queue add <id> <YYYY-MM-DD>... [--through YYYY-MM-DD] [--hires] [--thumbs] [--pick all\|hourly\|midday] [--daytime-only] [--min-sun-deg X] [--max-gb 1] [--queue PATH]` | none | Queue days to backfill (`--through`: every day of a range, at most 400). A day on or after 1 Jun 2026 is refused (D-019). |
-| `lookout-capture archive queue list [--json]` / `remove <id>... [--finished] [--all]` / `resume <id>... [--all] [--max-gb G]` | none | Show or edit the queue (default `state/archive/queue.json`). `--finished` takes done, refused, failed and stopped entries; `resume` sets stopped (size cap) or failed entries back to work, `--max-gb` raising their cap. Safe while the loop runs. |
-| `lookout-capture cadence <id> [--hours 24] [--max-gap S] [--json]` | none | The camera's update cadence from `capture_log` and sidecars (below). |
-| `lookout-capture storage [--day YYYY-MM-DD] [--only <id>] [--json]` (alias `storage-report`) | none | Bytes per frame and thumbnail per camera from disk, and bytes per day under PRD §8.7 against the old policy. Writes nothing. |
-| `lookout-capture archive days <id>` | NPS archive | `GetAvailableDays`: first and last day, days per year. |
-| `lookout-capture archive day <id> <YYYY-MM-DD> [--daytime-only] [--hires] [--dry-run] [--max-gb 1] [--held-out-override REASON]` | NPS archive | One day's frames (thumbmedium unless `--hires`). |
-| `lookout-capture archive sample <id> <YYYY-MM-DD>... [--pick midday\|hourly\|all] [--held-out-override REASON]` | NPS archive | Picked frames of several days. |
-| `lookout-capture archive-check [--viewpoint <id>]... [--rainier-page] [--budget 220]` | NPS archive | The M0.5 check; writes `archive/archive_check_<date>.json`. |
+| `snow-globe-capture once [--only <id>]` | NPS live | One pass over the cameras that are due. Prints a JSON summary. |
+| `snow-globe-capture loop [--interval 300] [--jitter 30] [--archive-queue PATH] [--archive-budget 1000] [--archive-total-gb 5]` | NPS live (+ archive) | A pass every interval plus 0–jitter s. With `--archive-queue`, queued archive work runs between passes in the same process (below). The first Ctrl-C finishes the current camera and exits; a second interrupts at once. |
+| `snow-globe-capture status [--json] [--archive-queue PATH]` | none | Persisted state per camera (the frame policy the newest frame's writer used, marked `*` where this code would use another; frames staged; last hourly decision; store failures; thumbnails pending; the next poll and what it is counted from, `next_poll_basis`: a recorded answer, an answer bound, a reservation, or state from older code, where the next poll shown is what this code would do if it took over now), today's event counts, and the archive queue's progress. |
+| `snow-globe-capture archive queue add <id> <YYYY-MM-DD>... [--through YYYY-MM-DD] [--hires] [--thumbs] [--pick all\|hourly\|midday] [--daytime-only] [--min-sun-deg X] [--max-gb 1] [--queue PATH]` | none | Queue days to backfill (`--through`: every day of a range, at most 400). A day on or after 1 Jun 2026 is refused (D-019). |
+| `snow-globe-capture archive queue list [--json]` / `remove <id>... [--finished] [--all]` / `resume <id>... [--all] [--max-gb G]` | none | Show or edit the queue (default `state/archive/queue.json`). `--finished` takes done, refused, failed and stopped entries; `resume` sets stopped (size cap) or failed entries back to work, `--max-gb` raising their cap. Safe while the loop runs. |
+| `snow-globe-capture cadence <id> [--hours 24] [--max-gap S] [--json]` | none | The camera's update cadence from `capture_log` and sidecars (below). |
+| `snow-globe-capture storage [--day YYYY-MM-DD] [--only <id>] [--json]` (alias `storage-report`) | none | Bytes per frame and thumbnail per camera from disk, and bytes per day under PRD §8.7 against the old policy. Writes nothing. |
+| `snow-globe-capture archive days <id>` | NPS archive | `GetAvailableDays`: first and last day, days per year. |
+| `snow-globe-capture archive day <id> <YYYY-MM-DD> [--daytime-only] [--hires] [--dry-run] [--max-gb 1] [--held-out-override REASON]` | NPS archive | One day's frames (thumbmedium unless `--hires`). |
+| `snow-globe-capture archive sample <id> <YYYY-MM-DD>... [--pick midday\|hourly\|all] [--held-out-override REASON]` | NPS archive | Picked frames of several days. |
+| `snow-globe-capture archive-check [--viewpoint <id>]... [--rainier-page] [--budget 220]` | NPS archive | The M0.5 check; writes `archive/archive_check_<date>.json`. |
 
 **One NPS fetcher per machine** (CLAUDE.md, D-021, D-023). Every command that contacts nps.gov runs inside a
-host-wide lock, `$LOOKOUT_DATA_DIR/state/locks/nps-fetcher.lock` (`flock`, always on local disk,
-also with `LOOKOUT_STORAGE=s3`). It exits with **status 3**, before sending anything, when:
-- another `lookout-capture` fetcher holds the lock (the message names its pid and command);
+host-wide lock, `$SNOW_GLOBE_DATA_DIR/state/locks/nps-fetcher.lock` (`flock`, always on local disk,
+also with `SNOW_GLOBE_STORAGE=s3`). It exits with **status 3**, before sending anything, when:
+- another `snow-globe-capture` fetcher holds the lock (the message names its pid and command);
 - a Rainier stopgap process (`stopgap_rainier.py`) is running;
 - stopgap-shaped records (`"vp"`, no `"worker"`) are in the local `capture_log` from the last
   11 minutes. After the stopgap is stopped, wait out that window (the message gives the time).
@@ -75,7 +77,7 @@ thumbnail, dated on or after **1 Jun 2026** are never requested or read. An asse
   of `ImageCreateDateTime` read as local standard time (in summer that field stays on standard
   time, so "05/31/2026 11:30:00 PM" with no readable `LocalTimeString` is 00:30 PDT on 1 Jun);
 - **UTC readings** (`asset_utc_dates`): the UTC date of the asset's instant under both of
-  lookout-common's conventions (`label`, the default, and `wall`: the instant behind its archive
+  snow-globe-common's conventions (`label`, the default, and `wall`: the instant behind its archive
   key either way), and the UTC date of each local reading converted in the camera's zone
   (`ImageCreateDateTime` as civil time, both sides of a DST fold, and as standard time;
   `LocalTimeString`'s clock as civil time). A reading with a date but no readable clock counts every
@@ -85,7 +87,7 @@ thumbnail, dated on or after **1 Jun 2026** are never requested or read. An asse
 So 31 May now turns at **UTC midnight**: at Point Reyes every frame from 16:00 standard (17:00 PDT)
 is refused, 32 of the day's 96; at Acadia from 19:00 EST, 20; at Grand Canyon (Arizona keeps MST)
 from 17:00, 28. On 20 Nov the lead removed the six 31 May queue entries; the owner may re-allow
-them by confirming D-038. An asset with no readable date is refused. lookout-eval's
+them by confirming D-038. An asset with no readable date is refused. snow-globe-eval's
 `heldout.nps_dates` reads exactly the same set: eval's fuzz loads this file and checks equal
 dates, local and UTC, and equal decisions on 6,000 random cases, and both test suites carry the
 same edge table per zone. `archive day|sample` refuses days on or after 1 Jun outright;
@@ -209,7 +211,7 @@ An answer time is never taken earlier than the true one:
   machine sleeps (`fetch.steady_clock`: `CLOCK_MONOTONIC_RAW` on macOS, `CLOCK_BOOTTIME` on
   Linux; Python's `time.monotonic()` on macOS is `mach_absolute_time()`, which stops during
   sleep, so a sleep between a reservation and its send used to let the request out an hour
-  later). The polite client's own timeouts (`lookout_common.http.DEFAULT_TIMEOUT`: connect 10 s,
+  later). The polite client's own timeouts (`snow_globe_common.http.DEFAULT_TIMEOUT`: connect 10 s,
   read 30 s, write 30 s, pool 10 s) each bound one operation, not a request: a body that trickles in
   never times out, the TLS handshake gets 10 s per operation, and DNS is not covered at all. So the
   head of a request is handed to the kernel within 60 s of its reservation
@@ -225,7 +227,7 @@ An answer time is never taken earlier than the true one:
   a trickling body can no longer let the lock expire under its holder (only possible for the CLI on
   S3; the Lambda dies at 120 s). The review's moto-S3 run of that case now ends with the image
   abandoned at its deadline (the first chunk past 60 s) and no lock taken over. The S3 state write is not yet conditional on the version it
-  read (that is `lookout_common.storage`'s).
+  read (that is `snow_globe_common.storage`'s).
 - **A poll reserved and never answered** (killed between the send and the save): counted as
   answered at the reservation + 60 s. A GET reserved and never answered: the later of its
   reservation and its send + 60 s.
@@ -329,7 +331,7 @@ every storage call; "jitter" is 0-2 s on each invocation. Waiting is the billed 
   10,176 GETs).
 
 **Archive** (`archive.py`):
-- Every request goes through `archive_limiter()`, a file-mode `MinIntervalLimiter("nps-archive", 5 s).hold()`: one at a time across processes, ≥ 5 s end to start. It is file-based even with `LOOKOUT_STORAGE=s3` (common's `auto` mode would fall back to an in-process limiter there).
+- Every request goes through `archive_limiter()`, a file-mode `MinIntervalLimiter("nps-archive", 5 s).hold()`: one at a time across processes, ≥ 5 s end to start. It is file-based even with `SNOW_GLOBE_STORAGE=s3` (common's `auto` mode would fall back to an in-process limiter there).
 - Errors are deferred for every process. A 200 whose body is not a decodable JPEG (an HTML error page, a truncated file) is an error too: not stored, not marked done.
 - A failing asset (transport error, HTTP 429/5xx, bad body) is tried at most 3 times per run and 6 times in all; failures are kept in `state/archive/<id>.json` under `failed`. A 404 is not retried.
 - An optional persisted request budget applies.
@@ -337,7 +339,7 @@ every storage call; "jitter" is 0-2 s on each invocation. Waiting is the billed 
 - `--max-gb` caps the bytes downloaded per viewpoint across runs (bad bodies count).
 - A day's search is cached under `cache/nps-archive/` only once the day is at least two days old (UTC), and a cache entry written earlier than that is ignored and refetched.
 
-## Storage (PRD §8.7, CLAUDE.md layout, via `lookout_common.storage`)
+## Storage (PRD §8.7, CLAUDE.md layout, via `snow_globe_common.storage`)
 
 **What is kept** (`retention.py`, the lead's decision of 19 Nov 2026):
 - **Every download, every camera:** a 640 px JPEG thumbnail (Lanczos, q85, original EXIF) with its sidecar
@@ -372,7 +374,7 @@ every storage call; "jitter" is 0-2 s on each invocation. Waiting is the billed 
 - A `stored` record's `key` is the download's durable file: the frame for "every" cameras, the
   thumbnail for hourly ones (`frame_key`, `thumb_key` and `staged_key` are also given).
 
-**Measured** (`lookout-capture storage --day 2026-11-19`, 22:38 UTC, on the 105 frames on disk from
+**Measured** (`snow-globe-capture storage --day 2026-11-19`, 22:38 UTC, on the 105 frames on disk from
 06:30–22:23 UTC 19 Nov; thumbnails made in memory with the code above; Sun-up/down means weighted by
 that day's daylight share; 96 downloads a camera a day at the 4-per-hour cap):
 
@@ -414,9 +416,9 @@ the six hourly cameras meet (13–21 MB each, PRD ~17) while the two design-P ca
   - capture events: `request` (one per nps.gov request: stage, method, status, bytes, ms, `sent_at`, `answered_at`; a failure that may still reach nps.gov also `answer_bound: failed_after_send` and `answer_bound_at`; a 3xx its `location`; on Lambda `lambda_log_stream`), `answer_bound` (an answer this code had to bound: a reservation a crash left unanswered, or state from code that recorded no answer; a GET's own stamps as `get_t`/`get_reserved_at`, since every record's `t` is the moment it was written), `stored`, `unchanged`, `duplicate`, `rate_capped`, `error` (stage `head`, `json`, `image`, `store` or `internal`), `backoff`, `promoted`, `staging_dropped` (with a reason), `staging_error`, `thumb_repaired`, `thumb_given_up`, `pass`, `idle_error`, `loop_stopped`. Every poll outcome carries the feed's validator (`json_last_modified`, or `head_last_modified`/`http_last_modified`), for `cadence`;
   - archive events: `archive_request`, `stored`, `error`, `held_out_override`, `queue_done`, `queue_stopped`, `queue_refused`, `queue_failed`, `queue_total_cap` (once per process). Each carries `runner` as live records do: `cli-loop` (the queue inside the loop), `cli-archive`, `cli-archive-check`.
   - `state/capture/hosts/www.nps.gov.json`: the www.nps.gov hold (`not_before`, `reason`, `source`: `live` or `archive`).
-- `LOOKOUT_STORAGE=s3` runs the same code against S3. The Lambda entry point is `lookout_capture.lambda_handler.handler`.
+- `SNOW_GLOBE_STORAGE=s3` runs the same code against S3. The Lambda entry point is `snow_globe_capture.lambda_handler.handler`.
   - **One log write per pass:** with S3 every record of a pass, the `pass` record included, is written by one `append_jsonl_many` when the pass ends (each S3 append is a GET and a PUT of the day's whole log). Locally each record is appended at once. Records a failed write could not store are printed to stderr as JSON lines (`capture_log_unwritten`; CloudWatch keeps a Lambda's) and sent first with the runner's next pass (up to 2,000); with less than 2 × 25 s left, the records so far are written before each further camera.
-  - **IAM:** the capture role needs read/write on `thumbs/*` and `cache/staging/*`, and `s3:DeleteObject` on `cache/staging/*`. They are granted in `infra/terraform/main.tf:59-60` (committed in e59247a, D-059), with a terraform test of the grants. Without them every download at the six hourly cameras would fail to store (still never fetched twice, but its frame lost). Deleting staged copies in S3 goes through the client inside `S3Storage` until `lookout_common` has a delete for `cache/` keys (TODO(M1)).
+  - **IAM:** the capture role needs read/write on `thumbs/*` and `cache/staging/*`, and `s3:DeleteObject` on `cache/staging/*`. They are granted in `infra/terraform/main.tf:59-60` (committed in e59247a, D-059), with a terraform test of the grants. Without them every download at the six hourly cameras would fail to store (still never fetched twice, but its frame lost). Deleting staged copies in S3 goes through the client inside `S3Storage` until `snow_globe_common` has a delete for `cache/` keys (TODO(M1)).
 
 ## Image time
 
@@ -440,7 +442,7 @@ EXIF is overruled, and flagged `exif_time_overruled`, only for the shape of a ca
 
 ## Update cadence (`cadence.py`)
 
-`lookout-capture cadence <id>` reads `capture_log` (the capture worker's poll outcomes and `request`
+`snow-globe-capture cadence <id>` reads `capture_log` (the capture worker's poll outcomes and `request`
 records, and the D-021 stopgap's records) and the sidecars, so it needs no request. Each poll gives at
 most one value: the image `Last-Modified` from the HEAD (park camera), or the JSON feed's `Last-Modified`
 and `imagedate` (ARD). Two measures per series:

@@ -10,12 +10,12 @@ from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
-from lookout_common.manifest import load_manifests
-from lookout_common.storage import LocalStorage, S3Storage
+from snow_globe_common.manifest import load_manifests
+from snow_globe_common.storage import LocalStorage, S3Storage
 
-from lookout_capture.live import status_report
-from lookout_capture.retention import hour_slot, key_stamp
-from lookout_capture.state import CameraState, camera_state_key
+from snow_globe_capture.live import status_report
+from snow_globe_capture.retention import hour_slot, key_stamp
+from snow_globe_capture.state import CameraState, camera_state_key
 
 from .conftest import FakeClock, FakeNPS, make_jpeg
 from .test_live import events, runner, set_ard, set_rainier
@@ -237,7 +237,7 @@ def test_status_reports_policy_staging_and_the_last_decision(data_root, fake_nps
 def test_s3_staging_is_promoted_and_deleted_and_listed_only_now_and_then(
     s3_bucket, fake_nps, data_root
 ):
-    storage = S3Storage("lookout-test", "dev", client=s3_bucket)
+    storage = S3Storage("snow-globe-test", "dev", client=s3_bucket)
     clock = FakeClock(datetime(2026, 11, 19, 12, 1, 30, tzinfo=UTC))
     fake_nps.clock = clock
     listed: list[str] = []
@@ -290,7 +290,7 @@ class CountingS3:
 
 def test_s3_mode_writes_each_pass_log_in_one_append(s3_bucket, clock, fake_nps, data_root):
     counting = CountingS3(s3_bucket)
-    storage = S3Storage("lookout-test", "dev", client=counting)
+    storage = S3Storage("snow-globe-test", "dev", client=counting)
     many: list[int] = []
     singles: list[dict] = []
     real_many = storage.append_jsonl_many
@@ -345,7 +345,7 @@ def test_local_mode_appends_each_record_at_once(data_root, clock, fake_nps, monk
 
 
 def test_a_failed_batched_log_write_never_stops_capture(s3_bucket, clock, fake_nps, data_root):
-    storage = S3Storage("lookout-test", "dev", client=s3_bucket)
+    storage = S3Storage("snow-globe-test", "dev", client=s3_bucket)
 
     def broken(key, records):
         raise RuntimeError("S3 is down")
@@ -370,7 +370,7 @@ def test_log_batching_can_be_forced(data_root, clock, fake_nps, mode):
 def test_records_a_failed_batch_could_not_write_go_out_with_the_next_pass(
     s3_bucket, clock, fake_nps, data_root, capsys
 ):
-    storage = S3Storage("lookout-test", "dev", client=s3_bucket)
+    storage = S3Storage("snow-globe-test", "dev", client=s3_bucket)
     real = storage.append_jsonl_many
     calls = {"n": 0}
 
@@ -399,7 +399,7 @@ def test_records_a_failed_batch_could_not_write_go_out_with_the_next_pass(
 def test_a_pass_near_its_deadline_writes_its_records_before_each_camera(
     s3_bucket, clock, fake_nps, data_root
 ):
-    storage = S3Storage("lookout-test", "dev", client=s3_bucket)
+    storage = S3Storage("snow-globe-test", "dev", client=s3_bucket)
     batches: list[list[str]] = []
     real = storage.append_jsonl_many
 

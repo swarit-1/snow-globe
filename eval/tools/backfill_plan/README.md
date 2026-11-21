@@ -1,6 +1,6 @@
 # Design-H archive backfill planner
 
-Offline research tooling behind [docs/research/archive-backfill-plan.md](../../../docs/research/archive-backfill-plan.md). It is not part of the `lookout-eval` package, and `make test` does not collect it (eval's `testpaths` is `tests/`). Eval's `ruff check .` and `ruff format --check .` do cover it.
+Offline research tooling behind [docs/research/archive-backfill-plan.md](../../../docs/research/archive-backfill-plan.md). It is not part of the `snow-globe-eval` package, and `make test` does not collect it (eval's `testpaths` is `tests/`). Eval's `ruff check .` and `ruff format --check .` do cover it.
 
 ## Files
 
@@ -13,10 +13,10 @@ Offline research tooling behind [docs/research/archive-backfill-plan.md](../../.
 
 ## Safety
 
-- **No network.** `plan.py` and `loop_sim.py` replace every socket connect, datagram send and name lookup (`getaddrinfo`, `gethostbyname`, …) before anything else runs; `measure_inputs.py` opens none. They read only metadata under `$LOOKOUT_DATA_DIR` (default `~/lookout-data`): day masks, cached searches for dates before 1 Jun 2026, state files, sidecars and capture logs. They never open an image or read `quarantine/`.
-- **The queue is read, never written.** Pass a copy with `--queue`. `plan.py` refuses to write under `$LOOKOUT_DATA_DIR`, and `loop_sim.py` refuses a queue file there. These are explicit checks (`refuse_under_data`), not `assert`s, so `python -O` cannot skip them.
+- **No network.** `plan.py` and `loop_sim.py` replace every socket connect, datagram send and name lookup (`getaddrinfo`, `gethostbyname`, …) before anything else runs; `measure_inputs.py` opens none. They read only metadata under the data dir (`$SNOW_GLOBE_DATA_DIR`, else `~/lookout-data` until the rename's live switch, then `~/snow-globe-data`; D-080): day masks, cached searches for dates before 1 Jun 2026, state files, sidecars and capture logs. They never open an image or read `quarantine/`.
+- **The queue is read, never written.** Pass a copy with `--queue`. `plan.py` refuses to write under `$SNOW_GLOBE_DATA_DIR`, and `loop_sim.py` refuses a queue file there. These are explicit checks (`refuse_under_data`), not `assert`s, so `python -O` cannot skip them.
 - **Dates.** Every planned date passes both readings of the held-out edge (plan section 9): its local date, and the wall-clock date of the latest frame it can yield, are before 1 Jun 2026 (D-019, D-047), and that frame is before 1 Jun 2026 00:00 UTC, judged by instant (the lead's rule of 20 Nov until the owner confirms D-038). At all six cameras the last such date is 30 May 2026. The planner also stops if an open queue entry fails either reading.
-- **Scripts.** Every generated script refuses to run unless `Q` names an existing, non-empty queue file by an absolute path (a mistyped path would start a new queue the loop never works). `draft-T3pr.sh` refuses, before queuing anything, an `EVENINGS` list that is empty or names a day that is not one of the plan's Point Reyes T1 days (`T3PR_DAYS` in the script: T1a as queued, T1b as planned) or is after 30 May 2026; `set -f` keeps the list from being expanded as file names. `draft-TQ.sh` is the owner's question: it refuses to run unless `TQ_CAMERAS` names the approved cameras, and queues only their blocks. Only the lead runs the drafts against the live queue (`Q=$HOME/lookout-data/state/archive/queue.json`); the running capture loop then works the queue (D-029). The planner never runs them.
+- **Scripts.** Every generated script refuses to run unless `Q` names an existing, non-empty queue file by an absolute path (a mistyped path would start a new queue the loop never works). `draft-T3pr.sh` refuses, before queuing anything, an `EVENINGS` list that is empty or names a day that is not one of the plan's Point Reyes T1 days (`T3PR_DAYS` in the script: T1a as queued, T1b as planned) or is after 30 May 2026; `set -f` keeps the list from being expanded as file names. `draft-TQ.sh` is the owner's question: it refuses to run unless `TQ_CAMERAS` names the approved cameras, and queues only their blocks. Only the lead runs the drafts against the live queue (`Q=$HOME/lookout-data/state/archive/queue.json`, valid before and after the rename's live switch, which leaves `~/lookout-data` as a symlink to `~/snow-globe-data`; D-080); the running capture loop then works the queue (D-029). The planner never runs them.
 
 ## Running it
 
@@ -26,7 +26,7 @@ Run it from `eval/`. It needs capture's queue code and the shared library on the
 cd eval
 PYTHONPATH=src:../workers/common/src:../workers/capture/src \
     uv run --no-sync python -m pytest -q -p no:cacheprovider tools/backfill_plan/test_plan.py
-cp ~/lookout-data/state/archive/queue.json <scratch>/queue.json      # read a copy
+cp ~/lookout-data/state/archive/queue.json <scratch>/queue.json         # read a copy (the live queue)
 PYTHONPATH=src:../workers/common/src:../workers/capture/src \
     uv run --no-sync python tools/backfill_plan/plan.py <scratch>/out --queue <scratch>/queue.json
 PYTHONPATH=src:../workers/common/src:../workers/capture/src \

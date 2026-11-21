@@ -81,12 +81,13 @@ else:
     _spec.loader.exec_module(plan)  # disables sockets before anything below can use one
 
 import httpx  # noqa: E402
-from lookout_capture.archive import (  # noqa: E402
+from PIL import Image  # noqa: E402
+from snow_globe_capture.archive import (  # noqa: E402
     ARCHIVE_LIMITER_NAME,
     ARCHIVE_MIN_INTERVAL_S,
     ArchiveClient,
 )
-from lookout_capture.archive_queue import (  # noqa: E402
+from snow_globe_capture.archive_queue import (  # noqa: E402
     CONNECT_TIMEOUT_S,
     READ_TIMEOUT_S,
     REQUEST_DEADLINE_S,
@@ -95,10 +96,9 @@ from lookout_capture.archive_queue import (  # noqa: E402
     ArchiveQueue,
     QueueRunner,
 )
-from lookout_common.http import MinIntervalLimiter  # noqa: E402
-from lookout_common.manifest import load_manifests  # noqa: E402
-from lookout_common.storage import LocalStorage  # noqa: E402
-from PIL import Image  # noqa: E402
+from snow_globe_common.http import MinIntervalLimiter  # noqa: E402
+from snow_globe_common.manifest import load_manifests  # noqa: E402
+from snow_globe_common.storage import LocalStorage  # noqa: E402
 
 DATA = plan.DATA
 _OPEN = ("pending", "active")
@@ -213,7 +213,7 @@ def as_archive_asset(cam: Any, asset: Any) -> Any:
     Capture stores an asset only if its id starts with 8 hex characters (an NPS AssetID),
     and parses its time only with a LocalTimeString such as '7/15/2025 11:00 AM Pacific
     Daylight Time': ImageCreateDateTime stays on standard time, LocalTimeString is civil
-    time, an hour ahead in summer (lookout_common.timeutil.parse_nps_archive_time).
+    time, an hour ahead in summer (snow_globe_common.timeutil.parse_nps_archive_time).
     """
     local = cam.utc_of(asset).astimezone(cam.tz)
     standard, daylight = ZONE_NAMES[str(cam.tz.key)]
@@ -326,7 +326,7 @@ def _setup(
     rng = random.Random(seed)
     root = out / f"tmp-{errors}-{seed}-{uuid.uuid4().hex[:8]}"
     (root / "data").mkdir(parents=True)
-    os.environ["LOOKOUT_DATA_DIR"] = str(root / "data")
+    os.environ["SNOW_GLOBE_DATA_DIR"] = str(root / "data")
     storage = LocalStorage(root / "data")
     queue = ArchiveQueue(root / "queue.json")
     with queue.edit() as doc:

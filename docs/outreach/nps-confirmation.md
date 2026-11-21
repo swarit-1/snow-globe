@@ -2,6 +2,8 @@
 
 **For you to send.** Fill the brackets and send it from the project's own contact address, not a personal one (PRD §15.5). I haven't sent anything.
 
+**The name:** the project is Snow Globe since 21 Nov 2026 (D-080). The capture loop keeps sending the old User-Agent, `Lookout/0.1 (…)`, until the lead's switch after the M0.5 gate (PLAN.md), so the email names both.
+
 Send it to two places:
 1. **NPS Air Resources Division (air-quality webcams).** Use the contact form linked from the archive site: <https://www.nps.gov/airwebcams/Contact>.
 2. **Mount Rainier National Park,** about the Paradise "mountain" camera. Use the park's contact page (<https://www.nps.gov/mora/contacts.htm>; check the link before sending).
@@ -12,7 +14,7 @@ Send it to two places:
 
 Hello,
 
-I'm building **Lookout**, a non-commercial, open-source portfolio project. It renders what a scenic viewpoint will look like at a future hour, using NOAA's public forecast, and then checks those renderings against what the park webcams actually recorded. NPS webcams are the ground truth. Before I publish anything, I'd like to confirm that my use is appropriate.
+I'm building **Snow Globe**, a non-commercial, open-source portfolio project. It renders what a scenic viewpoint will look like at a future hour, using NOAA's public forecast, and then checks those renderings against what the park webcams actually recorded. NPS webcams are the ground truth. Before I publish anything, I'd like to confirm that my use is appropriate.
 
 **Cameras:**
 - Air-quality webcams:
@@ -28,7 +30,7 @@ I'm building **Lookout**, a non-commercial, open-source portfolio project. It re
 **How I collect images:**
 - Live images are checked at most every 5 minutes, and an image is downloaded only when it has changed. That is no more than 4 images per camera per hour.
 - Archive images (AirWebCams) are fetched one request at a time, at least 5 seconds apart, and at most 1,000 requests a day. The first pass is about 4,300 frames over five days (about 0.25 GB), and about 23,700 frames (about 1.4 GB) by mid-December.
-- Every request identifies the project in its User-Agent.
+- Every request names the project in its User-Agent: `SnowGlobe/0.1 (webcam research capture; fetch-on-change)`. Requests sent before the project's rename used its earlier name, `Lookout/0.1 (webcam research capture; fetch-on-change)`.
 
 **What I'd like to confirm:**
 1. Are the images from these cameras NPS works in the public domain, per the NPS website disclaimer? Or do any carry other terms? The air-quality images name "National Park Service" as artist and copyright holder in their EXIF data. The Rainier Paradise image carries no ownership metadata, so I'd also like to know who operates that camera and what terms apply.
@@ -43,8 +45,8 @@ If any of this isn't appropriate, I'll change the plan, and I'll remove any imag
 
 Thank you,
 [Your name]
-Lookout project, [project contact address]
-[Repository URL, once public]
+Snow Globe project, [project contact address]
+[Repository URL]
 
 ---
 

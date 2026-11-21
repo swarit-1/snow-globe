@@ -68,8 +68,8 @@ describe('synthetic plate (committed fixture)', () => {
 
   it('refuses to make goldens of anything but the synthetic plate (real-plate goldens stay out of the repo)', () => {
     const s = readScene(goldenScenePath('clear'));
-    expect(() => assertSyntheticGolden({ ...s, viewpoint_id: 'rainier.paradise-mountain' }, 'x')).toThrow(/LOOKOUT_DATA_DIR/);
-    expect(() => assertSyntheticGolden({ ...s, plate: { ...s.plate, id: 'rainier.paradise-mountain/plate-v1' } }, 'x')).toThrow(/LOOKOUT_DATA_DIR/);
+    expect(() => assertSyntheticGolden({ ...s, viewpoint_id: 'rainier.paradise-mountain' }, 'x')).toThrow(/SNOW_GLOBE_DATA_DIR/);
+    expect(() => assertSyntheticGolden({ ...s, plate: { ...s.plate, id: 'rainier.paradise-mountain/plate-v1' } }, 'x')).toThrow(/SNOW_GLOBE_DATA_DIR/);
   });
 });
 

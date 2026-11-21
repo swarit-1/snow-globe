@@ -1,4 +1,4 @@
-# app/speech-macos: Lookout's on-device speech library
+# app/speech-macos: Snow Globe's on-device speech library
 
 A Swift static library with a C ABI that the Tauri shell links in process (PRD §6.1, §6.5). It
 runs engine A1 of PRD §7.1, SpeechAnalyzer with `DictationTranscriber`, **on device only**
@@ -7,37 +7,50 @@ and the stable (finalized) part of each, so the core can act on a stable partial
 After key-up it sends exactly one final transcript. It holds audio in RAM for the query only and
 never writes it anywhere (§15.1, §15.2).
 
-- **ABI:** [`include/lookout_speech.h`](include/lookout_speech.h), which is the contract: events,
+- **ABI:** [`include/snow_globe_speech.h`](include/snow_globe_speech.h), which is the contract: events,
   threading, lifetimes and codes.
-- **Products:** `liblookout_speech.a`, and `lookout-transcribe` (WAV in, JSON lines out).
+- **Products:** `libsnow_globe_speech.a`, and `snow-globe-transcribe` (WAV in, JSON lines out).
 - **Status (20 Nov 2026):** version 0.2.0, built and unit-tested, 103 tests passing. **It has
   never run against the real recognizer.** That needs the owner (see "What needs the owner"),
   because calling the recognizer can show a permission prompt and there are no voice fixtures
   yet.
+- **Renamed (21 Nov 2026, D-080), version 0.3.0:** the product is now Snow Globe. The C prefix
+  is `sg_`/`SG_` (was `lk_`/`LK_`), the header `snow_globe_speech.h` (was `lookout_speech.h`), the
+  archive `libsnow_globe_speech.a` (was `liblookout_speech.a`), the CLI `snow-globe-transcribe`
+  signed as `dev.snowglobe.transcribe` (was `lookout-transcribe`, `dev.lookout.transcribe`), and
+  the Swift modules `SnowGlobeSpeech*` (were `LookoutSpeech*`). The ABI's shape is unchanged: the
+  same ten functions with the same signatures, and the same constant values. Measurements in this
+  README before 21 Nov were taken under the old names; sizes quoted for the archive are of
+  `liblookout_speech.a`. A new signing identifier is a new identity to macOS, so the owner's
+  Speech Recognition grant and the model reservation must be made again for it (see "What needs
+  the owner").
 
 ## Build and test
 
 Build output stays outside the iCloud-synced repo (CLAUDE.md), under
-`$LOOKOUT_DATA_DIR/cache/speech-macos` (default `~/lookout-data`):
+`<data dir>/cache/speech-macos`. The scripts resolve the data dir as the workers do:
+`$SNOW_GLOBE_DATA_DIR`, else `$LOOKOUT_DATA_DIR`, else `~/snow-globe-data` or, until the data is
+moved, `~/lookout-data` (D-080):
 
 ```sh
 cd app/speech-macos
 scripts/build.sh            # everything below, in this order
 # or step by step:
-swift test --scratch-path "${LOOKOUT_DATA_DIR:-$HOME/lookout-data}/cache/speech-macos"
-swift build -c release --scratch-path "${LOOKOUT_DATA_DIR:-$HOME/lookout-data}/cache/speech-macos"
-codesign --sign - --force --identifier dev.lookout.transcribe <scratch>/release/lookout-transcribe
+swift test --scratch-path "<data dir>/cache/speech-macos"
+swift build -c release --scratch-path "<data dir>/cache/speech-macos"
+codesign --sign - --force --identifier dev.snowglobe.transcribe <scratch>/release/snow-globe-transcribe
 scripts/check-symbols.sh           # deny list + the reviewed import baseline (see "Static checks")
 scripts/check-symbols-selftest.sh  # the check above must reject 20 crafted archives
 scripts/link-check.sh              # a C program links the archive with the flags below and runs
 ```
 
 **Outputs:**
-- `<scratch>/release/liblookout_speech.a`: 907,616 bytes at the default scratch path; 9 Swift
+- `<scratch>/release/libsnow_globe_speech.a`: 907,616 bytes at the default scratch path (as
+  `liblookout_speech.a`, 0.2.0, 20 Nov); 9 Swift
   objects plus `version.c.o`. The size depends on the scratch path, because absolute source and
   module-cache paths are embedded; the symbol sets do not.
-- `<scratch>/release/lookout-transcribe`, signed ad hoc as `dev.lookout.transcribe` with its
-  embedded Info.plist bound (`codesign -dv`: `Identifier=dev.lookout.transcribe`,
+- `<scratch>/release/snow-globe-transcribe`, signed ad hoc as `dev.snowglobe.transcribe` with its
+  embedded Info.plist bound (`codesign -dv`: `Identifier=dev.snowglobe.transcribe`,
   `Info.plist entries=4`), so its signing identity and its bundle identifier agree.
 
 **Toolchain:** Swift 6.2.3 in Swift 6 language mode, with warnings treated as errors. Xcode 26.2,
@@ -46,7 +59,7 @@ macOS SDK 26.2 (25C57), deployment target macOS 26.
 **What the tests need:**
 - No microphone, no permission, no model and no audio fixture.
 - The real recognizer is unreachable from the test process. A C initializer in
-  `Tests/LookoutSpeechTestBootstrap` runs when the test bundle loads, before any test, and puts
+  `Tests/SnowGlobeSpeechTestBootstrap` runs when the test bundle loads, before any test, and puts
   a trap engine and a fake status probe behind the library's seams for the whole process. A test
   that forgets to install a mock, in any class or in a filtered run, gets an ERROR event, never
   `DictationEngine` or the Speech framework's status queries. `SpeechTestCase` also resets the
@@ -59,14 +72,14 @@ The M1 spike's [`tauri-app/build.rs`](../../spikes/m1-platform/tauri-app/build.r
 the reference. The minimal link line, checked by `scripts/link-check.sh`:
 
 ```
--L <dir of liblookout_speech.a> -llookout_speech
+-L <dir of libsnow_globe_speech.a> -lsnow_globe_speech
 -L $(xcrun --sdk macosx --show-sdk-path)/usr/lib/swift   # Swift runtime .tbd stubs
 -Wl,-rpath,/usr/lib/swift                                 # where the OS keeps the Swift runtime
 -framework Foundation -framework AVFoundation -framework CoreMedia -framework Speech
 ```
 
 In `build.rs` terms:
-- `cargo:rustc-link-search=native=…/release`, then `cargo:rustc-link-lib=static=lookout_speech`;
+- `cargo:rustc-link-search=native=…/release`, then `cargo:rustc-link-lib=static=snow_globe_speech`;
 - the SDK's `usr/lib/swift` as a search path;
 - `cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift`;
 - `cargo:rustc-link-lib=framework=…` for the four frameworks.
@@ -95,13 +108,13 @@ Swift module's `package` symbols; none of them is part of the ABI.
 
 | Call | When | Notes |
 |---|---|---|
-| `lk_speech_status(locale)` | any time, off the audio thread | 0 ready; 1 model not installed; 2 Speech Recognition denied or restricted; 3 locale unsupported; <0 error. Blocks up to 10 s; never prompts or downloads |
-| `lk_speech_start(locale, rate, cb, ctx)` | key-down | Returns at once (measured p50 0.7 to 1.0 ms at 48 kHz, mostly allocating and pre-faulting the 4 MB ring so the audio thread never takes a page fault). The recognizer is set up in the background while pushed audio waits in the ring. NULL only for bad arguments |
-| `lk_speech_push_f32(s, mono, n)` | audio thread | Copies into a lock-free ring (at least 20 s); no lock, allocation or system call. Any refused push makes the session end in ERROR `-3` |
-| `lk_speech_finish(s)` | key-up | Drains, adds the silence pad (default none), finalizes, then exactly one FINAL or ERROR. Does not wait. A 15 s watchdog turns a hang into ERROR `-6` |
-| `lk_speech_cancel(s)` | any time | No callback and no audio to the recognizer after it returns; safe from inside a callback. It waits for a running callback and for one audio chunk at most (measured: at most 1.3 to 1.7 ms per run during a 19 s backlog) |
-| `lk_speech_free(s)` | when no other call on the session is in flight | Cancels if needed and zeroes the ring. No push, finish or cancel may overlap or follow it |
-| `lk_speech_set_contextual_strings`, `_set_silence_pad_ms`, `_set_model_retention` | before `start` | **Added** (see below). Process-wide and copied at `start`. The library reads no environment variables and no files |
+| `sg_speech_status(locale)` | any time, off the audio thread | 0 ready; 1 model not installed; 2 Speech Recognition denied or restricted; 3 locale unsupported; <0 error. Blocks up to 10 s; never prompts or downloads |
+| `sg_speech_start(locale, rate, cb, ctx)` | key-down | Returns at once (measured p50 0.7 to 1.0 ms at 48 kHz, mostly allocating and pre-faulting the 4 MB ring so the audio thread never takes a page fault). The recognizer is set up in the background while pushed audio waits in the ring. NULL only for bad arguments |
+| `sg_speech_push_f32(s, mono, n)` | audio thread | Copies into a lock-free ring (at least 20 s); no lock, allocation or system call. Any refused push makes the session end in ERROR `-3` |
+| `sg_speech_finish(s)` | key-up | Drains, adds the silence pad (default none), finalizes, then exactly one FINAL or ERROR. Does not wait. A 15 s watchdog turns a hang into ERROR `-6` |
+| `sg_speech_cancel(s)` | any time | No callback and no audio to the recognizer after it returns; safe from inside a callback. It waits for a running callback and for one audio chunk at most (measured: at most 1.3 to 1.7 ms per run during a 19 s backlog) |
+| `sg_speech_free(s)` | when no other call on the session is in flight | Cancels if needed and zeroes the ring. No push, finish or cancel may overlap or follow it |
+| `sg_speech_set_contextual_strings`, `_set_silence_pad_ms`, `_set_model_retention` | before `start` | **Added** (see below). Process-wide and copied at `start`. The library reads no environment variables and no files |
 
 **Events:**
 - **READY** comes first. Its `audio_end_s` is the audio buffered during setup, so setup time is
@@ -124,41 +137,41 @@ Swift module's `package` symbols; none of them is part of the ABI.
   (the spike passes `kind` as a `u32` and maps 4 to `Unknown`).
 
 ### Additions to the ABI the lead specified (all additive; the spike is unaffected)
-- **`lk_speech_set_contextual_strings(strings, n)`.** PRD §7.1 says viewpoint aliases go in as
+- **`sg_speech_set_contextual_strings(strings, n)`.** PRD §7.1 says viewpoint aliases go in as
   contextual strings. That is the reason A1 is `DictationTranscriber`, and the specified ABI had
   no way to pass them. They go to `AnalysisContext.contextualStrings[.general]`. NULL, empty,
   blank and non-UTF-8 strings are rejected.
-- **`lk_speech_set_silence_pad_ms(ms)`.** PRD §7.1 finalization lever 1, "measured, not assumed",
+- **`sg_speech_set_silence_pad_ms(ms)`.** PRD §7.1 finalization lever 1, "measured, not assumed",
   so it defaults to 0: a caller that never sets it runs with lever 1 off (the spike does not set
   it). TODO(M1): the lead records the default in DECISIONS, and the shell and harness set it
   explicitly and log it with each trial.
-- **`lk_speech_set_model_retention(mode)`.** `SpeechAnalyzer.Options.ModelRetention`: while in
+- **`sg_speech_set_model_retention(mode)`.** `SpeechAnalyzer.Options.ModelRetention`: while in
   use, lingering (the default) or process lifetime. Idle latency is the headline (§10.6), and this
   setting affects it, so the bake-off should be able to vary it.
-- **`LK_EV_STABLE = 4`** (0.2.0): the stable part of the hypothesis (above). PRD §7.1's `Partial`
+- **`SG_EV_STABLE = 4`** (0.2.0): the stable part of the hypothesis (above). PRD §7.1's `Partial`
   has a `stability` field, and lever 2 ("Tier 0 painted from a stable partial", allowed only while
   the wrong-paint rate stays ≤ 2 %) needs to know what the recognizer has settled.
-- **Named codes.** `LK_SPEECH_*` status and error codes, and `LK_SPEECH_RETAIN_*`.
+- **Named codes.** `SG_SPEECH_*` status and error codes, and `SG_SPEECH_RETAIN_*`.
 
 ## What needs the owner
 
 1. **The on-device model.**
-   - **Check:** `lookout-transcribe status --locale en-US` prints `lk_speech_status`; code 1
+   - **Check:** `snow-globe-transcribe status --locale en-US` prints `sg_speech_status`; code 1
      means the model is missing. It also prints a `reservations` line:
      `AssetInventory.reservedLocales` for this tool's identity, and `maximumReservedLocales`.
-   - **Install:** `lookout-transcribe install-assets --locale en-US --yes`. This downloads
+   - **Install:** `snow-globe-transcribe install-assets --locale en-US --yes`. This downloads
      Apple's dictation model from Apple's servers (`AssetInventory`). It is the only code in the
      package that can make the system fetch anything, it lives in the CLI, not the library, and
      it needs `--yes`. It prints a `reservations` line before and after.
    - **The library never downloads.** A missing model is ERROR 1, not a fallback.
    - **Reservations.** Apple reserves models per app. A model installed through the CLI
-     (`dev.lookout.transcribe`) may still need a reservation for the spike
-     (`dev.lookout.spike-m1`). If SpeechAnalyzer reports `assetLocaleNotAllocated`, the library
+     (`dev.snowglobe.transcribe`) may still need a reservation for the spike
+     (`dev.snowglobe.spike-m1`). If SpeechAnalyzer reports `assetLocaleNotAllocated`, the library
      calls `AssetInventory.reserve(locale:)` once and retries; this downloads nothing. If the
      reservation fails, the session ends with ERROR `-8`.
    - TODO(M1): **which identity reservations (and TCC) key on is unverified.** It is either the
      embedded Info.plist's bundle identifier or the code-signing identifier. For the CLI the two
-     now agree (`scripts/build.sh` signs it as `dev.lookout.transcribe`). The spike's cargo
+     now agree (`scripts/build.sh` signs it as `dev.snowglobe.transcribe`). The spike's cargo
      binaries are linker-signed ad hoc with identifiers like `m1_spike-e8e55116026759cb`, which
      change with the build hash, and their Info.plist is not bound. If the key is the signing
      identifier, every spike rebuild is a new app, and repeated reservations could reach
@@ -180,8 +193,8 @@ Swift module's `package` symbols; none of them is part of the ABI.
 3. **The microphone** belongs to the shell (`cpal`), not to this library. The library never opens
    it.
 4. **Running anything on speech.**
-   - Voice fixtures come only from the owner, under `$LOOKOUT_DATA_DIR/fixtures/voice/`.
-   - `lookout-transcribe FILE.wav` replays one at the audio's own pace through the C ABI.
+   - Voice fixtures come only from the owner, under `$SNOW_GLOBE_DATA_DIR/fixtures/voice/`.
+   - `snow-globe-transcribe FILE.wav` replays one at the audio's own pace through the C ABI.
      `--fast` pushes at up to 20 times that pace and waits for READY once 15 s are buffered
      (nothing drains the 20 s ring before the recognizer is ready, so unbounded pushing would end
      a long file in ERROR `-3`). `--no-text` keeps only lengths.
@@ -198,25 +211,25 @@ Swift module's `package` symbols; none of them is part of the ABI.
 `spikes/m1-platform/tauri-app/src/speech.rs` and `checks.rs`, and the spike README, check 6.
 
 **Build.** `cargo build --release -p m1-spike-app --features speech` (with
-`CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target`). `build.rs`:
-- finds `liblookout_speech.a` in `$LOOKOUT_DATA_DIR/cache/speech-macos/release`;
+`CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target`, which is `~/snow-globe-data`'s after the switch, through the symlink). `build.rs`:
+- finds `libsnow_globe_speech.a` in `$SNOW_GLOBE_DATA_DIR/cache/speech-macos/release`;
 - checks that the header declares the seven functions;
 - links as above.
 
-**Before the trials.** The spike calls `lk_speech_status(locale)`. It refuses to run on a
+**Before the trials.** The spike calls `sg_speech_status(locale)`. It refuses to run on a
 non-zero code and prints its meaning.
 
 **Each trial:**
-- **Key-down:** `lk_speech_start(locale, device rate)`, then the cpal stream pushes 4,096-frame
-  (or smaller) mono chunks with `lk_speech_push_f32`. The spike times every push against the
+- **Key-down:** `sg_speech_start(locale, device rate)`, then the cpal stream pushes 4,096-frame
+  (or smaller) mono chunks with `sg_speech_push_f32`. The spike times every push against the
   ~1 ms budget.
 - **Key-up:**
   - the stream is dropped, so no push follows;
-  - `lk_speech_finish`;
+  - `sg_speech_finish`;
   - a wait of up to 10 s for FINAL;
-  - `lk_speech_cancel`, then `lk_speech_free`.
+  - `sg_speech_cancel`, then `sg_speech_free`.
 - **The library guarantees what the pass rule needs:**
-  - one FINAL, after `lk_speech_finish`, and never before it;
+  - one FINAL, after `sg_speech_finish`, and never before it;
   - PARTIALs with text while the key is held;
   - no ERROR on the happy path.
 - **STABLE events** reach the spike as kind 4, which it records as `Unknown` and its verdicts
@@ -278,14 +291,14 @@ application's memory space", WWDC25 session 277), so the monitor's daemon groups
 ## Inside (for whoever changes it)
 
 - **`CABI.swift`:** the `@_cdecl` entry points. **The compiler does not check them against the
-  header's prototypes**: only `lk_speech_cb` and the constants come from the header (the
-  `LookoutSpeechC` module), so a drifted prototype still builds the library. The test target
+  header's prototypes**: only `sg_speech_cb` and the constants come from the header (the
+  `SnowGlobeSpeechC` module), so a drifted prototype still builds the library. The test target
   catches drift: `ABITests.testEntryPointsHaveTheHeadersExactTypes` assigns each entry point to
   a variable typed from the header's declaration and fails to compile with a plain type error
   (checked on a copy with a parameter changed to `Int64`). Without it the only symptom is a
-  compiler crash in the test build ("SILFunction type mismatch for 'lk_speech_finish'").
+  compiler crash in the test build ("SILFunction type mismatch for 'sg_speech_finish'").
   `scripts/build.sh` builds the tests before the release archive. `version.c` holds
-  `lk_speech_version` and `_Static_assert`s.
+  `sg_speech_version` and `_Static_assert`s.
 - **`FloatRing`:** SPSC ring; the push side is two atomic loads, at most two `memcpy`s and one
   store. Consumed samples are zeroed.
 - **`Session`:**
@@ -304,7 +317,7 @@ application's memory space", WWDC25 session 277), so the monitor's daemon groups
   `bestAvailableAudioFormat`; it handles the silence pad and the resampler flush. It keeps
   converting until the converter asks for more input, then zeroes its Float32 input copy.
 - **`DictationEngine`:** the only `RecognizerEngine`. The tests' `MockEngine`
-  (`Tests/LookoutSpeechMocks`, in no product) sits behind the same seam; it can replay a scripted
+  (`Tests/SnowGlobeSpeechMocks`, in no product) sits behind the same seam; it can replay a scripted
   timeline of results, delay its feeds, and count feeds after a fence.
 
 ### Static checks (PRD §15.1)
@@ -331,11 +344,11 @@ application's memory space", WWDC25 session 277), so the monitor's daemon groups
 
 | What | Value | How |
 |---|---|---|
-| `lk_speech_push_f32`, 480 frames | p50 0.21 µs, p99 5.12 µs, p99.9 133.71 µs, max 506.46 µs; 0 of 5,000 over 1 ms | `PushLatencyTests`: host clock around each call, 10× real time, work queue converting concurrently, ordinary (not real-time) thread |
-| `lk_speech_start` at 48 kHz | p50 0.818 ms, max 2.546 ms (50 calls) | `StartLatencyTests` |
-| Callbacks after `lk_speech_cancel` returned | 0 (867 before it, in 300 sessions) | `CancelTests` stress |
-| Feeds to the recognizer after `lk_speech_cancel` returned | 0 in 200 random-timing sessions (171 were feeding, 67 with a 500 ms pad) | `CancelEdgeTests`, the mock's fence |
-| `lk_speech_cancel` wait | max 1.550 ms during a 19 s backlog drain (5 trials); max 13.462 ms during a 2 s pad fed to a recognizer taking 10 ms per buffer (3 trials; one buffer plus sleep overshoot, against about 200 ms for the rest of the pad) | `CancelEdgeTests.testCancelWaitsForOneChunkAtMost` |
+| `sg_speech_push_f32`, 480 frames | p50 0.21 µs, p99 5.12 µs, p99.9 133.71 µs, max 506.46 µs; 0 of 5,000 over 1 ms | `PushLatencyTests`: host clock around each call, 10× real time, work queue converting concurrently, ordinary (not real-time) thread |
+| `sg_speech_start` at 48 kHz | p50 0.818 ms, max 2.546 ms (50 calls) | `StartLatencyTests` |
+| Callbacks after `sg_speech_cancel` returned | 0 (867 before it, in 300 sessions) | `CancelTests` stress |
+| Feeds to the recognizer after `sg_speech_cancel` returned | 0 in 200 random-timing sessions (171 were feeding, 67 with a 500 ms pad) | `CancelEdgeTests`, the mock's fence |
+| `sg_speech_cancel` wait | max 1.550 ms during a 19 s backlog drain (5 trials); max 13.462 ms during a 2 s pad fed to a recognizer taking 10 ms per buffer (3 trials; one buffer plus sleep overshoot, against about 200 ms for the rest of the pad) | `CancelEdgeTests.testCancelWaitsForOneChunkAtMost` |
 | Footprint change | -4.2 MB after 150 full sessions, +4.0 MB after 500 more start+free cycles (27.5 → 23.3 → 27.3 MB) | `LeakTests`, `proc_pid_rusage` `ri_phys_footprint`; a leaked ring would add 4 MB each |
 | Archive | 907,616 bytes | `stat` |
 

@@ -17,20 +17,20 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from lookout_common.jsonl import read_jsonl
+from snow_globe_common.jsonl import read_jsonl
 
-from lookout_forecast import cli, lambda_handler
-from lookout_forecast.availability import (
+from snow_globe_forecast import cli, lambda_handler
+from snow_globe_forecast.availability import (
     LagModel,
     select_run_for_issue,
     select_stored_run,
     stored_availability,
 )
-from lookout_forecast.discovery import list_run
-from lookout_forecast.extract import ExtractOptions, Extractor
-from lookout_forecast.fields import resolve_fields
-from lookout_forecast.laglog import SurveyLogger, lag_events, read_lag_log
-from lookout_forecast.output import validate_document
+from snow_globe_forecast.discovery import list_run
+from snow_globe_forecast.extract import ExtractOptions, Extractor
+from snow_globe_forecast.fields import resolve_fields
+from snow_globe_forecast.laglog import SurveyLogger, lag_events, read_lag_log
+from snow_globe_forecast.output import validate_document
 
 from .conftest import RAINIER
 

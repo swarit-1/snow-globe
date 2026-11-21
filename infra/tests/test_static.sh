@@ -6,7 +6,7 @@
 #      (shell, Python, Dockerfiles) or the cost files; in the tests and the README, only addresses at the reserved
 #      example.com and example.invalid domains; and variable "alarm_email" stays required (no default), non-nullable
 #      and sensitive.
-#   2. Tags: both provider blocks keep default_tags, and the root one uses local.tags (project=lookout).
+#   2. Tags: both provider blocks keep default_tags, and the root one uses local.tags (project=snow-globe).
 #   3. Ordering: the depends_on hints that avoid first-deploy races are still there.
 #   4. Hermetic tests: every test file pins every variable of its module, and each pin equals the variable's
 #      default, so `terraform test` checks the shipped defaults whatever TF_VAR_* or *.auto.tfvars say.
@@ -108,7 +108,7 @@ ok
 CURRENT="providers_tag_every_resource"
 block="$(block_of "$TF/versions.tf" 'provider "aws" {')"
 printf '%s\n' "$block" | grep -Eq '^  default_tags \{$' || fail "terraform/versions.tf: provider \"aws\" lost its default_tags block"
-printf '%s\n' "$block" | grep -Eq '^    tags = local\.tags$' || fail "terraform/versions.tf: default_tags must be local.tags (project=lookout)"
+printf '%s\n' "$block" | grep -Eq '^    tags = local\.tags$' || fail "terraform/versions.tf: default_tags must be local.tags (project=snow-globe)"
 block="$(block_of "$TF/bootstrap/versions.tf" 'provider "aws" {')"
 printf '%s\n' "$block" | grep -Eq '^  default_tags \{$' || fail "terraform/bootstrap/versions.tf: provider \"aws\" lost its default_tags block"
 printf '%s\n' "$block" | grep -Eq '^      project += var\.project$' || fail "terraform/bootstrap/versions.tf: default_tags must set project"

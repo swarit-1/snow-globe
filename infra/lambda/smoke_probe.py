@@ -1,4 +1,4 @@
-"""Offline probe of the Lookout Lambda image (PRD §11.3; run by infra/lambda/smoke.sh, never built into the image).
+"""Offline probe of the Snow Globe Lambda image (PRD §11.3; run by infra/lambda/smoke.sh, never built into the image).
 
 smoke.sh mounts this file read-only and runs it with the image's own Python, with no network, a read-only root file
 system and a non-root user. It never calls a handler, so it is the only local check of the capture handler: that
@@ -12,7 +12,7 @@ It does what the Lambda Python runtime does before the first invoke, and checks 
 3. checks that the packages the base image also ships (boto3, botocore, ...) load from the pinned copies in
    /var/task, and that ecCodes loads its native library from there;
 4. builds, without using them, what the capture handler builds before its first request: the viewpoint
-   manifests, the storage named by LOOKOUT_STORAGE, and the polite HTTP client with the project User-Agent.
+   manifests, the storage named by SNOW_GLOBE_STORAGE, and the polite HTTP client with the project User-Agent.
 
 It prints one JSON object (every distribution and its version included) and exits 1 if a check fails.
 """
@@ -30,7 +30,7 @@ from typing import Any
 
 TASK_ROOT = os.environ.get("LAMBDA_TASK_ROOT", "/var/task")
 RUNTIME_SITE = f"/var/lang/lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
-HANDLERS = ("lookout_capture.lambda_handler.handler", "lookout_forecast.lambda_handler.handler")
+HANDLERS = ("snow_globe_capture.lambda_handler.handler", "snow_globe_forecast.lambda_handler.handler")
 #: Import name -> distribution name, for modules that must come from TASK_ROOT.
 PINNED = {
     "boto3": "boto3",
@@ -44,7 +44,7 @@ PINNED = {
     "PIL": "pillow",
     "jsonschema": "jsonschema",
 }
-DEFAULT_UA = "Lookout/0.1 (webcam research capture; fetch-on-change)"
+DEFAULT_UA = "SnowGlobe/0.1 (webcam research capture; fetch-on-change)"
 
 
 def runtime_sys_path() -> str:
@@ -114,12 +114,14 @@ def main() -> int:
     if not libeccodes or not all(p.startswith(TASK_ROOT + "/") for p in libeccodes):
         failures.append(f"libeccodes mapped from {libeccodes}")
 
-    from lookout_common.http import polite_client
-    from lookout_common.manifest import load_manifests
-    from lookout_common.storage import storage_from_env
+    from snow_globe_common.env import env_get
+    from snow_globe_common.http import polite_client
+    from snow_globe_common.manifest import load_manifests
+    from snow_globe_common.storage import storage_from_env
 
     manifests = load_manifests()
-    files = sorted(Path(os.environ["LOOKOUT_MANIFEST_DIR"]).glob("*.json"))
+    manifest_dir = env_get("SNOW_GLOBE_MANIFEST_DIR")
+    files = sorted(Path(manifest_dir).glob("*.json")) if manifest_dir else []
     out["manifests"] = sorted(manifests)
     if not manifests or len(manifests) != len(files):
         failures.append(f"{len(manifests)} manifests loaded from {len(files)} files")
@@ -130,7 +132,7 @@ def main() -> int:
         out["user_agent"] = client.headers.get("user-agent")
     finally:
         client.close()
-    expected_ua = os.environ.get("LOOKOUT_USER_AGENT") or DEFAULT_UA
+    expected_ua = (env_get("SNOW_GLOBE_USER_AGENT") or "").strip() or DEFAULT_UA
     if out["user_agent"] != expected_ua or "@" in (out["user_agent"] or ""):
         failures.append(f"user agent {out['user_agent']!r}")
 

@@ -13,10 +13,10 @@ from pathlib import Path
 import httpx
 import pytest
 
-from lookout_common import http as lh
-from lookout_common import timeutil
-from lookout_common.http import MinIntervalLimiter
-from lookout_common.timeutil import utcnow
+from snow_globe_common import http as lh
+from snow_globe_common import timeutil
+from snow_globe_common.http import MinIntervalLimiter
+from snow_globe_common.timeutil import utcnow
 
 
 # --- polite client ----------------------------------------------------------------------
@@ -31,7 +31,7 @@ def _recording_transport(seen: list[httpx.Request]) -> httpx.MockTransport:
 
 
 def test_default_user_agent_is_exact():
-    assert lh.DEFAULT_USER_AGENT == "Lookout/0.1 (webcam research capture; fetch-on-change)"
+    assert lh.DEFAULT_USER_AGENT == "SnowGlobe/0.1 (webcam research capture; fetch-on-change)"
     seen: list[httpx.Request] = []
     with lh.polite_client(transport=_recording_transport(seen)) as client:
         client.get("https://www.nps.gov/x")
@@ -39,15 +39,15 @@ def test_default_user_agent_is_exact():
 
 
 def test_user_agent_env_override_and_header_cannot_replace_it(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("LOOKOUT_USER_AGENT", "Lookout/0.2 (ci)")
+    monkeypatch.setenv("SNOW_GLOBE_USER_AGENT", "SnowGlobe/0.2 (ci)")
     seen: list[httpx.Request] = []
     with lh.polite_client(
         transport=_recording_transport(seen), headers={"user-agent": "Mozilla", "X-Test": "1"}
     ) as client:
         client.get("https://example.org/")
-    assert seen[0].headers["User-Agent"] == "Lookout/0.2 (ci)"
+    assert seen[0].headers["User-Agent"] == "SnowGlobe/0.2 (ci)"
     assert seen[0].headers["X-Test"] == "1"
-    monkeypatch.setenv("LOOKOUT_USER_AGENT", "   ")
+    monkeypatch.setenv("SNOW_GLOBE_USER_AGENT", "   ")
     assert lh.user_agent() == lh.DEFAULT_USER_AGENT
 
 
@@ -264,11 +264,11 @@ def test_process_mode_is_shared_in_process():
 
 
 def test_auto_picks_process_mode_only_on_lambda(monkeypatch: pytest.MonkeyPatch, data_root: Path):
-    """Review finding: LOOKOUT_STORAGE=s3 on this laptop used to drop cross-process spacing."""
-    monkeypatch.setenv("LOOKOUT_STORAGE", "s3")
+    """Review finding: SNOW_GLOBE_STORAGE=s3 on this laptop used to drop cross-process spacing."""
+    monkeypatch.setenv("SNOW_GLOBE_STORAGE", "s3")
     assert MinIntervalLimiter("auto-laptop", 1.0).mode == "file"
     assert (data_root / "state" / "ratelimit").is_dir()
-    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "lookout-capture")
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "snow-globe-capture")
     assert lh.on_aws_lambda()
     assert MinIntervalLimiter("auto-lambda", 1.0).mode == "process"
     monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "  ")
@@ -320,8 +320,8 @@ def test_hold_serialises_and_spaces_real_processes(tmp_path: Path):
 def _auto_worker(data_dir: str, out: str) -> None:
     import os
 
-    os.environ["LOOKOUT_DATA_DIR"] = data_dir
-    os.environ["LOOKOUT_STORAGE"] = "s3"  # S3 storage on this laptop, not on Lambda
+    os.environ["SNOW_GLOBE_DATA_DIR"] = data_dir
+    os.environ["SNOW_GLOBE_STORAGE"] = "s3"  # S3 storage on this laptop, not on Lambda
     os.environ.pop("AWS_LAMBDA_FUNCTION_NAME", None)
     limiter = MinIntervalLimiter("probe-auto", 0.3)  # the default mode="auto"
     for _ in range(2):

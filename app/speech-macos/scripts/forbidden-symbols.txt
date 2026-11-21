@@ -1,8 +1,8 @@
-# Symbols liblookout_speech.a must never refer to (PRD §15.1: speech on device only; audio in RAM
+# Symbols libsnow_globe_speech.a must never refer to (PRD §15.1: speech on device only; audio in RAM
 # for the query, never stored). One rule per line: a category, a TAB, then a POSIX extended
 # regular expression (also valid for NSRegularExpression) matched against every undefined symbol
 # name. Read by scripts/check-symbols.sh (release archive) and by
-# Tests/LookoutSpeechTests/StaticChecksTests.swift (debug objects), so the two never drift.
+# Tests/SnowGlobeSpeechTests/StaticChecksTests.swift (debug objects), so the two never drift.
 #
 # This is the deny list: it names what is forbidden and gives a clear failure. The allow list is
 # scripts/archive-imports.txt, the reviewed set of everything the release archive imports; any

@@ -1,5 +1,9 @@
-//! Where spike results go (CLAUDE.md "Data"): `$LOOKOUT_DATA_DIR/spikes/m1/`, defaulting to
-//! `~/lookout-data/spikes/m1/`, and never inside the repository.
+//! Where spike results go (CLAUDE.md "Data"): `<data dir>/spikes/m1/`, never inside the
+//! repository. The data dir is the workers' (D-080): `$SNOW_GLOBE_DATA_DIR`, else the deprecated
+//! `$LOOKOUT_DATA_DIR`, else `~/snow-globe-data` if it exists, else `~/lookout-data` if it exists
+//! (its name before the rename), else `~/snow-globe-data`; refused while no variable names it and
+//! both folders exist as different folders (something made `~/snow-globe-data` before the rename's
+//! live switch, which leaves `~/lookout-data` as a symlink to it).
 
 use std::path::{Component, Path, PathBuf};
 
@@ -14,27 +18,70 @@ pub fn repo_root() -> PathBuf {
         .unwrap_or_else(|| manifest.to_path_buf())
 }
 
-/// `$LOOKOUT_DATA_DIR`, or `$HOME/lookout-data` when it is unset or empty.
-pub fn data_dir() -> PathBuf {
+/// The data dir (see the module docs). A blank variable counts as unset.
+pub fn data_dir() -> Result<PathBuf, String> {
     data_dir_from(
+        std::env::var_os("SNOW_GLOBE_DATA_DIR").map(PathBuf::from),
         std::env::var_os("LOOKOUT_DATA_DIR").map(PathBuf::from),
         std::env::var_os("HOME").map(PathBuf::from),
+        |p| p.exists(),
+        same_folder,
     )
 }
 
-/// Pure form of [`data_dir`], for tests.
-pub fn data_dir_from(lookout_data_dir: Option<PathBuf>, home: Option<PathBuf>) -> PathBuf {
-    match lookout_data_dir {
-        Some(p) if !p.as_os_str().is_empty() => p,
-        _ => home
-            .unwrap_or_else(|| PathBuf::from("/tmp"))
-            .join("lookout-data"),
+/// Whether two existing paths are one folder: same device and inode, symlinks followed.
+pub fn same_folder(a: &Path, b: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (std::fs::metadata(a), std::fs::metadata(b)) {
+        (Ok(x), Ok(y)) => x.dev() == y.dev() && x.ino() == y.ino(),
+        _ => false,
     }
 }
 
+fn blank(p: &Path) -> bool {
+    p.as_os_str()
+        .to_str()
+        .map_or(p.as_os_str().is_empty(), |s| s.trim().is_empty())
+}
+
+/// Pure form of [`data_dir`], for tests: the two variables' values, the home folder, how to
+/// tell whether a folder exists, and whether two existing folders are one.
+pub fn data_dir_from(
+    data_dir: Option<PathBuf>,
+    legacy_data_dir: Option<PathBuf>,
+    home: Option<PathBuf>,
+    exists: impl Fn(&Path) -> bool,
+    same: impl Fn(&Path, &Path) -> bool,
+) -> Result<PathBuf, String> {
+    if let Some(named) = [data_dir, legacy_data_dir]
+        .into_iter()
+        .flatten()
+        .find(|p| !blank(p))
+    {
+        return Ok(named);
+    }
+    let home = home.unwrap_or_else(|| PathBuf::from("/tmp"));
+    let new = home.join("snow-globe-data");
+    let old = home.join("lookout-data");
+    if exists(&new) && exists(&old) && !same(&new, &old) {
+        return Err(format!(
+            "both {} and {} exist and are different folders, so the data dir is ambiguous \
+             (D-080): set SNOW_GLOBE_DATA_DIR to the folder you mean, and tell the lead which \
+             one is stray",
+            new.display(),
+            old.display()
+        ));
+    }
+    Ok(if exists(&new) || !exists(&old) {
+        new
+    } else {
+        old
+    })
+}
+
 /// `<data dir>/spikes/m1`.
-pub fn spike_dir() -> PathBuf {
-    data_dir().join("spikes").join("m1")
+pub fn spike_dir() -> Result<PathBuf, String> {
+    Ok(data_dir()?.join("spikes").join("m1"))
 }
 
 /// Lexically normalises an absolute path (drops `.` and resolves `..`), without touching the disk.
@@ -87,8 +134,8 @@ pub fn ensure_outside_repo(path: &Path) -> Result<(), String> {
     let root = repo_root();
     if is_inside(path, &root) {
         return Err(format!(
-            "refusing to write spike results inside the repository ({}); set LOOKOUT_DATA_DIR \
-             to a folder outside it, such as ~/lookout-data",
+            "refusing to write spike results inside the repository ({}); set SNOW_GLOBE_DATA_DIR \
+             to a folder outside it, such as ~/snow-globe-data",
             path.display()
         ));
     }
@@ -141,7 +188,7 @@ pub fn redact_home_with(s: &str, home: Option<&str>) -> String {
 /// `<spike dir>/<run-id>.jsonl`, after validating the id and the location.
 pub fn run_path(run_id: &str) -> Result<PathBuf, String> {
     validate_run_id(run_id)?;
-    let path = spike_dir().join(format!("{run_id}.jsonl"));
+    let path = spike_dir()?.join(format!("{run_id}.jsonl"));
     ensure_outside_repo(&path)?;
     Ok(path)
 }
@@ -150,20 +197,83 @@ pub fn run_path(run_id: &str) -> Result<PathBuf, String> {
 mod tests {
     use super::*;
 
+    fn apart(_: &Path, _: &Path) -> bool {
+        false
+    }
+
     #[test]
     fn data_dir_prefers_the_env_var() {
+        let none = |_: &Path| false;
+        let home = || Some(PathBuf::from("/home/u"));
         assert_eq!(
-            data_dir_from(Some("/x/data".into()), Some("/home/u".into())),
-            PathBuf::from("/x/data")
+            data_dir_from(Some("/x/data".into()), None, home(), none, apart),
+            Ok(PathBuf::from("/x/data"))
         );
         assert_eq!(
-            data_dir_from(Some("".into()), Some("/home/u".into())),
-            PathBuf::from("/home/u/lookout-data")
+            data_dir_from(Some("".into()), None, home(), none, apart),
+            Ok(PathBuf::from("/home/u/snow-globe-data"))
         );
         assert_eq!(
-            data_dir_from(None, Some("/home/u".into())),
-            PathBuf::from("/home/u/lookout-data")
+            data_dir_from(None, None, home(), none, apart),
+            Ok(PathBuf::from("/home/u/snow-globe-data"))
         );
+    }
+
+    #[test]
+    fn data_dir_follows_the_rename_order() {
+        let home = || Some(PathBuf::from("/home/u"));
+        let only_old = |p: &Path| p == Path::new("/home/u/lookout-data");
+        let both = |p: &Path| p.starts_with("/home/u");
+        let none = |_: &Path| false;
+        // the deprecated variable, then the new one over it, and a blank new one is unset
+        assert_eq!(
+            data_dir_from(None, Some("/old".into()), home(), none, apart),
+            Ok(PathBuf::from("/old"))
+        );
+        assert_eq!(
+            data_dir_from(
+                Some("/new".into()),
+                Some("/old".into()),
+                home(),
+                none,
+                apart
+            ),
+            Ok(PathBuf::from("/new"))
+        );
+        assert_eq!(
+            data_dir_from(Some(" ".into()), Some("/old".into()), home(), none, apart),
+            Ok(PathBuf::from("/old"))
+        );
+        // the old folder until it is moved, then the new one: after the switch the old name is a
+        // symlink to the new folder, so both exist and are one folder
+        assert_eq!(
+            data_dir_from(None, None, home(), only_old, apart),
+            Ok(PathBuf::from("/home/u/lookout-data"))
+        );
+        assert_eq!(
+            data_dir_from(None, None, home(), both, |_, _| true),
+            Ok(PathBuf::from("/home/u/snow-globe-data"))
+        );
+        // both folders apart (the new one made before the switch): refused
+        let err = data_dir_from(None, None, home(), both, apart).expect_err("ambiguous");
+        assert!(err.contains("ambiguous (D-080)"), "{err}");
+        assert_eq!(
+            data_dir_from(None, Some("/old".into()), home(), both, apart),
+            Ok(PathBuf::from("/old"))
+        );
+    }
+
+    #[test]
+    fn same_folder_follows_symlinks() {
+        let tmp = std::env::temp_dir().join(format!("m1-same-folder-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("new")).expect("mkdir");
+        std::fs::create_dir_all(tmp.join("other")).expect("mkdir");
+        std::os::unix::fs::symlink(tmp.join("new"), tmp.join("old")).expect("symlink");
+        assert!(same_folder(&tmp.join("new"), &tmp.join("old")));
+        assert!(!same_folder(&tmp.join("new"), &tmp.join("other")));
+        assert!(!same_folder(&tmp.join("new"), &tmp.join("missing")));
+        std::fs::remove_dir_all(&tmp).expect("cleanup");
     }
 
     #[test]
@@ -196,8 +306,8 @@ mod tests {
     fn home_is_redacted_from_logged_strings() {
         let h = Some("/Users/someone");
         assert_eq!(
-            redact_home_with("/Users/someone/lookout-data/spikes/m1/r.jsonl", h),
-            "~/lookout-data/spikes/m1/r.jsonl"
+            redact_home_with("/Users/someone/snow-globe-data/spikes/m1/r.jsonl", h),
+            "~/snow-globe-data/spikes/m1/r.jsonl"
         );
         assert_eq!(redact_home_with("--path=/Users/someone/x", h), "--path=~/x");
         assert_eq!(redact_home_with("/Users/someone", h), "~");

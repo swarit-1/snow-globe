@@ -1,9 +1,9 @@
-# Lookout: working rules for Claude Code
+# Snow Globe: working rules for Claude Code
 
-**Lookout** is a push-to-talk macOS "visual forecast" (repo name: `snow-globe`; product name: Lookout).
+**Snow Globe** is a push-to-talk macOS "visual forecast" (repo name: `snow-globe`; product name: Snow Globe since 21 Nov 2026, renamed from Lookout, D-080).
 
 **Documents:**
-- [PRD.md](PRD.md) v0.4.1 is the spec (v0.4 plus factual corrections, 19 Nov).
+- [PRD.md](PRD.md) v0.4.2 is the spec (v0.4 plus the factual corrections of 19–20 Nov and the rename of 21 Nov).
 - [PLAN.md](PLAN.md) holds the milestones.
 - [DECISIONS.md](DECISIONS.md) holds decisions with evidence, plus the spend ledger.
 - [PRD_PROGRESS.md](PRD_PROGRESS.md) tracks progress and measured numbers.
@@ -36,7 +36,8 @@ Only the lead session commits. Subagents never commit.
 
 **Privacy:**
 - Never put the owner's name, email or GitHub handle in requests to external services, including the User-Agent.
-- The default UA is `Lookout/0.1 (webcam research capture; fetch-on-change)`. It can be overridden with `LOOKOUT_USER_AGENT`.
+- The default UA is `SnowGlobe/0.1 (webcam research capture; fetch-on-change)`. It can be overridden with `SNOW_GLOBE_USER_AGENT` (the old `LOOKOUT_USER_AGENT` is still read).
+  - The running capture loop sends the old `Lookout/0.1 (webcam research capture; fetch-on-change)` until the post-gate switch (D-080).
 
 **Audio:** never record audio. Voice fixtures come only from the owner.
 
@@ -54,18 +55,23 @@ Only the lead session commits. Subagents never commit.
 **General:**
 - Back off on errors.
 - Never run two NPS fetchers at once.
-  - The lead runs `lookout-capture loop --archive-queue` for all 8 cameras; the Rainier stopgap was retired (D-023). Archive backfill runs only inside that loop, from `state/archive/queue.json`.
+  - The lead runs `snow-globe-capture loop --archive-queue` for all 8 cameras (until the post-gate switch, the snapshot's `lookout-capture loop`, D-080); the Rainier stopgap was retired (D-023). Archive backfill runs only inside that loop, from `state/archive/queue.json`.
   - The loop and a local forecast stand-in run from a frozen snapshot of committed code, with their own venvs, under `~/lookout-data/cache/runtime/<sha>/`. They never use the repo's venvs, so `uv sync` in the repo is safe. Never edit, stop or signal anything under `cache/runtime/`.
-  - Commands that fetch from nps.gov (`once`, `loop`, `archive days|day|sample`, `archive-check`) take a host-wide lock and exit with status 3 if another fetcher is active. The offline commands (`status`, `cadence`, `storage-report`, `archive queue add|list|remove|resume`) take no lock.
+  - Until the post-gate switch the loops stay where they are: the capture loop on snapshot `3cd2ca7`, the forecast stand-in on `034c46b` (where it started on 20 Nov). There is no re-snapshot between the rename commit and the switch: the live scripts start `lookout-capture` and import `lookout_forecast`, which renamed code no longer has, so the usual re-snapshot (flip `current`, SIGTERM the loops) would leave both jobs down. The switch, `infra/ops/migrate-to-snow-globe.sh`, is the only re-snapshot path until then (D-080).
+  - Commands that fetch from nps.gov (`once`, `loop`, `archive days|day|sample`, `archive-check`) take a host-wide lock and exit with status 3 if another fetcher is active. The lock is taken in the data dir and in each of `~/lookout-data` and `~/snow-globe-data` that exists, so it holds whichever data dir a process resolved, and the running 0.2.1 loop's lock is always respected; another `snow-globe-capture` or `lookout-capture` fetcher process also refuses it (D-080). The offline commands (`status`, `cadence`, `storage-report`, `archive queue add|list|remove|resume`) take no lock.
   - Don't start fetching commands yourself; report what you need fetched (the lead queues archive days).
 
 **NOAA:** use anonymous HTTPS to `noaa-hrrr-bdp-pds.s3.amazonaws.com` (us-east-1) with byte-range GETs. Keep local downloads small: subsets only, and delete GRIB files after extraction.
 
 ### Data
 - Data lives **outside the repo**. `~/Documents` is iCloud-synced (the `com.apple.file-provider-domain-id` xattr is set).
-- Use `$LOOKOUT_DATA_DIR`, defaulting to `~/lookout-data`.
+- Use `$SNOW_GLOBE_DATA_DIR` (the old `$LOOKOUT_DATA_DIR` is still read).
+  - Until the post-gate switch (D-080), the data dir is `~/lookout-data`.
+  - From the switch on, it is `~/snow-globe-data`, and `~/lookout-data` stays as a symlink to it, so paths under `~/lookout-data` keep working.
+  - With neither variable set, the code uses `~/snow-globe-data` if it exists, else `~/lookout-data` if it exists, else `~/snow-globe-data`. While both exist as different folders, every resolver (Python, Rust, TypeScript, the shell scripts and the Makefile) refuses until a variable names the folder meant.
+- Never create `~/snow-globe-data` before the switch: no `mkdir`, no build cache, no copied command. Renamed code would then refuse to pick a data dir (or, with a variable naming the new folder, keep its rate-limit state and logs apart from the running loop's), and the switch refuses to run while it exists. Commands in the docs therefore name `~/lookout-data`, which stays valid after the switch through the symlink; docs/checks fails on a command that hard-codes the new folder (`data-dir-commands`).
 - Never write frames, audio, plates, renders, traces or GRIB files inside the repo.
-- Never delete anything under `~/lookout-data` except your own temp or cache files.
+- Never delete anything under `~/lookout-data` or `~/snow-globe-data` except your own temp or cache files.
 
 ### Held-out data (D-019, D-022)
 Metadata may be read for any date.
@@ -75,7 +81,7 @@ Metadata may be read for any date.
 - **The sealed window:**
   - Never use any frame from **15 Dec 2026 – 14 Jan 2027**, live or archived, for development.
   - That is design P's sealed window.
-- **Quarantine:** never open anything under `~/lookout-data/quarantine/`.
+- **Quarantine:** never open anything under `~/lookout-data/quarantine/` or `~/snow-globe-data/quarantine/`.
 
 ## Toolchain (machine: MacBook Air M4, macOS 26.5.1. Don't upgrade.)
 
@@ -91,7 +97,7 @@ Metadata may be read for any date.
 **Node:** Node 24 with `pnpm`, TypeScript `strict`, and `vitest`. Headless rendering uses Playwright Chromium with SwiftShader.
 
 **Rust:** stable 1.98. `oculus-core` is a git dependency (`https://github.com/swarit-1/oculus`, rev `1b5410b`, public `main`, MIT; re-pinned from the unpushed `06809e6` on 19 Nov, `ephem.rs` identical). A local copy for reading is at `~/Documents/Oculus/oculus/core`.
-- Build with `CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target`. That keeps gigabytes of build output out of iCloud.
+- Build with `CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target`. That keeps gigabytes of build output out of iCloud. After the post-gate switch it is the same folder as `~/snow-globe-data/cache/cargo-target`, through the symlink.
 
 **Other:** Terraform 1.16, Docker 29, Xcode 26.2 / Swift 6.2. There is no AWS CLI and no AWS credentials on this machine.
 
@@ -99,14 +105,14 @@ Metadata may be read for any date.
 
 | Path | What | Notes |
 |---|---|---|
-| `workers/common/` | uv project `lookout-common`: data paths, manifest loader and schema validation, storage (local/S3), polite HTTP client, time helpers, JSONL logs | Shared; change only with care and keep its tests green |
-| `workers/capture/` | uv project `lookout-capture`: NPS live capture, archive backfill, archive check | |
-| `workers/forecast/` | uv project `lookout-forecast`: HRRR extraction, availability-lag log | |
-| `eval/` | uv project `lookout-eval`: extractor, scores, baselines, leakage tests, backtest pair | |
-| `renderer/` | pnpm package `@lookout/renderer`: WebGL2 Tier 1 renderer and headless runner | |
-| `app/core/` | Rust crate `lookout-core`: parser, time rules, ephemeris wrapper, solar events, trace, lifecycle | Cargo workspace at `app/Cargo.toml` |
+| `workers/common/` | uv project `snow-globe-common`: data paths, manifest loader and schema validation, storage (local/S3), polite HTTP client, time helpers, JSONL logs | Shared; change only with care and keep its tests green |
+| `workers/capture/` | uv project `snow-globe-capture`: NPS live capture, archive backfill, archive check | |
+| `workers/forecast/` | uv project `snow-globe-forecast`: HRRR extraction, availability-lag log | |
+| `eval/` | uv project `snow-globe-eval`: extractor, scores, baselines, leakage tests, backtest pair | |
+| `renderer/` | pnpm package `@snow-globe/renderer`: WebGL2 Tier 1 renderer and headless runner | |
+| `app/core/` | Rust crate `snow-globe-core`: parser, time rules, ephemeris wrapper, solar events, trace, lifecycle | Cargo workspace at `app/Cargo.toml` |
 | `app/src-tauri/`, `app/src/`, `app/speech-macos/` | Tauri shell, overlay UI, Swift static library | M1 |
-| `bench/` | Replay and paint-capture harness, utterance scripts and reports | Voice recordings stay outside git, under `$LOOKOUT_DATA_DIR/fixtures/voice/` |
+| `bench/` | Replay and paint-capture harness, utterance scripts and reports | Voice recordings stay outside git, under `$SNOW_GLOBE_DATA_DIR/fixtures/voice/` |
 | `spikes/` | Throwaway platform spikes, such as the M1 1a checks | Never shipped; the lead decides what moves into `app/` |
 | `viewpoints/` | `schema/viewpoint.schema.json` and `manifests/<viewpoint_id>.json` | Factual corrections allowed; say so in your report |
 | `infra/terraform/`, `infra/lambda/` | AWS serverless Terraform, and the Lambda container image | Never applied without the owner |
@@ -140,7 +146,7 @@ JSON base: `https://www.nps.gov/featurecontent/ard/webcams/json/`. Images: `http
 - `GET https://www.nps.gov/airwebcams/GetAsset/<AssetID>/proxy/hires` returns full resolution; `.../thumbmedium.jpg` returns a thumbnail.
 - Cadence is 15 minutes, day and night.
 
-## Data layout under `$LOOKOUT_DATA_DIR`
+## Data layout under `$SNOW_GLOBE_DATA_DIR`
 
 ```
 frames/<viewpoint_id>/<YYYY-MM-DD>/<YYYYMMDDTHHMMSSZ>_<sha256[:12]>.jpg (+ .json sidecar)   live, UTC image time, ≤1920 px wide (D-028: every frame at Rainier and Point Reyes; the frame nearest each UTC hour at the other six)
@@ -150,7 +156,7 @@ capture_log/<YYYY-MM-DD>.jsonl                                                  
 state/                                                                                     persisted rate-limit and dedupe state; state/archive/queue.json (backfill queue), state/capture/hosts/www.nps.gov.json (shared 429/503 hold)
 forecast/hrrr/<viewpoint_id>/<YYYYMMDDHH>z.json                                            one file per viewpoint per HRRR run
 forecast_log/<YYYY-MM-DD>.jsonl                                                            availability lag and fetch events (written only by the forecast stand-in)
-forecast_log/lag_survey/<YYYY-MM-DD>.jsonl                                                 S3 lag-survey events, "method": "survey" (written only by lookout-forecast lag-survey --log, D-053)
+forecast_log/lag_survey/<YYYY-MM-DD>.jsonl                                                 S3 lag-survey events, "method": "survey" (written only by snow-globe-forecast lag-survey --log, D-053)
 scores/pairs/, renders/pairs/                                                              backtest pair records and renders
 spikes/m1/<run-id>.jsonl                                                                   M1 1a spike results (run by the owner)
 cache/                                                                                     deletable caches (GRIB subsets, cache/staging/ capture staging, cache/runtime/ snapshots, etc.)

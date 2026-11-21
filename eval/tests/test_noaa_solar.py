@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from lookout_eval.noaa_solar import (
+from snow_globe_eval.noaa_solar import (
     julian_day,
     noaa_refraction_deg,
     solar_position,

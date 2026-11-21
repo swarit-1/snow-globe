@@ -6,8 +6,8 @@ import math
 
 import pytest
 
-from lookout_forecast.grid import HRRR_CONUS, GridMismatchError, LambertConformalGrid
-from lookout_forecast.points import destination
+from snow_globe_forecast.grid import HRRR_CONUS, GridMismatchError, LambertConformalGrid
+from snow_globe_forecast.points import destination
 
 
 def _lon_diff(a: float, b: float) -> float:

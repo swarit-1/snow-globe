@@ -1,5 +1,5 @@
 output "data_bucket" {
-  description = "Private data bucket (LOOKOUT_S3_BUCKET)."
+  description = "Private data bucket (SNOW_GLOBE_S3_BUCKET)."
   value       = aws_s3_bucket.data.bucket
 }
 

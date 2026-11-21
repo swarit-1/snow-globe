@@ -1,6 +1,0 @@
-// Exposes the public C ABI header (app/speech-macos/include/lookout_speech.h) to the Swift
-// targets, so the Swift implementation and the tests use the header's own types and constants.
-module LookoutSpeechC {
-    header "../../../include/lookout_speech.h"
-    export *
-}

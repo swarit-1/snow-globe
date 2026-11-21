@@ -21,10 +21,10 @@ from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from lookout_common.storage import LocalStorage
+from snow_globe_common.storage import LocalStorage
 
-from lookout_capture.retention import hour_slot, key_stamp
-from lookout_capture.state import camera_state_key
+from snow_globe_capture.retention import hour_slot, key_stamp
+from snow_globe_capture.state import camera_state_key
 
 from .conftest import FakeClock
 from .receipts import Killer, Latency, run_schedule, server_violations

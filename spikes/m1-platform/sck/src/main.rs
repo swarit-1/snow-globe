@@ -32,7 +32,7 @@ use serde_json::{Value, json};
 
 use crate::verdict::{FrameRec, Target};
 
-const PANEL_TITLE: &str = "Lookout M1 spike panel";
+const PANEL_TITLE: &str = "Snow Globe M1 spike panel";
 
 const USAGE: &str = "usage:
   m1-sck tag     [--run-id ID] [--seconds 20] [--fps 60] [--title T] [--pid P]

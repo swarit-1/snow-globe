@@ -26,8 +26,11 @@ infra/test.sh does not run it (tests/test_cost.sh checks its committed output). 
 dir for the HTTP limiter's local state:
 
     git archive <commit> workers viewpoints | tar -x -C /tmp/export
-    cd workers/capture && LOOKOUT_DATA_DIR="$(mktemp -d)" .venv/bin/python -I ../../infra/cost/sim_capture_s3.py \\
+    cd workers/capture && SNOW_GLOBE_DATA_DIR="$(mktemp -d)" .venv/bin/python -I ../../infra/cost/sim_capture_s3.py \\
       /tmp/export 24 /tmp/sim_24h.json
+
+The commit must use the Snow Globe names (D-080); for a commit from before the rename, such as 8246a8b below, run
+that commit's own copy of this script (it imports lookout_capture and sets the LOOKOUT_* variables).
 
 20 Nov 2026, commit 8246a8b (capture 0.2.0), 24 h: 288 passes in about 21 s; per day 8,944 PUT, 174 LIST, 7,902 GET,
 702 HEAD and 3,420 DELETE; a pass lasts 35.7 s on the fake clock on average (infra/cost/sim_capture_8246a8b.json).
@@ -45,8 +48,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-if len(sys.argv) != 4 or not os.environ.get("LOOKOUT_DATA_DIR"):
-    sys.exit("usage: LOOKOUT_DATA_DIR=<temp dir> python -I sim_capture_s3.py REPO_ROOT HOURS OUT_JSON")
+if len(sys.argv) != 4 or not (os.environ.get("SNOW_GLOBE_DATA_DIR") or os.environ.get("LOOKOUT_DATA_DIR")):
+    sys.exit("usage: SNOW_GLOBE_DATA_DIR=<temp dir> python -I sim_capture_s3.py REPO_ROOT HOURS OUT_JSON")
 clone, hours, out_path = sys.argv[1], float(sys.argv[2]), sys.argv[3]
 sys.path[:0] = [
     f"{clone}/workers/capture/src",
@@ -59,8 +62,8 @@ os.environ.update(
         "AWS_SECRET_ACCESS_KEY": "testing",
         "AWS_SESSION_TOKEN": "testing",
         "AWS_DEFAULT_REGION": "us-east-1",
-        "LOOKOUT_MANIFEST_DIR": f"{clone}/viewpoints/manifests",
-        "LOOKOUT_USER_AGENT": "Lookout/0.1 (webcam research capture; fetch-on-change)",
+        "SNOW_GLOBE_MANIFEST_DIR": f"{clone}/viewpoints/manifests",
+        "SNOW_GLOBE_USER_AGENT": "SnowGlobe/0.1 (webcam research capture; fetch-on-change)",
         # Proxies at a closed port: nothing here may reach a real host.
         "HTTPS_PROXY": "http://127.0.0.1:9",
         "HTTP_PROXY": "http://127.0.0.1:9",
@@ -70,18 +73,18 @@ os.environ.update(
 
 import boto3  # noqa: E402
 from conftest import FakeClock, FakeNPS, fixture_text, make_jpeg  # noqa: E402
-from lookout_capture import CAPTURE_VERSION  # noqa: E402
-from lookout_capture.live import CaptureOptions, CaptureRunner  # noqa: E402
-from lookout_common.http import polite_client  # noqa: E402
-from lookout_common.manifest import load_manifests  # noqa: E402
-from lookout_common.storage import S3Storage  # noqa: E402
 from moto import mock_aws  # noqa: E402
+from snow_globe_capture import CAPTURE_VERSION  # noqa: E402
+from snow_globe_capture.live import CaptureOptions, CaptureRunner  # noqa: E402
+from snow_globe_common.http import polite_client  # noqa: E402
+from snow_globe_common.manifest import load_manifests  # noqa: E402
+from snow_globe_common.storage import S3Storage  # noqa: E402
 
 #: lambda_handler.handler at 8246a8b: the function's timeout (infra/terraform/main.tf), the slot wait and the reserve.
 LAMBDA_TIMEOUT_S = 120.0
 WAIT_FOR_DUE_S = 45.0
 MIN_TIME_LEFT_S = 25.0
-BUCKET = "lookout-sim"
+BUCKET = "snow-globe-sim"
 
 FEED_CODE = {  # fixture JSON body to reuse per camera (only imagedate is replaced)
     "point-reyes.beach": "pore",

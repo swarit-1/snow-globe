@@ -1,4 +1,4 @@
-# Lookout's AWS infrastructure (PRD §11.2, §11.3, §15.2, §17). Serverless only:
+# Snow Globe's AWS infrastructure (PRD §11.2, §11.3, §15.2, §17). Serverless only:
 #   Lambda (one arm64 container image, two functions) + EventBridge Scheduler + S3 + ECR
 #   + CloudWatch (logs, alarms) + SNS (alarm email) + AWS Budgets.
 # Adapted from Oculus infra/terraform (bootstrap/, storage.tf, monitoring.tf). Oculus's ALB, ECS/Fargate,

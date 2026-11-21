@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke-test the Lookout Lambda image locally (PRD §11.3, D-014). It builds nothing, pushes nothing, touches no AWS
+# Smoke-test the Snow Globe Lambda image locally (PRD §11.3, D-014). It builds nothing, pushes nothing, touches no AWS
 # account, and never invokes the capture handler: that handler polls nps.gov, and only one NPS fetcher may run.
 #
 # Usage:
@@ -12,7 +12,7 @@
 #    Lambda runtime's own loader, checks that the pinned packages and ecCodes' native library load from /var/task,
 #    and builds the capture handler's manifests, storage and HTTP client without using them. Nothing is invoked.
 # 2. Forecast invoke: the emulator bundled in the AWS base image (/usr/local/bin/aws-lambda-rie) runs
-#    lookout_forecast.lambda_handler.handler, with LOOKOUT_STORAGE=local into a new temporary directory and a tiny
+#    snow_globe_forecast.lambda_handler.handler, with SNOW_GLOBE_STORAGE=local into a new temporary directory and a tiny
 #    profile (VIS:surface, forecast hour 0, at most 10 MB a run, 1 h lookback). The container gets the deployed
 #    function's settings where Docker can copy them: 2048 MB and no swap, 1.16 vCPU (Lambda gives one vCPU per
 #    1,769 MB), a 2 GB /tmp, a read-only root and a non-root user. It is invoked twice. The second call must find
@@ -29,7 +29,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROBE="$HERE/smoke_probe.py"
 DOCKER="${DOCKER:-docker}"
-HANDLER="lookout_forecast.lambda_handler.handler"
+HANDLER="snow_globe_forecast.lambda_handler.handler"
 
 log() { printf 'smoke.sh: %s\n' "$*" >&2; }
 usage() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}" >&2; }
@@ -66,13 +66,13 @@ if [ "$uid" = 0 ]; then uid=993; gid=990; fi
 default_cmd="$("$DOCKER" image inspect --format '{{json .Config.Cmd}}' "$image")"
 printf 'default_cmd=%s\n' "$default_cmd"
 case "$default_cmd" in
-  *lookout_capture*) fail "the image's default command is the capture handler, so a local run would poll nps.gov" ;;
+  *snow_globe_capture*) fail "the image's default command is the capture handler, so a local run would poll nps.gov" ;;
 esac
 
 log "1/2 offline probe of $image: no network, read-only root, user $uid:$gid"
 if probe="$("$DOCKER" run --rm --network none --read-only --tmpfs /tmp:rw,size=64m --user "$uid:$gid" \
       -v "$PROBE:/probe/smoke_probe.py:ro" \
-      -e LOOKOUT_STORAGE=s3 -e LOOKOUT_S3_BUCKET=lookout-smoke-no-such-bucket -e AWS_REGION=us-east-1 \
+      -e SNOW_GLOBE_STORAGE=s3 -e SNOW_GLOBE_S3_BUCKET=snow-globe-smoke-no-such-bucket -e AWS_REGION=us-east-1 \
       --entrypoint /var/lang/bin/python3.13 "$image" /probe/smoke_probe.py)"; then
   log "offline probe passed"
 else
@@ -88,11 +88,13 @@ if [ "$offline" -eq 1 ]; then
 fi
 
 # ---- 2. forecast handler under the emulator ---------------------------------------------------------------------
-work="$(mktemp -d "${TMPDIR:-/tmp}/lookout-lambda-smoke.XXXXXX")"
+work="$(mktemp -d "${TMPDIR:-/tmp}/snow-globe-lambda-smoke.XXXXXX")"
 data="$work/data"
 mkdir -p "$data"
-name="lookout-lambda-smoke-$$"
-# shellcheck disable=SC2329 # invoked by the EXIT trap below
+name="snow-globe-lambda-smoke-$$"
+# Invoked only by the EXIT trap below. shellcheck 0.9 (CI's ubuntu-24.04) calls its body unreachable (SC2317),
+# 0.10 and later call the function unused (SC2329); both are disabled for this function alone.
+# shellcheck disable=SC2317,SC2329
 cleanup() {
   "$DOCKER" rm -f "$name" >/dev/null 2>&1 || true
   rm -rf "$work"
@@ -107,16 +109,16 @@ log "2/2 $HANDLER under the Lambda Runtime Interface Emulator; data in a tempora
   --memory 2048m --memory-swap 2048m --cpus 1.16 \
   --user "$uid:$gid" \
   -p 127.0.0.1::8080 \
-  -v "$data:/mnt/lookout-data" \
-  -e AWS_LAMBDA_FUNCTION_NAME=lookout-forecast \
+  -v "$data:/mnt/snow-globe-data" \
+  -e AWS_LAMBDA_FUNCTION_NAME=snow-globe-forecast \
   -e AWS_LAMBDA_FUNCTION_MEMORY_SIZE=2048 \
   -e AWS_LAMBDA_FUNCTION_TIMEOUT=600 \
-  -e LOOKOUT_STORAGE=local \
-  -e LOOKOUT_DATA_DIR=/mnt/lookout-data \
-  -e LOOKOUT_FORECAST_FIELDS=VIS:surface \
-  -e LOOKOUT_FORECAST_MAX_FH=0 \
-  -e LOOKOUT_FORECAST_MAX_MB=10 \
-  -e LOOKOUT_FORECAST_LOOKBACK_H=1 \
+  -e SNOW_GLOBE_STORAGE=local \
+  -e SNOW_GLOBE_DATA_DIR=/mnt/snow-globe-data \
+  -e SNOW_GLOBE_FORECAST_FIELDS=VIS:surface \
+  -e SNOW_GLOBE_FORECAST_MAX_FH=0 \
+  -e SNOW_GLOBE_FORECAST_MAX_MB=10 \
+  -e SNOW_GLOBE_FORECAST_LOOKBACK_H=1 \
   "$image" "$HANDLER" >/dev/null
 
 port="$("$DOCKER" port "$name" 8080/tcp | sed -n 's/^127\.0\.0\.1:\([0-9][0-9]*\)$/\1/p' | head -n 1)"

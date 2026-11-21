@@ -17,14 +17,14 @@ import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 
-from lookout_common.paths import frame_key
-from lookout_common.storage import LocalStorage
-from lookout_common.timeutil import isoformat_z
+from snow_globe_common.paths import frame_key
+from snow_globe_common.storage import LocalStorage
+from snow_globe_common.timeutil import isoformat_z
 
-from lookout_capture.cli import main
-from lookout_capture.live import MIN_POLL_INTERVAL_S, POLL_MARGIN_S, status_report
-from lookout_capture.retention import hour_slot, key_stamp
-from lookout_capture.state import CameraState, camera_state_key
+from snow_globe_capture.cli import main
+from snow_globe_capture.live import MIN_POLL_INTERVAL_S, POLL_MARGIN_S, status_report
+from snow_globe_capture.retention import hour_slot, key_stamp
+from snow_globe_capture.state import CameraState, camera_state_key
 
 from .conftest import FakeClock, fixture_json
 from .test_live import RAINIER, events, image_gets, runner, set_rainier

@@ -3,7 +3,7 @@
 //! [`noaa`] is an **independent** implementation of NOAA's solar calculator: the formulas of the
 //! NOAA Global Monitoring Laboratory "Solar Calculator" spreadsheet (after Meeus, *Astronomical
 //! Algorithms*), written from those formulas for these tests. It shares no code with
-//! `lookout_core::solar` or `oculus-core`, so agreement between them is evidence, not a tautology.
+//! `snow_globe_core::solar` or `oculus-core`, so agreement between them is evidence, not a tautology.
 //!
 //! [`almanac_moon`] is likewise independent: the Astronomical Almanac's low-precision formulae for
 //! the Moon (about 0.3° in longitude), made topocentric. It checks the wrapping of oculus-core's

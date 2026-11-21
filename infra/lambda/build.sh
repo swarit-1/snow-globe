@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Build the Lookout Lambda image for linux/arm64 (PRD §11.3). Context: the repo root, filtered by
+# Build the Snow Globe Lambda image for linux/arm64 (PRD §11.3). Context: the repo root, filtered by
 # infra/lambda/Dockerfile.dockerignore.
 #
 # Usage:
-#   infra/lambda/build.sh                  build and load into the local Docker as lookout-lambda:<tag>
+#   infra/lambda/build.sh                  build and load into the local Docker as snow-globe-lambda:<tag>
 #   infra/lambda/build.sh --push REPO_URL  build and push REPO_URL:<tag> (log Docker in to ECR first;
 #                                          infra/deploy.sh does that)
 #   infra/lambda/build.sh --print-tag      print the tag this tree would get, and exit
@@ -22,7 +22,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DOCKERFILE="infra/lambda/Dockerfile"
-LOCAL_NAME="lookout-lambda"
+LOCAL_NAME="snow-globe-lambda"
 PLATFORM="linux/arm64"
 DOCKER="${DOCKER:-docker}"
 
@@ -84,9 +84,9 @@ fi
 missing=""
 for f in workers/common/pyproject.toml \
          workers/capture/pyproject.toml workers/capture/uv.lock \
-         workers/capture/src/lookout_capture/lambda_handler.py \
+         workers/capture/src/snow_globe_capture/lambda_handler.py \
          workers/forecast/pyproject.toml workers/forecast/uv.lock \
-         workers/forecast/src/lookout_forecast/lambda_handler.py \
+         workers/forecast/src/snow_globe_forecast/lambda_handler.py \
          viewpoints/schema/viewpoint.schema.json; do
   [ -f "$ROOT/$f" ] || missing="$missing $f"
 done

@@ -2,6 +2,8 @@
 
 Compared on 19 Nov 2026 before writing the synthesis ([PRD.md](../../PRD.md) v0.4).
 
+> **Rename note, 21 Nov 2026:** the product is now Snow Globe (D-080). Here "Lookout" names the owner's draft of 18 Nov, and "Snow Globe PRD v0.3" the Milestone 0 draft; neither label changes.
+
 **The two drafts:**
 - **Lookout** is the owner's 34-page draft, supplied as a PDF.
 - **v0.3** is the Milestone 0 draft at commit `d0ba83d`, which went through two council rounds.

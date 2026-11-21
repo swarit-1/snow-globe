@@ -3,7 +3,7 @@
 This file is the source of `scripted.tsv`. Each row holds the text the owner reads, its category
 tags, the reference clock and follow-up context it is scored at, and the expected result as read
 from PRD §7.4 (time rules) and §7.5 (places) by hand. The code below turns that reading into
-times. It shares no code with lookout-core or oculus-core, so where the two disagree the
+times. It shares no code with snow-globe-core or oculus-core, so where the two disagree the
 disagreement is real:
 
 - wall times become instants with the system tz database (`zoneinfo`), under PRD §7.4's
@@ -1736,7 +1736,7 @@ COLUMNS = [
     "difference",
 ]
 PARSER_COLUMNS = COLUMNS[14:]
-#: What lookout-parse printed; `agreement` and `difference` (the last two) are derived from it.
+#: What snow-globe-parse printed; `agreement` and `difference` (the last two) are derived from it.
 PARSER_OUTPUT_COLUMNS = COLUMNS[14:20]
 VERDICT_COLUMNS = COLUMNS[20:]
 
@@ -1816,7 +1816,7 @@ def read_tsv(path: Path) -> list[dict[str, str]]:
 
 
 def merge_parser_output(rows: list[dict[str, str]], old: list[dict[str, str]]) -> list[str]:
-    """Copy lookout-parse's columns from `old` rows into freshly built `rows`.
+    """Copy snow-globe-parse's columns from `old` rows into freshly built `rows`.
 
     A row keeps them only if an old row had the same text, clock and context, the inputs the
     parser saw (so reordering rows keeps them). `agreement` and `difference` are always blanked:

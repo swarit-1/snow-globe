@@ -1,19 +1,19 @@
 [package]
-name = "lookout-core"
-version = "0.1.0"
-description = "Lookout core: utterance parser, time rules, ephemeris wrapper, solar events, trace and query lifecycle (PRD §7, §8.4, §10)."
+name = "snow-globe-core"
+version = "0.2.0"
+description = "Snow Globe core: utterance parser, time rules, ephemeris wrapper, solar events, trace and query lifecycle (PRD §7, §8.4, §10)."
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 build = "build.rs"
 
 [lib]
-name = "lookout_core"
+name = "snow_globe_core"
 path = "src/lib.rs"
 
 [[bin]]
-name = "lookout-parse"
-path = "src/bin/lookout-parse.rs"
+name = "snow-globe-parse"
+path = "src/bin/snow-globe-parse.rs"
 
 [dependencies]
 oculus-core = { git = "https://github.com/swarit-1/oculus", rev = "1b5410b01f127514fa37656eff2b7d73be7ea8da" }

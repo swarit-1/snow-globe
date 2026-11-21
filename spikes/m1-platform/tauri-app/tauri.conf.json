@@ -1,7 +1,7 @@
 {
-  "productName": "Lookout M1 spike",
+  "productName": "Snow Globe M1 spike",
   "version": "0.1.0",
-  "identifier": "dev.lookout.spike-m1",
+  "identifier": "dev.snowglobe.spike-m1",
   "build": {
     "frontendDist": "ui"
   },

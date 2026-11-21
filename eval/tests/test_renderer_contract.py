@@ -1,15 +1,14 @@
-"""Opt-in contract check: the real renderer CLI accepts a SceneSpec built by lookout-eval.
+"""Opt-in contract check: the real renderer CLI accepts a SceneSpec built by snow-globe-eval.
 
 Runs ``pnpm --dir renderer render`` on the renderer's procedural synthetic plate (no camera
 pixels), writing only to a temporary folder. It needs pnpm and Playwright's Chromium, so it
-runs only with ``LOOKOUT_EVAL_RENDER=1``. The default suite runs the renderer's validateScene()
+runs only with ``SNOW_GLOBE_EVAL_RENDER=1``. The default suite runs the renderer's validateScene()
 under Node instead (tests/test_scene.py).
 """
 
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -17,12 +16,13 @@ from pathlib import Path
 
 import pytest
 from conftest import needs_oculus
-from lookout_common.manifest import load_manifest
+from snow_globe_common.env import env_get
+from snow_globe_common.manifest import load_manifest
 from synth_forecast import low_deck, make_doc
 
-from lookout_eval.ephemeris import moon_position, sun_position
-from lookout_eval.forecast_io import ForecastRun
-from lookout_eval.scene import (
+from snow_globe_eval.ephemeris import moon_position, sun_position
+from snow_globe_eval.forecast_io import ForecastRun
+from snow_globe_eval.scene import (
     PlateIdentity,
     build_scene,
     find_renderer_dir,
@@ -31,8 +31,8 @@ from lookout_eval.scene import (
 )
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("LOOKOUT_EVAL_RENDER") != "1" or shutil.which("pnpm") is None,
-    reason="set LOOKOUT_EVAL_RENDER=1 (needs pnpm and Playwright Chromium) to run the renderer",
+    (env_get("SNOW_GLOBE_EVAL_RENDER") or "").strip() != "1" or shutil.which("pnpm") is None,
+    reason="set SNOW_GLOBE_EVAL_RENDER=1 (needs pnpm and Playwright Chromium) to run the renderer",
 )
 
 

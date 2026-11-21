@@ -1,4 +1,4 @@
-"""Invariant checks for Lookout's docs (CLAUDE.md "Documents"; PRD §12 conventions, §16 milestones).
+"""Invariant checks for Snow Globe's docs (CLAUDE.md "Documents"; PRD §12 conventions, §16 milestones).
 
 Standard library only, Python 3.9 or later, no network: `make docs-check` runs it with `python3 -I`.
 
@@ -21,7 +21,10 @@ DECISIONS.md, PRD_PROGRESS.md and PRD.md keep changing:
 - THIRD_PARTY_NOTICES names every package the repo's lock files pin, at that version (PRD §12,
   §15.4), and PRD Appendix A's JSON example has the manifest schema's shape (D-044);
 - CI (.github/workflows/ci.yml) runs every suite that `make test` runs, except the ones the
-  Makefile names laptop-only (PRD §12).
+  Makefile names laptop-only (PRD §12);
+- the rename (D-080): no command hard-codes `$HOME/snow-globe-data`, which run before the live
+  switch would create a second data folder, and no old name (`lookout`, `LOOKOUT_`, `lk_speech`,
+  `dev.lookout`) is back outside the deliberate keeps listed in docs/checks/old_names.json.
 
 `Repo` reads the working tree and git. Tests build an in-memory `Repo` instead (test_selftest.py).
 """
@@ -30,6 +33,7 @@ from __future__ import annotations
 
 import datetime as dt
 import difflib
+import fnmatch
 import json
 import os
 import posixpath
@@ -143,7 +147,7 @@ class Repo:
 
     @classmethod
     def memory(cls, files: dict[str, str], history: Sequence[str] | None = None) -> Repo:
-        repo = cls(Path("/nonexistent-lookout-memory-repo"))
+        repo = cls(Path("/nonexistent-snow-globe-memory-repo"))
         repo._files = dict(files)
         repo._listed = sorted(files)
         versions = [(f"v{i}", text) for i, text in enumerate(history or [])]
@@ -1930,6 +1934,186 @@ def check_ci_suites(repo: Repo) -> list[Problem]:
     return problems
 
 
+# --------------------------------------------------------------------------------------------
+# The rename (D-080): no command makes ~/snow-globe-data early, and no old name comes back
+
+#: Lock files, which tools write: only the old product name is looked for there (their hashes hold
+#: any letters).
+LOCK_FILE_NAMES = ("uv.lock", "Cargo.lock", "pnpm-lock.yaml", "package-lock.json")
+
+
+def scanned_files(repo: Repo) -> list[str]:
+    """Every text file of the repo (`paths()`): any name or suffix, Swift, C and plists included;
+    a file over MAX_TEXT_BYTES or with a NUL in its first 8 KB (an image) is left out."""
+    out = []
+    for p in repo.paths():
+        if repo._files is None:
+            try:
+                if (repo.root / p).stat().st_size > MAX_TEXT_BYTES:
+                    continue
+            except OSError:
+                continue
+        if "\0" in repo.read(p)[:8192]:
+            continue
+        out.append(p)
+    return out
+
+
+#: The new data folder hard-coded in shell or Make form. Run before the rename's live switch, such a
+#: command creates ~/snow-globe-data beside ~/lookout-data, and renamed code then refuses to pick a
+#: data dir. The docs name ~/lookout-data instead, which the switch leaves as a symlink (D-080).
+NEW_DATA_SHELL_RE = re.compile(r'(?:\$\{?HOME\}?|\$\(HOME\)|"\$HOME")/snow-globe-data(?![\w-])')
+NEW_DATA_TILDE_RE = re.compile(r"~/snow-globe-data(?![\w-])")
+#: Where the new folder may be hard-coded: (a path, an fnmatch pattern, or "" for every file; a
+#: regex the line must match, or "" for every line; why).
+NEW_DATA_KEEPS: tuple[tuple[str, str, str], ...] = (
+    ("DECISIONS.md", "", "the record, append-only"),
+    ("docs/evidence/*", "", "records of measured runs"),
+    ("infra/ops/migrate-to-snow-globe.sh", "", "the switch, which writes the post-switch scripts"),
+    ("infra/tests/test_migrate.sh", "", "the switch's tests, which read those scripts"),
+    (".github/workflows/ci.yml", "", "CI's runner has neither folder, so every resolver picks ~/snow-globe-data"),
+    ("", r'\bnew="\$HOME/snow-globe-data"', "a shell resolver's candidate for the new folder"),
+    ("Makefile", r"^SG_DATA_DIR_NEW := \$\(HOME\)/snow-globe-data$", "the Makefile's resolver"),
+    ("docs/checks/*", "", "this check's own messages and self-tests"),
+)
+
+
+def _kept(keeps: Sequence[tuple[str, str, str]], path: str, line: str) -> bool:
+    for where, pattern, _why in keeps:
+        if where and not fnmatch.fnmatchcase(path, where):
+            continue
+        if pattern and not re.search(pattern, line):
+            continue
+        return True
+    return False
+
+
+def markdown_commands(text: str) -> Iterator[tuple[int, str]]:
+    """(line number, text) of each command in Markdown: every line of a fenced code block, and
+    every inline code span holding whitespace (a bare path in backticks is a mention)."""
+    fence: str | None = None
+    for n, line in enumerate(text.split("\n"), 1):
+        m = re.match(r"^\s{0,3}(`{3,}|~{3,})", line)
+        if fence is not None:
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence):
+                fence = None
+            else:
+                yield n, line
+            continue
+        if m:
+            fence = m.group(1)
+            continue
+        for span in re.finditer(r"(`+)(.+?)\1", line):
+            if re.search(r"\s", span.group(2).strip()):
+                yield n, span.group(2)
+
+
+def check_data_dir_commands(repo: Repo) -> list[Problem]:
+    """No command hard-codes the new data folder (D-080): `$HOME/snow-globe-data` (or `${HOME}`,
+    `"$HOME"`, `$(HOME)`) on any line of any text file, and `~/snow-globe-data` in a Markdown
+    command (a fenced block's line, or an inline code span with whitespace), outside NEW_DATA_KEEPS.
+    Name `$HOME/lookout-data`, which is right before and after the switch, or the resolved data dir."""
+    problems: list[Problem] = []
+    for path in scanned_files(repo):
+        text = repo.read(path)
+        for n, line in enumerate(text.split("\n"), 1):
+            if NEW_DATA_SHELL_RE.search(line) and not _kept(NEW_DATA_KEEPS, path, line):
+                problems.append(
+                    Problem(
+                        "data-dir-commands",
+                        f"{path}:{n}",
+                        "hard-codes $HOME/snow-globe-data, which a command run before the rename's live switch "
+                        "creates: name $HOME/lookout-data (the switch leaves it as a symlink) or the resolved "
+                        "data dir (D-080)",
+                    )
+                )
+        if path.endswith(".md"):
+            for n, command in markdown_commands(text):
+                if (
+                    NEW_DATA_TILDE_RE.search(command)
+                    and not NEW_DATA_SHELL_RE.search(command)
+                    and not _kept(NEW_DATA_KEEPS, path, command)
+                ):
+                    problems.append(
+                        Problem(
+                            "data-dir-commands",
+                            f"{path}:{n}",
+                            f"the command {command.strip()[:90]!r} names ~/snow-globe-data, which run before the "
+                            "rename's live switch would create it: name ~/lookout-data or the resolved data dir "
+                            "(D-080)",
+                        )
+                    )
+    return problems
+
+
+#: The names before the rename (D-080): Lookout in any letter case (lookout-*, lookout_*, LOOKOUT_*,
+#: LookoutSpeech, dev.lookout.*), and the old C and Swift prefixes (lk_speech_*, LK_SPEECH_*, LK_EV_*,
+#: lkMutant*, LKCheckMutants).
+OLD_NAME_RE = re.compile(r"(?i:lookout)|\b(?:lk|LK)_|\blk[A-Z]|\bLK[A-Z][a-z]")
+OLD_NAME_IN_LOCK_RE = re.compile(r"(?i:lookout)")
+#: The deliberate keeps: {"files": {fnmatch pattern: why}, "counts": {path: {"lines": n, "why": ...}}}.
+OLD_NAMES_FILE = "docs/checks/old_names.json"
+
+
+def check_old_names(repo: Repo) -> list[Problem]:
+    """No old name is back (D-080): every line naming one (OLD_NAME_RE) is in a file that
+    docs/checks/old_names.json keeps whole (records, fixtures, hash-pinned files), or in a file
+    whose number of such lines it gives, with the reason. A new old-name line, or one fewer, fails
+    until the list says so; an entry that matches nothing any more fails too, so the list stays
+    the list of deliberate keeps."""
+    if not repo.has(OLD_NAMES_FILE):
+        return [Problem("old-names", OLD_NAMES_FILE, "missing: it lists the files that keep old names, and why")]
+    try:
+        keeps = json.loads(repo.read(OLD_NAMES_FILE))
+        whole: dict[str, str] = keeps["files"]
+        counted: dict[str, dict[str, Any]] = keeps["counts"]
+        if not all(isinstance(v, str) and v for v in whole.values()) or not all(
+            isinstance(e.get("lines"), int) and isinstance(e.get("why"), str) and e["why"] for e in counted.values()
+        ):
+            raise ValueError("every entry needs its reason, and every count a whole number of lines")
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        return [Problem("old-names", OLD_NAMES_FILE, f"unreadable: {exc}")]
+    problems: list[Problem] = []
+    paths = [p for p in scanned_files(repo) if p != OLD_NAMES_FILE]
+    for pattern in whole:
+        if not any(fnmatch.fnmatchcase(p, pattern) for p in paths):
+            problems.append(Problem("old-names", OLD_NAMES_FILE, f"keeps {pattern!r} whole, but no file matches it"))
+    for path in paths:
+        if any(fnmatch.fnmatchcase(path, pattern) for pattern in whole):
+            continue
+        rx = OLD_NAME_IN_LOCK_RE if posixpath.basename(path) in LOCK_FILE_NAMES else OLD_NAME_RE
+        hits = [(n, line) for n, line in enumerate(repo.read(path).split("\n"), 1) if rx.search(line)]
+        entry = counted.get(path)
+        want = entry["lines"] if entry else 0
+        if len(hits) == want:
+            continue
+        if entry is None:
+            n, line = hits[0]
+            problems.append(
+                Problem(
+                    "old-names",
+                    f"{path}:{n}",
+                    f"{len(hits)} line(s) name an old name, first {line.strip()[:90]!r}: use D-080's new names, or "
+                    f"add the file to {OLD_NAMES_FILE} with why it must keep them",
+                )
+            )
+        else:
+            where = f"{path}:{hits[0][0]}" if hits else path
+            problems.append(
+                Problem(
+                    "old-names",
+                    where,
+                    f"{len(hits)} line(s) name an old name, {OLD_NAMES_FILE} keeps {want} ({entry['why']}): rename the "
+                    "new ones, or change the count there if they are deliberate",
+                )
+            )
+    for path in sorted(set(counted) - set(paths)):
+        problems.append(
+            Problem("old-names", OLD_NAMES_FILE, f"keeps {counted[path]['lines']} line(s) in {path}, which is gone")
+        )
+    return problems
+
+
 CHECKS: dict[str, Callable[[Repo], list[Problem]]] = {
     "links": check_links,
     "tables": check_tables,
@@ -1947,6 +2131,8 @@ CHECKS: dict[str, Callable[[Repo], list[Problem]]] = {
     "notices": check_notices,
     "appendix-a": check_appendix_a,
     "ci-suites": check_ci_suites,
+    "data-dir-commands": check_data_dir_commands,
+    "old-names": check_old_names,
 }
 
 
@@ -1968,8 +2154,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     repo = Repo()
     results = run_all(repo, args)
     bad = 0
+    width = max(len(name) for name in results)
     for name, problems in results.items():
-        print(f"{name:13s} {'ok' if not problems else f'{len(problems)} problem(s)'}")
+        print(f"{name:{width}s} {'ok' if not problems else f'{len(problems)} problem(s)'}")
         for p in problems:
             print(f"  {p}")
         bad += len(problems)

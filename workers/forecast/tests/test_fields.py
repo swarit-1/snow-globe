@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from lookout_forecast.fields import (
+from snow_globe_forecast.fields import (
     CATALOGUE,
     DEFAULT_FIELD_NAMES,
     TERRAIN_FIELD,

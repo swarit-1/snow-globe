@@ -1,10 +1,10 @@
-# Lookout
+# Snow Globe
 
-**Updated:** 2026-11-20 (UTC). A skeleton (PLAN.md M1 1d): the blanks are filled only from the
+**Updated:** 2026-11-21 (UTC). A skeleton (PLAN.md M1 1d): the blanks are filled only from the
 evaluation dashboard's exports (PRD §21), and a blank stays blank until its number is measured.
 
 > *On a pre-registered, sealed ___-day period (base rate: summit visible ___ % of daytime frames;
-> climatology PSS ___), Lookout's 24-hour visual forecast of Mount Rainier's summit scored a
+> climatology PSS ___), Snow Globe's 24-hour visual forecast of Mount Rainier's summit scored a
 > Peirce skill score of ___ vs ___ for persistence (Δ ___, 95 % CI ___ to ___). The skill is
 > NOAA HRRR's. Rendering it lost none (non-inferiority margin 0.05: ___), and sampling the
 > forecast along each view ray beat the camera's own grid cell at predicting cloud height (___).*
@@ -12,7 +12,8 @@ evaluation dashboard's exports (PRD §21), and a blank stays blank until its num
 > *Latency after 30 min idle: first forecast-driven frame in ___ ms p95 from key release,
 > measured at the composited pixel.*
 
-Lookout is a push-to-talk visual forecast for macOS, in development. The aim:
+Snow Globe is a push-to-talk visual forecast for macOS, in development. It was called Lookout
+until 21 Nov 2026 (D-080). The aim:
 1. You hold a hotkey and ask, for example, "is Rainier out tomorrow at 4?".
 2. You let go.
 3. An overlay shows that real view at that hour, built from NOAA's forecast and the true
@@ -67,15 +68,18 @@ Day by day in [PLAN.md](PLAN.md); every measured number so far, with how it was 
   Both jobs run on the development laptop until the AWS deployment, which waits for the owner
   (D-014, D-030).
 - **The 72 h log clock is still running.** It started at 12:24:23 UTC on 19 Nov for all eight
-  cameras, and outages extend it. After 19 Nov's 8.2 h of sleep on battery, it closes at about
-  20:36 UTC on Sun 22 Nov at the earliest.
+  cameras, and outages extend it. With 10.80 h lost to sleep and restarts by 06:06 UTC on 21 Nov,
+  it closes at 23:12:07 UTC on Sun 22 Nov at the earliest (the data report; every new outage moves
+  it later). The jobs keep their old Lookout names until the lead's switch after that
+  (`infra/ops/migrate-to-snow-globe.sh`, D-080).
 - **M1, voice to first pixel**, runs from Mon 23 Nov to Mon 7 Dec 2026:
   - a platform spike, built but not yet run;
   - on-device speech, the parser, the overlay with Tier 0, and the replay harness;
   - this README's first numbers.
 
   The owner's steps are in [docs/m1/owner-runbook.md](docs/m1/owner-runbook.md).
-- **Nothing has been pushed.** CI runs only after the first push, which waits for the owner.
+- **First pushed on 21 Nov 2026** (`23c0543`, with the owner's word; D-080). CI runs on every
+  push; the first run's result is not recorded yet.
 
 ## How it is meant to work
 
@@ -136,7 +140,8 @@ python3 -I -B -m unittest discover -s bench/utterances -t bench/utterances -p 't
 ## Data
 
 - **Nothing captured lives in this repository.** Frames, forecasts, logs and voice fixtures go
-  under `$LOOKOUT_DATA_DIR` (default `~/lookout-data`), outside git and outside iCloud (D-017).
+  under `$SNOW_GLOBE_DATA_DIR` (default `~/snow-globe-data`), outside git and outside iCloud
+  (D-017). The older `$LOOKOUT_DATA_DIR` and `~/lookout-data` are still found (D-080).
 - **Camera frames stay private** until the National Park Service confirms in writing (PRD
   §15.1). Until then, the repository, README and demo carry code, numbers and charts only.
 - **The repository holds no camera pixels.** `renderer/goldens/` holds synthetic test images
@@ -157,8 +162,8 @@ python3 -I -B -m unittest discover -s bench/utterances -t bench/utterances -p 't
 - **oculus-core** (MIT) computes the Sun and the Moon.
 - Every third-party package and data source, with its licence, is in
   [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES). The ledger behind it is PRD §15.4.
-- **Lookout's own licence is not chosen yet.** The owner picks one before the repository is made
-  public.
+- **Snow Globe's own licence is not chosen yet,** so none is granted. The owner picks one; the
+  repository was first pushed on 21 Nov 2026 without it (D-080).
 - **Takedown:** a project-specific contact address is still to be set (`TODO(M5)`, PRD §15.5).
 
 ## Privacy
@@ -178,7 +183,7 @@ The rules the app is being built to (PRD §15.1, §15.2):
 
 | Document | What |
 |---|---|
-| [PRD.md](PRD.md) | The specification, v0.4.1 |
+| [PRD.md](PRD.md) | The specification, v0.4.2 |
 | [PLAN.md](PLAN.md) | Milestones, dates, the cut order and gate evidence |
 | [DECISIONS.md](DECISIONS.md) | Every decision with its evidence, and the spend ledger |
 | [PRD_PROGRESS.md](PRD_PROGRESS.md) | Tickets, owner actions and every measured number |

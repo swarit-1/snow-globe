@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from lookout_forecast.backoff import (
+from snow_globe_forecast.backoff import (
     failure_key,
     next_delay_s,
     read_failure,

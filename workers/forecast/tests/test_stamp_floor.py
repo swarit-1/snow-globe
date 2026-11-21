@@ -16,8 +16,8 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
-from lookout_forecast import availability, output
-from lookout_forecast.availability import (
+from snow_globe_forecast import availability, output
+from snow_globe_forecast.availability import (
     ArchivedStamps,
     LagModel,
     archived_availability,
@@ -25,14 +25,14 @@ from lookout_forecast.availability import (
     select_run_for_issue,
     select_stored_run,
 )
-from lookout_forecast.bucket import HrrrBucket
-from lookout_forecast.discovery import IDX_AFTER_GRIB_MARGIN_S, STAMP_TRUST_H, publication_floor
-from lookout_forecast.evidence import lag_check, lag_survey
-from lookout_forecast.extract import ExtractOptions, Extractor
-from lookout_forecast.fields import resolve_fields
-from lookout_forecast.hrrr import run_prefix
-from lookout_forecast.laglog import SurveyLogger, read_lag_log
-from lookout_forecast.output import DocumentError, load_schema, validate_document
+from snow_globe_forecast.bucket import HrrrBucket
+from snow_globe_forecast.discovery import IDX_AFTER_GRIB_MARGIN_S, STAMP_TRUST_H, publication_floor
+from snow_globe_forecast.evidence import lag_check, lag_survey
+from snow_globe_forecast.extract import ExtractOptions, Extractor
+from snow_globe_forecast.fields import resolve_fields
+from snow_globe_forecast.hrrr import run_prefix
+from snow_globe_forecast.laglog import SurveyLogger, read_lag_log
+from snow_globe_forecast.output import DocumentError, load_schema, validate_document
 
 from .conftest import FIXTURES, RAINIER
 
@@ -42,7 +42,7 @@ F46_GRIB = datetime(2025, 7, 15, 1, 54, 30, tzinfo=UTC)
 F46_IDX = datetime(2025, 7, 15, 1, 54, 34, tzinfo=UTC)
 #: Rule 2 for f46 of the 00Z cycle in the review's scratch test: 109.6 min.
 MODEL_F46_S = 109.6 * 60
-#: Recorded by `lookout-forecast lag-check 2020120312 ... --save-listings` on 2026-11-20 at
+#: Recorded by `snow-globe-forecast lag-check 2020120312 ... --save-listings` on 2026-11-20 at
 #: 03:58 UTC: one ListObjectsV2 answer, 24,393 bytes, 98 objects. GRIB2 stamps are 54-108 min
 #: after the run start; every .idx stamp is 2021-02-17T05:16:42-43Z (75.7 days later).
 REWRITTEN = FIXTURES / "list_20201203_t12z_full.xml"

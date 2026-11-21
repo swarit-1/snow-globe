@@ -14,38 +14,38 @@ mock_provider "aws" {
   override_resource {
     target          = aws_ecr_repository.lambda
     override_during = plan
-    values          = { repository_url = "123456789012.dkr.ecr.us-east-1.amazonaws.com/lookout/lambda" }
+    values          = { repository_url = "123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-globe/lambda" }
   }
   override_resource {
     target          = aws_sns_topic.alarms
     override_during = plan
-    values          = { arn = "arn:aws:sns:us-east-1:123456789012:lookout-alarms" }
+    values          = { arn = "arn:aws:sns:us-east-1:123456789012:snow-globe-alarms" }
   }
   # One ARN and id per role instance, so a test can tell which role each function and policy uses.
   override_resource {
     target          = aws_iam_role.job["capture"]
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-capture-lambda", id = "lookout-capture-lambda" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-capture-lambda", id = "snow-globe-capture-lambda" }
   }
   override_resource {
     target          = aws_iam_role.job["forecast"]
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-forecast-lambda", id = "lookout-forecast-lambda" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-forecast-lambda", id = "snow-globe-forecast-lambda" }
   }
   override_resource {
     target          = aws_iam_role.scheduler
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-scheduler", id = "lookout-scheduler" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-scheduler", id = "snow-globe-scheduler" }
   }
   override_resource {
     target          = aws_iam_role.budget_action
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-budget-action", id = "lookout-budget-action" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-budget-action", id = "snow-globe-budget-action" }
   }
   override_resource {
     target          = aws_iam_policy.budget_hard_stop
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:policy/lookout-budget-hard-stop" }
+    values          = { arn = "arn:aws:iam::123456789012:policy/snow-globe-budget-hard-stop" }
   }
 }
 
@@ -56,8 +56,8 @@ variables {
   alarm_email                     = "alerts@example.com"
   image_tag                       = "0123456789ab"
   region                          = "us-east-1"
-  project                         = "lookout"
-  user_agent                      = "Lookout/0.1 (webcam research capture; fetch-on-change)"
+  project                         = "snow-globe"
+  user_agent                      = "SnowGlobe/0.1 (webcam research capture; fetch-on-change)"
   capture_schedule_expression     = "rate(5 minutes)"
   forecast_schedule_expression    = "rate(5 minutes)"
   capture_schedule_enabled        = true
@@ -76,7 +76,7 @@ run "capture_function_matches_spec" {
   command = plan
 
   assert {
-    condition     = aws_lambda_function.job["capture"].function_name == "lookout-capture"
+    condition     = aws_lambda_function.job["capture"].function_name == "snow-globe-capture"
     error_message = "capture function name"
   }
   assert {
@@ -88,7 +88,7 @@ run "capture_function_matches_spec" {
     error_message = "capture must run on arm64"
   }
   assert {
-    condition     = aws_lambda_function.job["capture"].image_config[0].command == tolist(["lookout_capture.lambda_handler.handler"])
+    condition     = aws_lambda_function.job["capture"].image_config[0].command == tolist(["snow_globe_capture.lambda_handler.handler"])
     error_message = "capture handler"
   }
   assert {
@@ -113,7 +113,7 @@ run "forecast_function_matches_spec" {
   command = plan
 
   assert {
-    condition     = aws_lambda_function.job["forecast"].function_name == "lookout-forecast"
+    condition     = aws_lambda_function.job["forecast"].function_name == "snow-globe-forecast"
     error_message = "forecast function name"
   }
   assert {
@@ -121,7 +121,7 @@ run "forecast_function_matches_spec" {
     error_message = "forecast must be an arm64 container-image function"
   }
   assert {
-    condition     = aws_lambda_function.job["forecast"].image_config[0].command == tolist(["lookout_forecast.lambda_handler.handler"])
+    condition     = aws_lambda_function.job["forecast"].image_config[0].command == tolist(["snow_globe_forecast.lambda_handler.handler"])
     error_message = "forecast handler"
   }
   assert {
@@ -159,16 +159,16 @@ run "both_functions_share_one_image_and_environment" {
   }
   assert {
     condition = alltrue([for name in ["capture", "forecast"] : aws_lambda_function.job[name].environment[0].variables == tomap({
-      LOOKOUT_STORAGE      = "s3"
-      LOOKOUT_S3_BUCKET    = "lookout-data-123456789012"
-      LOOKOUT_MANIFEST_DIR = "/var/task/viewpoints/manifests"
-      LOOKOUT_USER_AGENT   = "Lookout/0.1 (webcam research capture; fetch-on-change)"
-      LOOKOUT_DATA_DIR     = "/tmp/lookout-data"
+      SNOW_GLOBE_STORAGE      = "s3"
+      SNOW_GLOBE_S3_BUCKET    = "snow-globe-data-123456789012"
+      SNOW_GLOBE_MANIFEST_DIR = "/var/task/viewpoints/manifests"
+      SNOW_GLOBE_USER_AGENT   = "SnowGlobe/0.1 (webcam research capture; fetch-on-change)"
+      SNOW_GLOBE_DATA_DIR     = "/tmp/snow-globe-data"
     })])
     error_message = "environment variables differ from the spec"
   }
   assert {
-    condition     = alltrue([for name in ["capture", "forecast"] : aws_lambda_function.job[name].logging_config[0].log_group == "/aws/lambda/lookout-${name}"])
+    condition     = alltrue([for name in ["capture", "forecast"] : aws_lambda_function.job[name].logging_config[0].log_group == "/aws/lambda/snow-globe-${name}"])
     error_message = "each function must log to its own managed log group"
   }
 }
@@ -178,15 +178,15 @@ run "each_function_runs_with_its_own_role" {
   command = plan
 
   assert {
-    condition     = aws_lambda_function.job["capture"].role == "arn:aws:iam::123456789012:role/lookout-capture-lambda"
+    condition     = aws_lambda_function.job["capture"].role == "arn:aws:iam::123456789012:role/snow-globe-capture-lambda"
     error_message = "capture must run with the capture role"
   }
   assert {
-    condition     = aws_lambda_function.job["forecast"].role == "arn:aws:iam::123456789012:role/lookout-forecast-lambda"
+    condition     = aws_lambda_function.job["forecast"].role == "arn:aws:iam::123456789012:role/snow-globe-forecast-lambda"
     error_message = "forecast must run with the forecast role"
   }
   assert {
-    condition     = alltrue([for name in ["capture", "forecast"] : aws_iam_role.job[name].name == "lookout-${name}-lambda" && aws_iam_role_policy.job[name].role == "lookout-${name}-lambda"])
+    condition     = alltrue([for name in ["capture", "forecast"] : aws_iam_role.job[name].name == "snow-globe-${name}-lambda" && aws_iam_role_policy.job[name].role == "snow-globe-${name}-lambda"])
     error_message = "each job's policy must be attached to that job's role"
   }
 }
@@ -199,7 +199,7 @@ run "log_groups_keep_30_days" {
     error_message = "PRD §15.2 promises 30-day log retention"
   }
   assert {
-    condition     = toset([for g in aws_cloudwatch_log_group.job : g.name]) == toset(["/aws/lambda/lookout-capture", "/aws/lambda/lookout-forecast"])
+    condition     = toset([for g in aws_cloudwatch_log_group.job : g.name]) == toset(["/aws/lambda/snow-globe-capture", "/aws/lambda/snow-globe-forecast"])
     error_message = "log group names"
   }
 }
@@ -235,13 +235,13 @@ run "roles_are_least_privilege" {
     error_message = "job policies may only use the listed actions (no wildcards, no s3:DeleteObjectVersion, no logs:CreateLogGroup)"
   }
   # The bucket itself or a key in it: a bare prefix match would also accept another bucket whose name starts with
-  # this one's (lookout-data-123456789012-other).
+  # this one's (snow-globe-data-123456789012-other).
   assert {
     condition = alltrue(flatten([
       for name, p in aws_iam_role_policy.job : [
         for s in jsondecode(p.policy).Statement : [
           for r in flatten([s.Resource]) :
-          r == "arn:aws:s3:::lookout-data-123456789012" || startswith(r, "arn:aws:s3:::lookout-data-123456789012/") || r == "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/lookout-${name}:*"
+          r == "arn:aws:s3:::snow-globe-data-123456789012" || startswith(r, "arn:aws:s3:::snow-globe-data-123456789012/") || r == "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/snow-globe-${name}:*"
         ]
       ]
     ]))
@@ -278,28 +278,28 @@ run "each_job_owns_its_keys" {
       for want in [
         {
           actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
-          resources = ["arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/lookout-capture:*"]
+          resources = ["arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/snow-globe-capture:*"]
         },
         {
           actions   = ["s3:ListBucket"]
-          resources = ["arn:aws:s3:::lookout-data-123456789012"]
+          resources = ["arn:aws:s3:::snow-globe-data-123456789012"]
         },
         {
           actions = ["s3:GetObject", "s3:PutObject", "s3:AbortMultipartUpload"]
           resources = [
-            "arn:aws:s3:::lookout-data-123456789012/frames/*",
-            "arn:aws:s3:::lookout-data-123456789012/thumbs/*",
-            "arn:aws:s3:::lookout-data-123456789012/cache/staging/*",
-            "arn:aws:s3:::lookout-data-123456789012/capture_log/*",
-            "arn:aws:s3:::lookout-data-123456789012/state/capture/*",
-            "arn:aws:s3:::lookout-data-123456789012/state/locks/capture*",
+            "arn:aws:s3:::snow-globe-data-123456789012/frames/*",
+            "arn:aws:s3:::snow-globe-data-123456789012/thumbs/*",
+            "arn:aws:s3:::snow-globe-data-123456789012/cache/staging/*",
+            "arn:aws:s3:::snow-globe-data-123456789012/capture_log/*",
+            "arn:aws:s3:::snow-globe-data-123456789012/state/capture/*",
+            "arn:aws:s3:::snow-globe-data-123456789012/state/locks/capture*",
           ]
         },
         {
           actions = ["s3:DeleteObject"]
           resources = [
-            "arn:aws:s3:::lookout-data-123456789012/cache/staging/*",
-            "arn:aws:s3:::lookout-data-123456789012/state/locks/capture*",
+            "arn:aws:s3:::snow-globe-data-123456789012/cache/staging/*",
+            "arn:aws:s3:::snow-globe-data-123456789012/state/locks/capture*",
           ]
         },
         ] : [
@@ -315,24 +315,24 @@ run "each_job_owns_its_keys" {
       for want in [
         {
           actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
-          resources = ["arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/lookout-forecast:*"]
+          resources = ["arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/snow-globe-forecast:*"]
         },
         {
           actions   = ["s3:ListBucket"]
-          resources = ["arn:aws:s3:::lookout-data-123456789012"]
+          resources = ["arn:aws:s3:::snow-globe-data-123456789012"]
         },
         {
           actions = ["s3:GetObject", "s3:PutObject", "s3:AbortMultipartUpload"]
           resources = [
-            "arn:aws:s3:::lookout-data-123456789012/forecast/*",
-            "arn:aws:s3:::lookout-data-123456789012/forecast_log/*",
-            "arn:aws:s3:::lookout-data-123456789012/state/forecast/*",
-            "arn:aws:s3:::lookout-data-123456789012/state/locks/forecast*",
+            "arn:aws:s3:::snow-globe-data-123456789012/forecast/*",
+            "arn:aws:s3:::snow-globe-data-123456789012/forecast_log/*",
+            "arn:aws:s3:::snow-globe-data-123456789012/state/forecast/*",
+            "arn:aws:s3:::snow-globe-data-123456789012/state/locks/forecast*",
           ]
         },
         {
           actions   = ["s3:DeleteObject"]
-          resources = ["arn:aws:s3:::lookout-data-123456789012/state/locks/forecast*"]
+          resources = ["arn:aws:s3:::snow-globe-data-123456789012/state/locks/forecast*"]
         },
         ] : [
         for a in want.actions : toset(flatten([
@@ -348,15 +348,15 @@ run "each_job_owns_its_keys" {
     condition = toset(flatten([
       for s in jsondecode(aws_iam_role_policy.job["capture"].policy).Statement : flatten([s.Resource]) if contains(flatten([s.Action]), "s3:DeleteObject")
       ])) == toset([
-      "arn:aws:s3:::lookout-data-123456789012/cache/staging/*",
-      "arn:aws:s3:::lookout-data-123456789012/state/locks/capture*",
+      "arn:aws:s3:::snow-globe-data-123456789012/cache/staging/*",
+      "arn:aws:s3:::snow-globe-data-123456789012/state/locks/capture*",
     ])
     error_message = "capture may delete only its staged copies and its own locks"
   }
   assert {
     condition = toset(flatten([
       for s in jsondecode(aws_iam_role_policy.job["forecast"].policy).Statement : flatten([s.Resource]) if contains(flatten([s.Action]), "s3:DeleteObject")
-    ])) == toset(["arn:aws:s3:::lookout-data-123456789012/state/locks/forecast*"])
+    ])) == toset(["arn:aws:s3:::snow-globe-data-123456789012/state/locks/forecast*"])
     error_message = "forecast may delete only its own locks"
   }
   # The capture job's persisted NPS politeness state (state/capture/..., its locks) is out of forecast's reach.
@@ -364,8 +364,8 @@ run "each_job_owns_its_keys" {
     condition = !anytrue(flatten([
       for s in jsondecode(aws_iam_role_policy.job["forecast"].policy).Statement : [
         for r in flatten([s.Resource]) : (
-          startswith("arn:aws:s3:::lookout-data-123456789012/state/capture/hosts/www.nps.gov.json", trimsuffix(r, "*")) ||
-          startswith("arn:aws:s3:::lookout-data-123456789012/state/locks/capture/rainier.paradise-mountain.lock", trimsuffix(r, "*"))
+          startswith("arn:aws:s3:::snow-globe-data-123456789012/state/capture/hosts/www.nps.gov.json", trimsuffix(r, "*")) ||
+          startswith("arn:aws:s3:::snow-globe-data-123456789012/state/locks/capture/rainier.paradise-mountain.lock", trimsuffix(r, "*"))
         )
       ] if contains(flatten([s.Action]), "s3:PutObject") || contains(flatten([s.Action]), "s3:DeleteObject")
     ]))
@@ -375,8 +375,8 @@ run "each_job_owns_its_keys" {
     condition = !anytrue(flatten([
       for s in jsondecode(aws_iam_role_policy.job["capture"].policy).Statement : [
         for r in flatten([s.Resource]) : (
-          startswith("arn:aws:s3:::lookout-data-123456789012/state/forecast/hrrr/2026111912z.json", trimsuffix(r, "*")) ||
-          startswith("arn:aws:s3:::lookout-data-123456789012/state/locks/forecast-hrrr.lock", trimsuffix(r, "*"))
+          startswith("arn:aws:s3:::snow-globe-data-123456789012/state/forecast/hrrr/2026111912z.json", trimsuffix(r, "*")) ||
+          startswith("arn:aws:s3:::snow-globe-data-123456789012/state/locks/forecast-hrrr.lock", trimsuffix(r, "*"))
         )
       ] if contains(flatten([s.Action]), "s3:PutObject") || contains(flatten([s.Action]), "s3:DeleteObject")
     ]))
@@ -396,9 +396,9 @@ run "each_job_owns_its_keys" {
   }
 }
 
-# The keys below are what the worker code builds (printed on 20 Nov from lookout_common.paths frame_key,
-# sidecar_key, thumb_key, capture_log_key, forecast_key and forecast_log_key; lookout_common.storage.lock_key;
-# lookout_capture.retention's staged key, state.camera_state_key and state.HOST_STATE_KEY; lookout_forecast's
+# The keys below are what the worker code builds (printed on 20 Nov from lookout_common.paths, renamed D-080: frame_key,
+# sidecar_key, thumb_key, capture_log_key, forecast_key and forecast_log_key; snow_globe_common.storage.lock_key;
+# snow_globe_capture.retention's staged key, state.camera_state_key and state.HOST_STATE_KEY; snow_globe_forecast's
 # marker, failure and lag-survey keys). A pattern matches a key as IAM does: a trailing "*" matches any rest of the
 # key, "/" included, and a pattern without "*" (the bucket ARN, for s3:ListBucket) matches only itself.
 #
@@ -425,7 +425,7 @@ run "capture_can_use_every_key_it_writes" {
           for r in flatten([
             for s in jsondecode(aws_iam_role_policy.job["capture"].policy).Statement : flatten([s.Resource])
             if contains(flatten([s.Action]), "s3:GetObject") && contains(flatten([s.Action]), "s3:PutObject")
-          ]) : endswith(r, "*") ? startswith("arn:aws:s3:::lookout-data-123456789012/${k}", trimsuffix(r, "*")) : "arn:aws:s3:::lookout-data-123456789012/${k}" == r
+          ]) : endswith(r, "*") ? startswith("arn:aws:s3:::snow-globe-data-123456789012/${k}", trimsuffix(r, "*")) : "arn:aws:s3:::snow-globe-data-123456789012/${k}" == r
       ])
     ])
     error_message = "capture must read and write frames/, thumbs/, cache/staging/ (D-028), capture_log/, its state (camera state, the www.nps.gov hold) and its locks"
@@ -441,7 +441,7 @@ run "capture_can_use_every_key_it_writes" {
         ] : anytrue([
           for r in flatten([
             for s in jsondecode(aws_iam_role_policy.job["capture"].policy).Statement : flatten([s.Resource]) if contains(flatten([s.Action]), "s3:DeleteObject")
-          ]) : endswith(r, "*") ? startswith("arn:aws:s3:::lookout-data-123456789012/${k}", trimsuffix(r, "*")) : "arn:aws:s3:::lookout-data-123456789012/${k}" == r
+          ]) : endswith(r, "*") ? startswith("arn:aws:s3:::snow-globe-data-123456789012/${k}", trimsuffix(r, "*")) : "arn:aws:s3:::snow-globe-data-123456789012/${k}" == r
       ])
     ])
     error_message = "capture must delete its staged copies under cache/staging/ and release its locks"
@@ -469,7 +469,7 @@ run "capture_never_deletes_evidence" {
         ] : [
         for r in flatten([
           for s in jsondecode(aws_iam_role_policy.job["capture"].policy).Statement : flatten([s.Resource]) if contains(flatten([s.Action]), "s3:DeleteObject")
-        ]) : endswith(r, "*") ? startswith("arn:aws:s3:::lookout-data-123456789012/${k}", trimsuffix(r, "*")) : "arn:aws:s3:::lookout-data-123456789012/${k}" == r
+        ]) : endswith(r, "*") ? startswith("arn:aws:s3:::snow-globe-data-123456789012/${k}", trimsuffix(r, "*")) : "arn:aws:s3:::snow-globe-data-123456789012/${k}" == r
       ]
     ]))
     error_message = "capture may delete only cache/staging/ copies and its own locks: never a frame, thumbnail, archive frame, log, state document or forecast key"
@@ -495,7 +495,7 @@ run "forecast_uses_only_its_own_keys" {
           for r in flatten([
             for s in jsondecode(aws_iam_role_policy.job["forecast"].policy).Statement : flatten([s.Resource])
             if contains(flatten([s.Action]), "s3:GetObject") && contains(flatten([s.Action]), "s3:PutObject")
-          ]) : endswith(r, "*") ? startswith("arn:aws:s3:::lookout-data-123456789012/${k}", trimsuffix(r, "*")) : "arn:aws:s3:::lookout-data-123456789012/${k}" == r
+          ]) : endswith(r, "*") ? startswith("arn:aws:s3:::snow-globe-data-123456789012/${k}", trimsuffix(r, "*")) : "arn:aws:s3:::snow-globe-data-123456789012/${k}" == r
       ])
     ])
     error_message = "forecast must read and write its forecast files, its logs, its run markers and failure records, and its locks"
@@ -511,7 +511,7 @@ run "forecast_uses_only_its_own_keys" {
         "capture_log/2026-11-20.jsonl",
         ] : [
         for s in jsondecode(aws_iam_role_policy.job["forecast"].policy).Statement : [
-          for r in flatten([s.Resource]) : endswith(r, "*") ? startswith("arn:aws:s3:::lookout-data-123456789012/${k}", trimsuffix(r, "*")) : "arn:aws:s3:::lookout-data-123456789012/${k}" == r
+          for r in flatten([s.Resource]) : endswith(r, "*") ? startswith("arn:aws:s3:::snow-globe-data-123456789012/${k}", trimsuffix(r, "*")) : "arn:aws:s3:::snow-globe-data-123456789012/${k}" == r
         ]
       ]
     ]))
@@ -522,7 +522,7 @@ run "forecast_uses_only_its_own_keys" {
       for k in ["state/locks/forecast-hrrr.lock", "state/locks/forecast-lag-survey.lock"] : anytrue([
         for r in flatten([
           for s in jsondecode(aws_iam_role_policy.job["forecast"].policy).Statement : flatten([s.Resource]) if contains(flatten([s.Action]), "s3:DeleteObject")
-        ]) : endswith(r, "*") ? startswith("arn:aws:s3:::lookout-data-123456789012/${k}", trimsuffix(r, "*")) : "arn:aws:s3:::lookout-data-123456789012/${k}" == r
+        ]) : endswith(r, "*") ? startswith("arn:aws:s3:::snow-globe-data-123456789012/${k}", trimsuffix(r, "*")) : "arn:aws:s3:::snow-globe-data-123456789012/${k}" == r
       ])
     ])
     error_message = "forecast must be able to release its locks"
@@ -562,7 +562,7 @@ run "user_agent_rejects_an_email_address" {
   command = plan
 
   variables {
-    user_agent = "Lookout/0.1 (contact someone@example.com)"
+    user_agent = "SnowGlobe/0.1 (contact someone@example.com)"
   }
 
   expect_failures = [var.user_agent]

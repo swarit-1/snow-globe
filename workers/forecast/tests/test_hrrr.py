@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
 
-from lookout_forecast import hrrr
+from snow_globe_forecast import hrrr
 
 
 def test_run_ids_round_trip() -> None:

@@ -1,4 +1,4 @@
-# Lookout M1 1a platform spike (PLAN.md M1 1a). Throwaway: never shipped, not part of app/Cargo.toml.
+# Snow Globe M1 1a platform spike (PLAN.md M1 1a). Throwaway: never shipped, not part of app/Cargo.toml.
 # Build output goes to $CARGO_TARGET_DIR (CLAUDE.md: $HOME/lookout-data/cache/cargo-target), never into iCloud.
 [workspace]
 resolver = "3"

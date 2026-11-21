@@ -8,10 +8,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from lookout_common.manifest import load_manifest
+from snow_globe_common.manifest import load_manifest
 from synth_forecast import clear_sky, low_deck, make_doc
 
-from lookout_eval.forecast_io import (
+from snow_globe_eval.forecast_io import (
     CEILING,
     LOW_CLOUD,
     ForecastFileError,
@@ -22,7 +22,7 @@ from lookout_eval.forecast_io import (
 RUN = datetime(2026, 11, 18, 12, tzinfo=UTC)
 SCHEMA = (
     Path(__file__).resolve().parents[2]
-    / "workers/forecast/src/lookout_forecast/schema/forecast_run.schema.json"
+    / "workers/forecast/src/snow_globe_forecast/schema/forecast_run.schema.json"
 )
 
 

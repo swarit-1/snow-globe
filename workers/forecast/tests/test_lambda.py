@@ -8,13 +8,13 @@ from datetime import UTC, datetime, timedelta
 
 import eccodes
 import pytest
-from lookout_common.jsonl import read_jsonl
-from lookout_common.storage import LockTimeoutError
+from snow_globe_common.jsonl import read_jsonl
+from snow_globe_common.storage import LockTimeoutError
 
-from lookout_forecast import backoff, lambda_handler
-from lookout_forecast.bucket import HrrrBucket
-from lookout_forecast.extract import ExtractOptions, Extractor
-from lookout_forecast.fields import resolve_fields
+from snow_globe_forecast import backoff, lambda_handler
+from snow_globe_forecast.bucket import HrrrBucket
+from snow_globe_forecast.extract import ExtractOptions, Extractor
+from snow_globe_forecast.fields import resolve_fields
 
 from .conftest import RAINIER
 
@@ -84,9 +84,9 @@ def test_handler_reads_its_settings_from_the_environment(
     fake, small_grid, data_root, manifests, monkeypatch
 ) -> None:
     fake.add_run(datetime(2026, 11, 19, 7, tzinfo=UTC), fields=FIELDS, hours=range(19))
-    monkeypatch.setenv("LOOKOUT_FORECAST_FIELDS", "VIS,TERRAIN")
-    monkeypatch.setenv("LOOKOUT_FORECAST_MAX_FH", "1")
-    monkeypatch.setenv("LOOKOUT_FORECAST_LOOKBACK_H", "3")
+    monkeypatch.setenv("SNOW_GLOBE_FORECAST_FIELDS", "VIS,TERRAIN")
+    monkeypatch.setenv("SNOW_GLOBE_FORECAST_MAX_FH", "1")
+    monkeypatch.setenv("SNOW_GLOBE_FORECAST_LOOKBACK_H", "3")
     monkeypatch.setattr(
         lambda_handler, "HrrrBucket", lambda: HrrrBucket(transport=fake.transport())
     )

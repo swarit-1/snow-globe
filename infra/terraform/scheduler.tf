@@ -1,7 +1,7 @@
 # EventBridge Scheduler (PRD §11.2, §11.3): no GitHub Actions cron, which jitters and is disabled after 60 days
 # without activity in a public repo. The free tier covers 14 M invocations a month; these schedules use ~17 k.
 
-resource "aws_scheduler_schedule_group" "lookout" {
+resource "aws_scheduler_schedule_group" "snow_globe" {
   name = var.project
 }
 
@@ -21,7 +21,7 @@ resource "aws_scheduler_schedule" "job" {
   for_each = local.jobs
 
   name        = local.function_name[each.key]
-  group_name  = aws_scheduler_schedule_group.lookout.name
+  group_name  = aws_scheduler_schedule_group.snow_globe.name
   description = "Runs ${local.function_name[each.key]} on ${each.value.schedule_expression}"
 
   schedule_expression = each.value.schedule_expression
@@ -38,7 +38,7 @@ resource "aws_scheduler_schedule" "job" {
     # jsonencode() escapes "<" and ">" as < and >, and the Scheduler only replaces the literal
     # placeholder text, so the two characters are put back after encoding.
     input = replace(replace(jsonencode({
-      source         = "lookout.scheduler"
+      source         = "snow-globe.scheduler"
       job            = each.key
       scheduled_time = "<aws.scheduler.scheduled-time>"
       execution_id   = "<aws.scheduler.execution-id>"

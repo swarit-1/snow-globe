@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lookout.invalid/schemas/scene.schema.json",
+  "$id": "https://snow-globe.invalid/schemas/scene.schema.json",
   "title": "SceneSpec",
   "description": "Everything one Tier 1 frame depends on (PRD section 9.2), renderer 0.2.0. Heights are metres above mean sea level unless a name says _agl; angles are degrees; azimuths are clockwise from true north. Mirrors validateScene() in renderer/src/scene.ts (a test checks they agree). Rules this schema cannot express, which validateScene() also enforces: seed == deriveSeed(viewpoint_id, run_init_utc); timestamps must be real instants (no 30 February; the patterns already exclude month 13, day 32, hour 24, second 60); valid_time_utc lies 0 to 384 h after run_init_utc; cover_profile distances and wind_series lead_h values strictly increase; wind_series read at the valid time is within 0.05 m/s of wind_u_ms / wind_v_ms; sun is within 1 degree of the solar position for valid_time_utc at the camera.",
   "type": "object",

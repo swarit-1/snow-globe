@@ -17,7 +17,7 @@ path = "src/main.rs"
 # devUrl the ui/ folder is still embedded and served over tauri://. `cargo run` works with no
 # Tauri CLI and no dev server.
 default = []
-# Links app/speech-macos's static library through its C ABI (lookout_speech.h). Off by default
+# Links app/speech-macos's static library through its C ABI (snow_globe_speech.h). Off by default
 # because that library is built by another work package; see README.md, check 6.
 speech = []
 

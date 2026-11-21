@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from lookout_forecast.fields import CATALOGUE
-from lookout_forecast.idx import (
+from snow_globe_forecast.fields import CATALOGUE
+from snow_globe_forecast.idx import (
     IdxError,
     MessageRange,
     group_contiguous,

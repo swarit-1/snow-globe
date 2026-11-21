@@ -19,11 +19,11 @@ import eccodes
 import httpx
 import numpy as np
 
-from lookout_forecast.fields import FieldSpec, field_by_name
-from lookout_forecast.grid import HRRR_CONUS, LambertConformalGrid
-from lookout_forecast.hrrr import BASE_URL, idx_key, object_key, run_hours
+from snow_globe_forecast.fields import FieldSpec, field_by_name
+from snow_globe_forecast.grid import HRRR_CONUS, LambertConformalGrid
+from snow_globe_forecast.hrrr import BASE_URL, idx_key, object_key, run_hours
 
-#: Messages Lookout never asks for, put in the files so ranges must skip them.
+#: Messages Snow Globe never asks for, put in the files so ranges must skip them.
 FILLER = ("REFC:entire atmosphere", "PRES:cloud top", "GUST:surface")
 _FILLER_ID = {
     "REFC:entire atmosphere": (0, 16, 196, 10, 0),

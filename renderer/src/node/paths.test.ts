@@ -1,8 +1,45 @@
-import { mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PACKAGE_ROOT, assertOutsideRepo, dataDir, repoRoot } from './paths.ts';
+import { PACKAGE_ROOT, assertOutsideRepo, dataDir, envVar, repoRoot } from './paths.ts';
+
+/** The rename (D-080): the new names first, the old ones as a fallback. */
+describe('the data dir after the rename', () => {
+  it('reads SNOW_GLOBE_* first, then the deprecated LOOKOUT_* name', () => {
+    expect(envVar('SNOW_GLOBE_X', {})).toBeUndefined();
+    expect(envVar('SNOW_GLOBE_X', { LOOKOUT_X: 'old' })).toBe('old');
+    expect(envVar('SNOW_GLOBE_X', { SNOW_GLOBE_X: 'new', LOOKOUT_X: 'old' })).toBe('new');
+    expect(envVar('SNOW_GLOBE_X', { SNOW_GLOBE_X: ' ', LOOKOUT_X: 'old' })).toBe('old');
+    expect(envVar('HOME', { LOOKOUT_HOME: 'x' })).toBeUndefined();
+  });
+
+  it('defaults to ~/snow-globe-data, or ~/lookout-data until it is moved', () => {
+    const home = mkdtempSync(join(tmpdir(), 'snow-globe-home-test-'));
+    try {
+      expect(dataDir({}, home)).toBe(join(home, 'snow-globe-data'));
+      mkdirSync(join(home, 'lookout-data'));
+      expect(dataDir({}, home)).toBe(join(home, 'lookout-data'));
+      mkdirSync(join(home, 'snow-globe-data'));
+      // Both folders apart (~/snow-globe-data made before the switch): refused, as the workers refuse.
+      expect(() => dataDir({}, home)).toThrow(/ambiguous \(D-080\)/);
+      expect(dataDir({ LOOKOUT_DATA_DIR: '/old' }, home)).toBe('/old');
+      expect(dataDir({ LOOKOUT_DATA_DIR: '/old', SNOW_GLOBE_DATA_DIR: '/new' }, home)).toBe('/new');
+      // After the switch ~/lookout-data is a symlink to ~/snow-globe-data: the new name wins.
+      rmSync(join(home, 'lookout-data'), { recursive: true });
+      symlinkSync(join(home, 'snow-globe-data'), join(home, 'lookout-data'));
+      expect(dataDir({}, home)).toBe(join(home, 'snow-globe-data'));
+      // A dangling ~/snow-globe-data link does not exist.
+      unlinkSync(join(home, 'lookout-data'));
+      rmSync(join(home, 'snow-globe-data'), { recursive: true });
+      mkdirSync(join(home, 'lookout-data'));
+      symlinkSync(join(home, 'nowhere'), join(home, 'snow-globe-data'));
+      expect(dataDir({}, home)).toBe(join(home, 'lookout-data'));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
 
 /** CLAUDE.md: never write frames, plates, renders, traces or GRIB files inside the repo. */
 describe('outputs stay outside the repository', () => {
@@ -19,7 +56,7 @@ describe('outputs stay outside the repository', () => {
   });
 
   it('refuses a path that reaches the repository through a symlink', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'lookout-paths-test-'));
+    const dir = mkdtempSync(join(tmpdir(), 'snow-globe-paths-test-'));
     try {
       symlinkSync(PACKAGE_ROOT, join(dir, 'link'));
       expect(() => assertOutsideRepo(join(dir, 'link', 'out.png'), 'a render')).toThrow(/inside the repository/);

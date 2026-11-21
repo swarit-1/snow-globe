@@ -1,4 +1,4 @@
-"""Shared test fixtures: a clean LOOKOUT_* environment, a temp data dir, a fake clock,
+"""Shared test fixtures: a clean SNOW_GLOBE_* environment, a temp data dir, a fake clock,
 synthetic JPEGs (no NPS frame ever enters the repo) and a fake nps.gov behind
 ``httpx.MockTransport`` that records every request it receives."""
 
@@ -21,29 +21,40 @@ from PIL import ExifTags, Image
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def subprocess_prelude() -> str:
+#: A home folder that never exists, for child processes (see :func:`subprocess_prelude`).
+NO_HOME = "/nonexistent-snow-globe-test-home"
+
+
+def subprocess_prelude(home: Path | str = NO_HOME) -> str:
     """Python source that puts this checkout's packages on ``sys.path`` in a child process.
 
     Child scripts run with ``-I`` (no environment, no script folder on the path), and iCloud
     hides the venv's ``.pth`` files on this machine, so the child is told where the two
-    ``src`` folders are instead of relying on either.
+    ``src`` folders are instead of relying on either. The child's fetcher guard looks for
+    default data folders under ``home`` (by default a folder that never exists), never under
+    this machine's real home, where the running loop holds the lock (:func:`no_host_lock_home`).
     """
-    import lookout_common
+    import snow_globe_common
 
-    import lookout_capture
+    import snow_globe_capture
 
     roots = [
         str(Path(module.__file__).resolve().parents[1])
-        for module in (lookout_capture, lookout_common)
+        for module in (snow_globe_capture, snow_globe_common)
     ]
-    return f"import sys\nsys.path[:0] = {roots!r}\n"
+    return (
+        f"import sys\nsys.path[:0] = {roots!r}\n"
+        "import pathlib\n"
+        "import snow_globe_capture.fetcher_guard as _guard\n"
+        f"_guard.host_home = lambda: pathlib.Path({str(home)!r})\n"
+    )
 
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Drop LOOKOUT_* and AWS_* variables from the developer's shell."""
+    """Drop SNOW_GLOBE_*, LOOKOUT_* (their deprecated names) and AWS_* variables from the shell."""
     for name in list(os.environ):
-        if name.startswith(("LOOKOUT_", "AWS_")):
+        if name.startswith(("SNOW_GLOBE_", "LOOKOUT_", "AWS_")):
             monkeypatch.delenv(name, raising=False)
 
 
@@ -51,17 +62,30 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def no_host_processes(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tests never see this machine's processes: a real Rainier stopgap may be running,
     and no test sends anything to nps.gov. Guard tests pass their own process lists."""
-    import lookout_capture.fetcher_guard as guard
+    import snow_globe_capture.fetcher_guard as guard
 
     monkeypatch.setattr(guard, "list_processes", lambda: [])
 
 
+@pytest.fixture(autouse=True)
+def no_host_lock_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Tests never touch this machine's default data folders: the fetcher guard also locks
+    ``~/snow-globe-data`` and ``~/lookout-data`` when they exist (D-080), and the running loop
+    holds the real one. Its home is an empty scratch folder instead; a test that needs default
+    folders makes them under this fixture's value."""
+    import snow_globe_capture.fetcher_guard as guard
+
+    home = tmp_path / "home"
+    monkeypatch.setattr(guard, "host_home", lambda: home)
+    return home
+
+
 @pytest.fixture
 def data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A fresh data dir, exported as LOOKOUT_DATA_DIR."""
-    root = tmp_path / "lookout-data"
+    """A fresh data dir, exported as SNOW_GLOBE_DATA_DIR."""
+    root = tmp_path / "snow-globe-data"
     root.mkdir()
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(root))
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(root))
     return root
 
 
@@ -294,5 +318,5 @@ def s3_bucket(aws_env) -> Iterator[Any]:
 
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
-        client.create_bucket(Bucket="lookout-test")
+        client.create_bucket(Bucket="snow-globe-test")
         yield client

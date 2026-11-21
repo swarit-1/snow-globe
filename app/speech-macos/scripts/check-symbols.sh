@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Static check on liblookout_speech.a (PRD §15.1: speech on device only; §6.5: the C ABI).
+# Static check on libsnow_globe_speech.a (PRD §15.1: speech on device only; §6.5: the C ABI).
 #
 # Fails when:
 # - the archive refers to anything in scripts/forbidden-symbols.txt (networking, server-capable
@@ -12,11 +12,11 @@
 #   _objc_msgSend import (NSData.write(toFile:) adds no symbol of its own);
 # - a C ABI function is missing or not external;
 # - the objects ask the linker for Network.framework.
-# The deny list also runs in Tests/LookoutSpeechTests/StaticChecksTests.swift on the debug
+# The deny list also runs in Tests/SnowGlobeSpeechTests/StaticChecksTests.swift on the debug
 # objects; scripts/check-symbols-selftest.sh checks that this script catches each category.
 #
-# usage: scripts/check-symbols.sh [path/to/liblookout_speech.a]
-#        scripts/check-symbols.sh --update-baseline [path/to/liblookout_speech.a]
+# usage: scripts/check-symbols.sh [path/to/libsnow_globe_speech.a]
+#        scripts/check-symbols.sh --update-baseline [path/to/libsnow_globe_speech.a]
 #          rewrites archive-imports.txt from the archive (only when every other check passes);
 #          review the printed and git diffs first: each new line is a new dependency.
 set -euo pipefail
@@ -27,7 +27,38 @@ if [ "${1:-}" = "--update-baseline" ]; then
   UPDATE=1
   shift
 fi
-ARCHIVE="${1:-${LOOKOUT_DATA_DIR:-$HOME/lookout-data}/cache/speech-macos/release/liblookout_speech.a}"
+# The data dir, resolved as the workers resolve it (D-080): $SNOW_GLOBE_DATA_DIR, else the deprecated
+# $LOOKOUT_DATA_DIR (blank counts as unset; surrounding whitespace is dropped), else ~/snow-globe-data if it
+# exists, else ~/lookout-data if it exists (the folder's name before the rename), else ~/snow-globe-data.
+# Symlinks are followed and nothing is created. While both folders exist and are different folders (something
+# made ~/snow-globe-data before the rename's live switch), it prints why on stderr and returns 1.
+data_dir() {
+  local v new="$HOME/snow-globe-data" old="$HOME/lookout-data"
+  for v in "${SNOW_GLOBE_DATA_DIR:-}" "${LOOKOUT_DATA_DIR:-}"; do
+    v="${v#"${v%%[![:space:]]*}"}"
+    v="${v%"${v##*[![:space:]]}"}"
+    if [ -n "$v" ]; then
+      printf '%s\n' "$v"
+      return 0
+    fi
+  done
+  if [ -e "$new" ] && [ -e "$old" ] && ! [ "$new" -ef "$old" ]; then
+    printf '%s\n' "both $new and $old exist and are different folders, so the data dir is ambiguous (D-080):" \
+      "until the rename's live switch the data is in $old, and after it $old is a symlink to $new." \
+      "Set SNOW_GLOBE_DATA_DIR to the folder you mean, and tell the lead which one is stray." >&2
+    return 1
+  elif [ -e "$new" ] || [ ! -e "$old" ]; then
+    printf '%s\n' "$new"
+  else
+    printf '%s\n' "$old"
+  fi
+}
+if [ -n "${1:-}" ]; then
+  ARCHIVE="$1"
+else
+  DATA_DIR="$(data_dir)" || exit 1
+  ARCHIVE="$DATA_DIR/cache/speech-macos/release/libsnow_globe_speech.a"
+fi
 DENY="$HERE/forbidden-symbols.txt"
 BASELINE="$HERE/archive-imports.txt"
 if [ ! -f "$ARCHIVE" ]; then
@@ -94,15 +125,15 @@ done
 # The C ABI: every function defined and external (not private extern).
 missing=""
 for f in status start push_f32 finish cancel free version set_contextual_strings set_silence_pad_ms set_model_retention; do
-  if ! grep -E -q -- " external( \[no dead strip\])? _lk_speech_${f}\$" <<<"$DEFINED"; then
-    missing="$missing _lk_speech_$f"
+  if ! grep -E -q -- " external( \[no dead strip\])? _sg_speech_${f}\$" <<<"$DEFINED"; then
+    missing="$missing _sg_speech_$f"
   fi
 done
 if [ -n "$missing" ]; then
   echo "FAIL  C ABI not exported:$missing"
   fail=1
 else
-  echo "ok    C ABI exported: 10 _lk_speech_* functions"
+  echo "ok    C ABI exported: 10 _sg_speech_* functions"
 fi
 
 # What the objects ask the linker to add (LC_LINKER_OPTION autolink entries), for the record.
@@ -127,7 +158,7 @@ if [ "$UPDATE" -eq 1 ]; then
     exit 1
   fi
   {
-    echo "# The reviewed list of external symbols liblookout_speech.a (release build) imports, and of the"
+    echo "# The reviewed list of external symbols libsnow_globe_speech.a (release build) imports, and of the"
     echo "# Objective-C selector names it contains, as @selector(name). One per line: the name, a TAB,"
     echo "# then the demangled name for the reviewer."
     echo "#"

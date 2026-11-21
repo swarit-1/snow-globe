@@ -95,7 +95,7 @@ const now = (): number => (typeof performance !== 'undefined' ? performance.now(
 
 type TexSlot = 'plate' | 'skyMask' | 'depth' | 'lattice';
 
-export class LookoutRenderer {
+export class SnowGlobeRenderer {
   readonly gl: WebGL2RenderingContext;
   readonly canvas: HTMLCanvasElement | OffscreenCanvas;
   private program: WebGLProgram | null = null;
@@ -120,7 +120,7 @@ export class LookoutRenderer {
       preserveDrawingBuffer: false,
       powerPreference: 'high-performance',
     }) as WebGL2RenderingContext | null;
-    if (!gl) throw new Error('LookoutRenderer: WebGL2 is not available');
+    if (!gl) throw new Error('SnowGlobeRenderer: WebGL2 is not available');
     this.gl = gl;
     // TODO(M2): restore and pre-warm shader variants after a lost context (PRD §9.2 performance).
     canvas.addEventListener('webglcontextlost', () => {
@@ -263,7 +263,7 @@ export class LookoutRenderer {
    * The draw is only issued; call finish() (or read pixels) to wait for the GPU.
    */
   render(sceneInput: SceneSpec, inputs: RenderInputs, opts: RenderOptions = {}): RenderInfo {
-    if (this.contextLost) throw new Error('LookoutRenderer: WebGL context lost');
+    if (this.contextLost) throw new Error('SnowGlobeRenderer: WebGL context lost');
     const t0 = now();
     const scene = validateScene(sceneInput, { allowSyntheticSun: opts.allowSyntheticSun === true });
     if (scene.plate.has_sky_mask !== Boolean(inputs.skyMask)) throw new Error('scene.plate.has_sky_mask does not match the inputs');
@@ -458,7 +458,7 @@ export function flipRows<T extends Uint8Array | Float32Array>(buf: T, w: number,
   return out;
 }
 
-const renderers = new WeakMap<object, LookoutRenderer>();
+const renderers = new WeakMap<object, SnowGlobeRenderer>();
 
 /**
  * Functional entry point: render(scene, plate, sky mask?, depth?, target canvas). Keeps one renderer
@@ -474,7 +474,7 @@ export function render(
 ): RenderInfo {
   let r = renderers.get(target);
   if (!r) {
-    r = new LookoutRenderer(target);
+    r = new SnowGlobeRenderer(target);
     renderers.set(target, r);
   }
   return r.render(scene, { plate, skyMask: skyMask ?? null, depth: depth ?? null }, options);

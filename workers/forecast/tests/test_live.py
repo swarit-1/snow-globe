@@ -3,7 +3,7 @@
 The task's smoke: the most recent complete HRRR run, f00-f02, fields VIS, HGT:cloud
 ceiling, HGT:cloud base, LCDC, MCDC, HCDC and HGT:surface, all 8 viewpoints, files written.
 It downloads about 30 MB and prints what it measured as JSON. Files go to a temporary
-data dir unless ``FORECAST_SMOKE_DATA_DIR`` names one (e.g. ``~/lookout-data`` to keep them
+data dir unless ``FORECAST_SMOKE_DATA_DIR`` names one (e.g. ``~/snow-globe-data`` to keep them
 as M0.5 evidence).
 """
 
@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from lookout_forecast import cli
-from lookout_forecast.output import validate_document
+from snow_globe_forecast import cli
+from snow_globe_forecast.output import validate_document
 
 SMOKE_FIELDS = ["VIS", "HGT:cloud ceiling", "HGT:cloud base", "LCDC", "MCDC", "HCDC", "HGT:surface"]
 
@@ -82,10 +82,10 @@ def _summary(event: dict, docs: dict[str, dict], seconds: float) -> dict:
 
 @pytest.mark.network
 def test_live_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-    target = Path(os.environ.get("FORECAST_SMOKE_DATA_DIR") or tmp_path / "lookout-data")
+    target = Path(os.environ.get("FORECAST_SMOKE_DATA_DIR") or tmp_path / "snow-globe-data")
     target = target.expanduser()
     target.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(target))
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(target))
     started = time.monotonic()
     rc = cli.main(
         ["latest", "--max-fh", "2", "--fields", *SMOKE_FIELDS, "--max-mb", "150", "--json"]

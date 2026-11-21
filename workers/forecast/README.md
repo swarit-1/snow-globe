@@ -1,6 +1,8 @@
-# lookout-forecast
+# snow-globe-forecast
 
-The Lookout forecast worker (PRD §8.3, §11.2). It reads HRRR directly from NOAA's open-data
+Renamed from `lookout-forecast` on 21 Nov 2026 (D-080). Forecast 0.3.0 is 0.2.0 under the Snow Globe names: it writes `kind: snow-globe.forecast-run` and `software.snow_globe_forecast`, reads `SNOW_GLOBE_FORECAST_*` (else the old `LOOKOUT_FORECAST_*`), and every file and log written before stays valid and readable (`kind: lookout.forecast-run`, `software.lookout_forecast`). Measurements below dated before 21 Nov were taken under the old names.
+
+The Snow Globe forecast worker (PRD §8.3, §11.2). It reads HRRR directly from NOAA's open-data
 bucket `noaa-hrrr-bdp-pds` over anonymous HTTPS, fetches only the byte ranges of the fields it
 needs (from each hour's `.idx`), decodes them with ecCodes, samples every viewpoint's points and
 writes one JSON file per viewpoint per run. It also logs the publication lag of every forecast
@@ -13,7 +15,7 @@ that are never available before their own S3 stamps. It reads every file, state 
 written by 0.1.0. Live files it writes are valid under the 0.1.0 schema; archived files are not
 (see "Compatibility" below).
 
-Python 3.13, uv, path dependency on `../common` (`lookout-common[s3]`).
+Python 3.13, uv, path dependency on `../common` (`snow-globe-common[s3]`).
 
 ```sh
 cd workers/forecast && uv sync && uv run pytest -q && uv run ruff check .
@@ -24,26 +26,26 @@ uv run pytest -m network -s tests/test_live.py        # live smoke, about 21 MB
 
 | Command | Does |
 |---|---|
-| `lookout-forecast latest [--max-fh N] [--fields F ...] [--only VP]` | Extract the newest complete run (skips it if already written) |
-| `lookout-forecast run YYYYMMDDHH [...] [--allow-incomplete] [--hours FH ...]` | Extract one run (only the hours it needs must exist); `--hours 24 25` extracts exactly those hours instead of 0..`--max-fh` |
-| `lookout-forecast backfill --start YYYYMMDDHH --end YYYYMMDDHH [--every-h N] [--synoptic-only] [--max-total-mb N]` | Archived runs; availability is modelled |
-| `lookout-forecast tick [--json] [--uncapped]` | One call of the Lambda handler, `handler({}, None)`: the code path the scheduled Lambda runs, with the `LOOKOUT_FORECAST_*` environment; prints its summary (`--json`: the handler's return value, unchanged). Exits 0, or 1 if a run failed in the call (4 if every failure was a cap refusal), so a loop can tell without parsing the JSON. Refuses to start without `LOOKOUT_FORECAST_MAX_MB` unless `--uncapped` |
-| `lookout-forecast status [--offline] [--hours N]` | Files written, the lag log by method (live, survey, duplicates dropped), the lag model and how many of its 576 cells have left the fallback, cache size, and (online) which runs are on S3 |
-| `lookout-forecast plan YYYYMMDDHH [--fields ...] [--hours FH ...]` | Bytes per field per hour, from the inventories only (no GRIB download) |
-| `lookout-forecast grid-check YYYYMMDDHH [--write-fixture PATH]` | Compare the grid mapping with ecCodes' latitude/longitude arrays |
-| `lookout-forecast datum-check YYYYMMDDHH` | Compare the height fields with the model terrain and with `PRES:cloud base` |
-| `lookout-forecast lag-survey --start YYYYMMDDHH [--end YYYYMMDDHH] [--log] [--save-listings DIR]` | Publication lags of past runs from S3 listings (one per run, no GRIB; the run the newest-complete search found is not listed again). `--end` defaults to the newest complete run. Without `--log` it writes nothing; with it, every listed hour not logged yet (live or survey) becomes a survey lag event in `forecast_log/lag_survey/<today>.jsonl`. An hour with a stamp more than 24 h after the run start (a rewritten object) is left out and never logged (`stamps_not_trusted`) |
-| `lookout-forecast lag-check YYYYMMDDHH ... [--save-listings DIR]` | Each run's S3-stamp lags next to the lag model (live + survey, and live only), and the availability an archived run of it gets (`availability_lag_min`, `availability_source`, `hours_set_by_stamps`, `hours_with_ignored_stamps`); one listing per run, writes nothing |
+| `snow-globe-forecast latest [--max-fh N] [--fields F ...] [--only VP]` | Extract the newest complete run (skips it if already written) |
+| `snow-globe-forecast run YYYYMMDDHH [...] [--allow-incomplete] [--hours FH ...]` | Extract one run (only the hours it needs must exist); `--hours 24 25` extracts exactly those hours instead of 0..`--max-fh` |
+| `snow-globe-forecast backfill --start YYYYMMDDHH --end YYYYMMDDHH [--every-h N] [--synoptic-only] [--max-total-mb N]` | Archived runs; availability is modelled |
+| `snow-globe-forecast tick [--json] [--uncapped]` | One call of the Lambda handler, `handler({}, None)`: the code path the scheduled Lambda runs, with the `SNOW_GLOBE_FORECAST_*` environment; prints its summary (`--json`: the handler's return value, unchanged). Exits 0, or 1 if a run failed in the call (4 if every failure was a cap refusal), so a loop can tell without parsing the JSON. Refuses to start without `SNOW_GLOBE_FORECAST_MAX_MB` unless `--uncapped` |
+| `snow-globe-forecast status [--offline] [--hours N]` | Files written, the lag log by method (live, survey, duplicates dropped), the lag model and how many of its 576 cells have left the fallback, cache size, and (online) which runs are on S3 |
+| `snow-globe-forecast plan YYYYMMDDHH [--fields ...] [--hours FH ...]` | Bytes per field per hour, from the inventories only (no GRIB download) |
+| `snow-globe-forecast grid-check YYYYMMDDHH [--write-fixture PATH]` | Compare the grid mapping with ecCodes' latitude/longitude arrays |
+| `snow-globe-forecast datum-check YYYYMMDDHH` | Compare the height fields with the model terrain and with `PRES:cloud base` |
+| `snow-globe-forecast lag-survey --start YYYYMMDDHH [--end YYYYMMDDHH] [--log] [--save-listings DIR]` | Publication lags of past runs from S3 listings (one per run, no GRIB; the run the newest-complete search found is not listed again). `--end` defaults to the newest complete run. Without `--log` it writes nothing; with it, every listed hour not logged yet (live or survey) becomes a survey lag event in `forecast_log/lag_survey/<today>.jsonl`. An hour with a stamp more than 24 h after the run start (a rewritten object) is left out and never logged (`stamps_not_trusted`) |
+| `snow-globe-forecast lag-check YYYYMMDDHH ... [--save-listings DIR]` | Each run's S3-stamp lags next to the lag model (live + survey, and live only), and the availability an archived run of it gets (`availability_lag_min`, `availability_source`, `hours_set_by_stamps`, `hours_with_ignored_stamps`); one listing per run, writes nothing |
 
 Shared options: `--max-mb N` refuses a run whose planned download is larger (planned from the
 inventories, before any GRIB byte is fetched); `--force` rewrites existing files; `--json`.
 Fields can be named as in the inventory (`"HGT:cloud base"`), by alias (`CLOUDBASE`, `TERRAIN`,
 `TCDC`, `BLCDC`) or by a unique variable (`VIS`, `LCDC`).
 
-Without flags, `LOOKOUT_FORECAST_FIELDS`, `LOOKOUT_FORECAST_MAX_FH` and `LOOKOUT_FORECAST_MAX_MB`
+Without flags, `SNOW_GLOBE_FORECAST_FIELDS`, `SNOW_GLOBE_FORECAST_MAX_FH` and `SNOW_GLOBE_FORECAST_MAX_MB`
 apply, so `make forecast-latest` can be limited from the environment.
 
-**Downloads stay small by default.** With neither `--max-mb` nor `LOOKOUT_FORECAST_MAX_MB`, the CLI
+**Downloads stay small by default.** With neither `--max-mb` nor `SNOW_GLOBE_FORECAST_MAX_MB`, the CLI
 refuses a run planned above **150 MB** (exit code 4, before any GRIB byte). All 22 fields cost
 about 24 MB per forecast hour: 453.0 MB for an 18 h run (2026111910), 1,202.1 MB for a 48 h run
 (2026111906). So a whole run needs an explicit `--max-mb`, or fewer fields or hours (the smoke's
@@ -52,15 +54,15 @@ about 24 MB per forecast hour: 453.0 MB for an 18 h run (2026111910), 1,202.1 MB
 never overshoot it. `HGT:surface`, the static model terrain, is fetched once per run, with the
 first hour (it was 8 % of a whole-run download when fetched every hour).
 
-Lambda: `lookout_forecast.lambda_handler.handler` (`lookout-forecast tick` makes the same call
-locally). Each call processes, newest first, every run of the last `LOOKOUT_FORECAST_LOOKBACK_H`
+Lambda: `snow_globe_forecast.lambda_handler.handler` (`snow-globe-forecast tick` makes the same call
+locally). Each call processes, newest first, every run of the last `SNOW_GLOBE_FORECAST_LOOKBACK_H`
 (12) hours that is not written yet: complete runs, plus runs still incomplete after
-`LOOKOUT_FORECAST_STALE_H` (4) hours, with their missing hours recorded. A run already covered
+`SNOW_GLOBE_FORECAST_STALE_H` (4) hours, with their missing hours recorded. A run already covered
 costs one small storage read. A run that is extracted is listed once: the handler hands the
 listing that showed it ready to the extractor (0.1.0 listed it twice, about 3.6-13 KB more per
-run). Other settings: `LOOKOUT_FORECAST_MAX_RUNS` (4), `LOOKOUT_FORECAST_WORKERS` (8),
-`LOOKOUT_FORECAST_MAX_MB` (no default in the Lambda), `LOOKOUT_FORECAST_RESERVE_S` (180),
-`LOOKOUT_FORECAST_TIMEOUT_S` (600, used without a Lambda context).
+run). Other settings: `SNOW_GLOBE_FORECAST_MAX_RUNS` (4), `SNOW_GLOBE_FORECAST_WORKERS` (8),
+`SNOW_GLOBE_FORECAST_MAX_MB` (no default in the Lambda), `SNOW_GLOBE_FORECAST_RESERVE_S` (180),
+`SNOW_GLOBE_FORECAST_TIMEOUT_S` (600, used without a Lambda context).
 
 **Field-set changes.** Files are never narrowed: a file is rewritten only by an extraction that
 holds all its fields and hours (or with `--force`).
@@ -85,11 +87,11 @@ retried until the fields, hours, cap or viewpoints change; other errors are retr
 of a call that timed out, until its 900 s expiry) or a failed bucket listing defers the rest of
 the call to the next tick. Each row of the summary reports the bytes that run cost in this call.
 
-## What it writes (under `$LOOKOUT_DATA_DIR`, through `lookout_common.storage`)
+## What it writes (under `$SNOW_GLOBE_DATA_DIR`, through `snow_globe_common.storage`)
 
 | Key | Content |
 |---|---|
-| `forecast/hrrr/<viewpoint_id>/<YYYYMMDDHH>z.json` | One run for one viewpoint; schema `src/lookout_forecast/schema/forecast_run.schema.json` |
+| `forecast/hrrr/<viewpoint_id>/<YYYYMMDDHH>z.json` | One run for one viewpoint; schema `src/snow_globe_forecast/schema/forecast_run.schema.json` |
 | `forecast_log/<YYYY-MM-DD>.jsonl` | `lag` events (`run`, `fh`, `last_modified`, `lag_s`, ..., `"method": "live"`; 0.1.0 wrote no `method`, which reads as live) for every listed hour of a live run; one `run` event per extraction (that extraction's own bytes, seconds, requests); `error` events from the Lambda (`kind`, `attempts`, `next_try_utc`, `bytes`). Every extraction appends to it: the Lambda (or the local stand-in), `tick`, `run`, `latest`, `backfill`, and anything else that calls `Extractor.extract`, such as eval's backtest pair (its archived run wrote a `run` event there on 19 Nov, 23:13 UTC). Survey events never go here |
 | `forecast_log/lag_survey/<YYYY-MM-DD>.jsonl` | Survey `lag` events (`"method": "survey"`, plus `listed_utc`), written only by `lag-survey --log`, dated by the UTC day of the write; one per (run, hour) not already logged |
 | `state/locks/forecast-lag-survey.lock` | Held by `lag-survey --log`, so two surveys never log the same hour twice |
@@ -110,7 +112,7 @@ GRIB `shortName`, `typeOfLevel`, `level`, `units`, `datum` and the datum's evide
 `[field][forecast hour][point]` with `null` where the GRIB bitmap marks a cell missing; an
 `HGT:surface` row repeats the first hour's terrain for every hour (it is static: bit-for-bit
 identical at f00, f01, f18 and f48 of 2026111906, all 1,905,141 cells), and later hours list no
-byte range for it. `lookout_forecast.output.validate_document` checks the schema and the shapes.
+byte range for it. `snow_globe_forecast.output.validate_document` checks the schema and the shapes.
 
 Sample points per viewpoint: the camera cell; the view azimuth every 1.5 km from 1.5 to 45 km
 (M2 picks where the ray meets each layer); every manifest landmark (Rainier's summit); and the
@@ -167,7 +169,7 @@ The typical lags of `docs/research/forecast.md` (f00 52 min, f18 85 min, f48 108
 issue, valid)` returns the newest *stored* run whose needed hours were available by the issue
 time, with the actual lead. A run or hour that is not stored is skipped (the search falls back to
 an older run; it is never modelled into existence). A live hour counts as available at the later
-of its S3 time and the file's `fetch_finished_utc`, since Lookout could not use it earlier (design P).
+of its S3 time and the file's `fetch_finished_utc`, since Snow Globe could not use it earlier (design P).
 An archived hour is re-modelled from the current log (the `availability_utc` stored in an archived
 file is only what the model said when the file was written) and never placed before the stamps the
 file records. `select_run_for_issue` is the same rule without storage: with no `availability`
@@ -241,7 +243,7 @@ GRIB data).
 | What | Value |
 |---|---|
 | Live smoke (final code, 12:01 UTC): run 2026111910, f00-f02, 7 fields, 8 viewpoints | 21,440,626 bytes this run: 21,398,192 GRIB in 10 ranges, 1 listing, 3 inventories, 0 retries; 3.46 s wall, 3.08 s extraction, decode 0.50 s; 8 files of 29.3-30.9 KB; no GRIB left |
-| Earlier smoke (first build, 09:54 UTC): run 2026111908, same request | 25.4 MB; its "3 listings" included the `latest` search, and HGT:surface was fetched every hour. Its 8 files in `~/lookout-data/forecast/hrrr/*/2026111908z.json` come from that build |
+| Earlier smoke (first build, 09:54 UTC): run 2026111908, same request | 25.4 MB; its "3 listings" included the `latest` search, and HGT:surface was fetched every hour. Its 8 files in `~/snow-globe-data/forecast/hrrr/*/2026111908z.json` come from that build |
 | Publication lag, 2026111908 / 2026111910 (logged) | f00 53.3 / 51.3 min, f02 57.2 / 55.3, f06 64.6 / 63.8, f18 86.4 / 85.6; out of order: 08Z f05 73.5, 10Z f04 70.6 |
 | Publication lag survey: 124 runs, 2026-11-14 06Z to 2026-11-19 09Z (`lag-survey`, 2.0 MB of listings) | 2,986 hour-lags; 37.3 % later than the forecast.md curve; per-hour p95 up to 25 min above it (f11 97.1 vs 72.2 min); 3 lags above 120 min (0.10 %, all 2026111715, max 131.2 min); every 23Z run published f06-f18 at ~111 min while other cycles' medians were 62.6-85.1 min |
 | `lag-survey --log`, 2026-11-12 00Z to 2026-11-20 01Z (2026112001, the newest complete run) (20 Nov, 03:11-03:12 UTC) | 194 runs, 0 incomplete; 4,676 listed hour-lags; **4,082 survey events logged** (594 hours were already logged live, all 594 with equal lags); 194 listings, 3,160,172 bytes, 0 retries, 53 s wall; 3 lags above 120 min (the same 2026111715 hours, max 131.17 min). The log then held 4,679 lags of 195 runs (597 live, 4,082 survey) |
@@ -272,12 +274,12 @@ What is kept: the same ecCodes wheels Herbie installs (`eccodes` 2.50.1 with `ec
 2.50.0.34), its grouping of adjacent messages into one range, and its check that a range answer
 is `206`.
 
-## Troubleshooting: `ModuleNotFoundError: No module named 'lookout_common'`
+## Troubleshooting: `ModuleNotFoundError: No module named 'snow_globe_common'`
 
 The repo sits in iCloud-synced `~/Documents`. On this machine the `.pth` files of editable installs
 in `.venv` gain the macOS `hidden` flag (seen at 04:01 and again before 06:00 on 2026-11-19), and
 Python 3.13 skips hidden `.pth` files. The tests do not depend on them (`pythonpath` in
-`pyproject.toml`). For the CLI, run `PYTHONPATH=src:../common/src uv run lookout-forecast ...`,
+`pyproject.toml`). For the CLI, run `PYTHONPATH=src:../common/src uv run snow-globe-forecast ...`,
 which always runs the current source, or `chflags nohidden .venv/lib/python3.13/site-packages/*.pth`.
 Do **not** rely on `UV_NO_EDITABLE=1`: it installed a cached wheel of the package (its `cli.py`
 from 04:02, while the source had changed at 05:59), because uv only rebuilds a local package when
@@ -289,8 +291,8 @@ its `pyproject.toml` changes.
   the camera pose); M0.5 stores the whole ray.
 - `TODO(M1.5)`: mask phantom cloud bases (HGT against `PRES:cloud base`) in the renderer and the
   extractor inputs.
-- The laptop profile is set (closed 20 Nov): the Makefile's light profile (`LOOKOUT_FORECAST_FIELDS`,
-  `LOOKOUT_FORECAST_MAX_FH`, `LOOKOUT_FORECAST_MAX_MB`: 8 fields, f00-f02, at most 40 MB a run) is
+- The laptop profile is set (closed 20 Nov): the Makefile's light profile (`SNOW_GLOBE_FORECAST_FIELDS`,
+  `SNOW_GLOBE_FORECAST_MAX_FH`, `SNOW_GLOBE_FORECAST_MAX_MB`: 8 fields, f00-f02, at most 40 MB a run) is
   the local stand-in's since 02:39 UTC on 20 Nov (D-050), so `make forecast-latest` and
   `make forecast-tick` ask for exactly what the stand-in fetches. Run without those variables, the
   CLI's 150 MB default cap still refuses a whole-run download (exit 4).

@@ -1251,7 +1251,7 @@ impl Spike {
             }
             Ok(code) if code != 0 => {
                 let why = format!(
-                    "lk_speech_status({}) = {code}: {}",
+                    "sg_speech_status({}) = {code}: {}",
                     self.cfg.locale,
                     speech::status_meaning(code)
                 );
@@ -1748,7 +1748,7 @@ fn audio_thread(spike: Arc<Spike>, rx: Receiver<AudioCmd>) {
                         .log
                         .ev("audio_mismatch", json!({"stop": index, "active": a.index}));
                 }
-                // The stream goes first, so no push can follow lk_speech_finish. Its teardown is
+                // The stream goes first, so no push can follow sg_speech_finish. Its teardown is
                 // timed separately (key_up_to_finish_ms) from the library's finish_to_final_ms.
                 drop(a.stream.take());
                 let closed_ns = host_now_ns();

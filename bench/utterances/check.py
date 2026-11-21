@@ -1,4 +1,4 @@
-"""Check scripted.tsv and compare lookout-core's parser with the PRD reading (PRD §7.6, §10.6).
+"""Check scripted.tsv and compare snow-globe-core's parser with the PRD reading (PRD §7.6, §10.6).
 
 Run from the repository root (stdlib only; no network, no audio):
 
@@ -12,13 +12,19 @@ Exit status: 0 when everything holds; 1 when the TSV is unsound, the parser's ou
 stored `agreement`/`difference` is not what compare() gives (rerun with --write); 2 when the
 binary is missing or older than what it is built from.
 
-It needs the `lookout-parse` binary from app/core, built with the target dir outside iCloud:
+It needs the `snow-globe-parse` binary from app/core, built with the target dir outside iCloud:
 
     cd app && CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target \
-        cargo build --release --offline -p lookout-core --bin lookout-parse
+        cargo build --release --offline -p snow-globe-core --bin snow-globe-parse
 
-`--bin`, `$LOOKOUT_PARSE` or `$CARGO_TARGET_DIR/release/lookout-parse` (default
-`~/lookout-data/cache/cargo-target/release/lookout-parse`) names it. A binary older than any of its
+(`$HOME/lookout-data` is the data dir until the rename's live switch, and a symlink to
+`~/snow-globe-data` after it, so the command is right both before and after; D-080.)
+
+`--bin`, `$SNOW_GLOBE_PARSE` (or the deprecated `$LOOKOUT_PARSE`) or
+`$CARGO_TARGET_DIR/release/snow-globe-parse` (default `<data dir>/cache/cargo-target/release/
+snow-globe-parse`, the data dir resolved as the workers do: `$SNOW_GLOBE_DATA_DIR`, else
+`$LOOKOUT_DATA_DIR`, else `~/snow-globe-data` or, until it is moved, `~/lookout-data`; D-080)
+names it. A binary older than any of its
 build inputs (BUILD_INPUTS: app/core's sources, the Cargo files, the manifests it embeds) is
 refused, because it would vouch for code it was not built from; `--allow-stale-binary` overrides.
 
@@ -36,7 +42,7 @@ summary lists them apart.
 | `expected_*` | the PRD reading (prd_reading.py): outcome, viewpoint, rule, valid time, chips |
 | `tolerance_s` | 60 for solar times, else 0 |
 | `prd_note` | where the PRD is silent or the reading needs a word |
-| `parser_*` | what `lookout-parse` printed for `text` at `clock` (and `context`) |
+| `parser_*` | what `snow-globe-parse` printed for `text` at `clock` (and `context`) |
 | `agreement` | `yes`; `soft` (only a `rolled_*` flag differs, or a miss meets a fallback); `no` |
 | `difference` | what differs |
 
@@ -152,7 +158,7 @@ ERROR_OUTCOME = {
 }
 CHIP_PREFIXES = ("ampm:", "place:", "viewpoint:")
 
-#: What the lookout-parse binary is built from: (folder, glob). app/core/build.rs embeds the
+#: What the snow-globe-parse binary is built from: (folder, glob). app/core/build.rs embeds the
 #: manifests, so a manifest edit needs a rebuild too.
 BUILD_INPUTS = (
     ("app/core/src", "**/*.rs"),
@@ -373,27 +379,61 @@ def coverage(rows: list[dict[str, str]]) -> dict[str, object]:
 # ---------------------------------------------------------------- the parser
 
 
+def env(name: str) -> str | None:
+    """``SNOW_GLOBE_<X>``, else its deprecated ``LOOKOUT_<X>`` form, else None (D-080).
+
+    The workers' rule (snow_globe_common.env), which this standard-library script cannot import:
+    a blank value counts as unset.
+    """
+    for candidate in (name, "LOOKOUT_" + name.removeprefix("SNOW_GLOBE_")):
+        value = os.environ.get(candidate)
+        if value is not None and value.strip():
+            return value
+    return None
+
+
+def data_dir() -> Path:
+    """The data dir in the workers' order (D-080): ``$SNOW_GLOBE_DATA_DIR``, else
+    ``$LOOKOUT_DATA_DIR``, else ``~/snow-globe-data`` if it exists, else ``~/lookout-data`` if it
+    exists, else ``~/snow-globe-data``. Like the workers, it refuses (``SystemExit``) while both
+    folders exist and are different folders: something created ``~/snow-globe-data`` before
+    the switch moved the data."""
+    named = env("SNOW_GLOBE_DATA_DIR")
+    if named:
+        return Path(named.strip()).expanduser()
+    home = Path.home()
+    new, old = home / "snow-globe-data", home / "lookout-data"
+    if new.exists():
+        if old.exists() and not os.path.samefile(new, old):
+            raise SystemExit(
+                f"check.py: both {new} and {old} exist and are different folders, so the data "
+                "dir is ambiguous (D-080); set SNOW_GLOBE_DATA_DIR, CARGO_TARGET_DIR or --bin"
+            )
+        return new
+    return old if old.exists() else new
+
+
 def find_binary(arg: str | None) -> Path:
-    """The lookout-parse binary: --bin, $LOOKOUT_PARSE, or the release build in the target dir."""
+    """The snow-globe-parse binary: --bin, $SNOW_GLOBE_PARSE, or the release build in the target
+    dir."""
     if arg:
         return Path(arg)
-    if os.environ.get("LOOKOUT_PARSE"):
-        return Path(os.environ["LOOKOUT_PARSE"])
-    target = os.environ.get("CARGO_TARGET_DIR") or str(
-        Path.home() / "lookout-data" / "cache" / "cargo-target"
-    )
-    return Path(target) / "release" / "lookout-parse"
+    named = env("SNOW_GLOBE_PARSE")
+    if named:
+        return Path(named)
+    target = os.environ.get("CARGO_TARGET_DIR") or str(data_dir() / "cache" / "cargo-target")
+    return Path(target) / "release" / "snow-globe-parse"
 
 
 def run_parser(binary: Path, row: dict[str, str], clocks: dict[str, str]) -> dict:
-    """Run lookout-parse on a row's text at its clock; returns the JSON plus the exit code."""
+    """Run snow-globe-parse on a row's text at its clock; returns the JSON plus the exit code."""
     cmd = [str(binary), row["text"], "--now", clocks[row["clock"]], "--machine-tz", pr.MACHINE_TZ]
     if row["context"]:
         cmd += ["--context", row["context"]]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
     if proc.returncode not in (0, 2):
         raise RuntimeError(
-            f"{row['id']}: lookout-parse exited {proc.returncode}: {proc.stderr.strip()}"
+            f"{row['id']}: snow-globe-parse exited {proc.returncode}: {proc.stderr.strip()}"
         )
     out = json.loads(proc.stdout)
     out["_exit"] = proc.returncode
@@ -406,7 +446,7 @@ def utc_of(local: str) -> str:
 
 
 def parser_columns(out: dict) -> dict[str, str]:
-    """The parser_* columns for one lookout-parse result."""
+    """The parser_* columns for one snow-globe-parse result."""
     cols = {
         "parser_outcome": "",
         "parser_viewpoint_id": "",
@@ -633,7 +673,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument(
         "--no-parser", action="store_true", help="validate the TSV and its stored verdicts only"
     )
-    ap.add_argument("--bin", help="path to lookout-parse")
+    ap.add_argument("--bin", help="path to snow-globe-parse")
     ap.add_argument(
         "--allow-stale-binary", action="store_true", help="use a binary older than its sources"
     )
@@ -701,14 +741,14 @@ def main(argv: list[str]) -> int:
     binary = find_binary(args.bin)
     if not binary.exists():
         print(
-            f"lookout-parse not found at {binary}; build it (see this file's doc) or pass --bin",
+            f"snow-globe-parse not found at {binary}; build it (see this file's doc) or pass --bin",
             file=sys.stderr,
         )
         return 2
     newer = newer_sources(binary)
     if newer and not args.allow_stale_binary:
         print(
-            f"lookout-parse at {binary} is older than {', '.join(newer)}; rebuild it",
+            f"snow-globe-parse at {binary} is older than {', '.join(newer)}; rebuild it",
             file=sys.stderr,
         )
         return 2
@@ -736,7 +776,7 @@ def main(argv: list[str]) -> int:
     if args.json:
         print(json.dumps(summary, indent=2))
     else:
-        print(f"lookout-parse: {binary}" + (" (older than its sources)" if newer else ""))
+        print(f"snow-globe-parse: {binary}" + (" (older than its sources)" if newer else ""))
         _print_summary(summary, rows)
         if drift and not args.write:
             print(

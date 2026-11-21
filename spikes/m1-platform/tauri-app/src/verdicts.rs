@@ -255,7 +255,7 @@ impl AudioTrial {
     }
 
     /// Key-up to FINAL, in ms: D-004's release-to-final measure. In this spike it includes the
-    /// hand-off to the audio thread and the stream teardown before `lk_speech_finish`
+    /// hand-off to the audio thread and the stream teardown before `sg_speech_finish`
     /// ([`Self::key_up_to_finish_ms`]) as well as the library's own time
     /// ([`Self::finish_to_final_ms`]).
     pub fn release_to_final_ms(&self) -> Option<f64> {
@@ -263,13 +263,13 @@ impl AudioTrial {
         s.final_ns.map(|f| ms_between(self.key_up_ns, f))
     }
 
-    /// Key-up to the `lk_speech_finish` call, in ms (hand-off plus stream teardown).
+    /// Key-up to the `sg_speech_finish` call, in ms (hand-off plus stream teardown).
     pub fn key_up_to_finish_ms(&self) -> Option<f64> {
         let s = self.speech.as_ref()?;
         s.finish_called_ns.map(|f| ms_between(self.key_up_ns, f))
     }
 
-    /// The `lk_speech_finish` call to FINAL, in ms (the library's flush and finalize).
+    /// The `sg_speech_finish` call to FINAL, in ms (the library's flush and finalize).
     pub fn finish_to_final_ms(&self) -> Option<f64> {
         let s = self.speech.as_ref()?;
         match (s.finish_called_ns, s.final_ns) {
@@ -284,7 +284,7 @@ impl AudioTrial {
 pub struct SpeechOutcome {
     pub start_error: Option<String>,
     pub finish_rc: Option<i32>,
-    /// Host clock just before and just after `lk_speech_finish`.
+    /// Host clock just before and just after `sg_speech_finish`.
     pub finish_called_ns: Option<u64>,
     pub finish_returned_ns: Option<u64>,
     pub terminal_within_timeout: bool,
@@ -298,7 +298,7 @@ impl SpeechOutcome {
         self.events.iter().filter(|e| e.kind == k).count()
     }
 
-    /// FINAL events that arrived before `lk_speech_finish` was called (all of them when it was
+    /// FINAL events that arrived before `sg_speech_finish` was called (all of them when it was
     /// never called).
     pub fn finals_before_finish(&self) -> usize {
         self.events
@@ -346,7 +346,7 @@ pub fn speech_trial_failures(t: &AudioTrial) -> Vec<String> {
         return r;
     };
     if let Some(e) = &s.start_error {
-        r.push(format!("lk_speech_start failed: {e}"));
+        r.push(format!("sg_speech_start failed: {e}"));
         return r;
     }
     let partials = s
@@ -364,7 +364,7 @@ pub fn speech_trial_failures(t: &AudioTrial) -> Vec<String> {
     let early = s.finals_before_finish();
     if early > 0 {
         r.push(format!(
-            "{early} FINAL event(s) arrived before lk_speech_finish was called"
+            "{early} FINAL event(s) arrived before sg_speech_finish was called"
         ));
     }
     let errors = s.count(EventKind::Error);
@@ -372,7 +372,7 @@ pub fn speech_trial_failures(t: &AudioTrial) -> Vec<String> {
         r.push(format!("{errors} ERROR event(s)"));
     }
     if !s.terminal_within_timeout {
-        r.push("no FINAL or ERROR within 10 s of lk_speech_finish".into());
+        r.push("no FINAL or ERROR within 10 s of sg_speech_finish".into());
     }
     r
 }
@@ -723,16 +723,16 @@ mod tests {
         assert!(!speech_trial_failures(&trial(c, Some(empty_partial))).is_empty());
     }
 
-    /// The reviewer's case: "exactly one FINAL arrives after lk_speech_finish" counted FINALs
+    /// The reviewer's case: "exactly one FINAL arrives after sg_speech_finish" counted FINALs
     /// without checking when they came.
     #[test]
-    fn a_final_before_lk_speech_finish_fails() {
+    fn a_final_before_sg_speech_finish_fails() {
         let mut early = outcome();
         early.events[2] = ev_at(EventKind::Final, 12, 1_500_000);
         early.final_ns = Some(1_500_000);
         let f = speech_trial_failures(&trial(capture(Some(30_000), 4000, 0), Some(early)));
         assert!(
-            f.iter().any(|x| x.contains("before lk_speech_finish")),
+            f.iter().any(|x| x.contains("before sg_speech_finish")),
             "{f:?}"
         );
         assert_eq!(outcome().finals_before_finish(), 0);

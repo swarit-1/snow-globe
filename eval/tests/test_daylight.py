@@ -7,10 +7,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from conftest import FixedEphemeris, needs_oculus
-from lookout_common.manifest import load_manifest
+from snow_globe_common.manifest import load_manifest
 
-from lookout_eval import daylight
-from lookout_eval.daylight import (
+from snow_globe_eval import daylight
+from snow_globe_eval.daylight import (
     CLOUD_FRACTION_MIN_SUN_ALT_DEG,
     P1_MIN_SUN_ALT_DEG,
     day_mask,
@@ -18,7 +18,7 @@ from lookout_eval.daylight import (
     viewpoint_day_mask,
     viewpoint_is_day,
 )
-from lookout_eval.ephemeris import NoaaBackend, refraction_deg
+from snow_globe_eval.ephemeris import NoaaBackend, refraction_deg
 
 T = datetime(2026, 11, 17, 20, 0, tzinfo=UTC)
 

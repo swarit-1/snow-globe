@@ -2,9 +2,11 @@
 
 **Updated:** 2026-11-20 (UTC).
 
+Renamed for Snow Globe on 21 Nov 2026 (D-080): the parser is `snow-globe-parse` in the crate `snow-globe-core` (were `lookout-parse` and `lookout-core`); the parser outputs recorded on 20 Nov came from the old binary at `8246a8b`, which differs only in name. `$SNOW_GLOBE_PARSE` (or the old `$LOOKOUT_PARSE`) names the binary.
+
 **Nothing has been recorded.** This folder holds the script the owner will read and the
 instructions for reading it. There is no audio here, and there never will be: recordings live
-outside the repository, under `$LOOKOUT_DATA_DIR/fixtures/voice/` (see [Where recordings
+outside the repository, under `$SNOW_GLOBE_DATA_DIR/fixtures/voice/` (see [Where recordings
 live](#where-recordings-live)). The recording tool does not exist yet (`TODO(M1)`, ticket M1-09
 in [PRD_PROGRESS.md](../PRD_PROGRESS.md)), so the steps below describe how a recording session
 will run once it does.
@@ -18,10 +20,10 @@ wrong-paint rate. The script is the fixed input those numbers are measured on.
 
 | File | What |
 |---|---|
-| [utterances/scripted.tsv](utterances/scripted.tsv) | The 130 scripted utterances (30 dev, 100 test), with the expected query for each and what lookout-core's parser printed |
+| [utterances/scripted.tsv](utterances/scripted.tsv) | The 130 scripted utterances (30 dev, 100 test), with the expected query for each and what snow-globe-core's parser printed |
 | [utterances/clocks.tsv](utterances/clocks.tsv) | The six reference clocks the expected times are computed at |
 | [utterances/prd_reading.py](utterances/prd_reading.py) | The source of the script: each row's text, tags and expected result as read from PRD §7.4 and §7.5. It writes both TSVs. |
-| [utterances/check.py](utterances/check.py) | Validates the script, reruns `lookout-parse` on every row, compares, and checks the stored verdicts |
+| [utterances/check.py](utterances/check.py) | Validates the script, reruns `snow-globe-parse` on every row, compares, and checks the stored verdicts |
 | [utterances/test_utterances.py](utterances/test_utterances.py) | Tests for both scripts (stdlib `unittest`) |
 | [ruff.toml](ruff.toml) | Lint and format settings, the same rules as every `pyproject.toml` in the repo |
 
@@ -35,7 +37,7 @@ python3 -I -B -m unittest discover -s bench/utterances -t bench/utterances -p 't
 ruff check bench && ruff format --check bench           # any ruff; the repo's is in workers/common/.venv
 ```
 
-`check.py` needs the parser binary: `cd app && CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target cargo build --release --offline -p lookout-core --bin lookout-parse`.
+`check.py` needs the parser binary: `cd app && CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target cargo build --release --offline -p snow-globe-core --bin snow-globe-parse` (`~/lookout-data` is the data dir until the rename's live switch and a symlink to `~/snow-globe-data` after it, so the command is right before and after, and never creates a second data folder; D-080).
 `make bench-script` does both: it builds the binary (offline and `--locked`), then runs
 `check.py` on it (D-075). `make test` runs only `check.py --no-parser`.
 - Without it, the parser tests are skipped, never faked.
@@ -92,7 +94,7 @@ ids joined by `|` for a close call, where either is right but a chip must offer 
   11:30" have not happened yet at the place, but have already passed in Chicago.
 - **Close calls:** "Grand" alone, and two places named at once.
 - **Refusals:**
-  - places Lookout doesn't know: Golden Gate, Mount Hood and Big Sur;
+  - places Snow Globe doesn't know: Golden Gate, Mount Hood and Big Sur;
   - real places whose names come close to an alias: "Tacoma" and "Paradise Valley" (test),
     "Tetonia" and "Rainier Valley" (dev), all waiting on the owner;
   - an unknown viewpoint, and no place at all;
@@ -125,7 +127,7 @@ One clock can't reach both DST changes within the 7-day horizon, so the DST rows
 ## How the expected columns were filled
 
 1. **From the PRD, by hand.** [prd_reading.py](utterances/prd_reading.py) holds each row's
-   reading of PRD §7.4 and §7.5, and turns it into times. It shares no code with lookout-core
+   reading of PRD §7.4 and §7.5, and turns it into times. It shares no code with snow-globe-core
    or oculus-core:
    - wall times go through the system tz database (2026d);
    - the Sun comes from Meeus's low-accuracy solar position, at the PRD §7.4 altitudes.
@@ -133,14 +135,14 @@ One clock can't reach both DST changes within the 7-day horizon, so the DST rows
    Where PRD §7.4 is silent, the row's `prd_note` says which reading was used. D-039's proposed
    reading is followed where one exists, including its date and same-day rules, which no row
    uses yet. The exceptions are tagged `owner-pending` (below).
-2. **From lookout-core's parser.** `check.py --write` ran `lookout-parse` (lookout-core at
+2. **From snow-globe-core's parser.** `check.py --write` ran `snow-globe-parse` (snow-globe-core at
    commit `8246a8b`; the binary's SHA-256 is `ed5c1815…`) on every row's text at its clock and
    context, and filled the `parser_*` columns.
 
 **The first freeze (the builder, 20 Nov).**
 - At 03:11:10 UTC the reading was hashed (`scripted.tsv` SHA-256 `ddb6a01a…`) and a copy kept in
   the workflow's scratch space.
-- The builder states that `lookout-parse` had then run only on the seven PRD §3.3 examples. The
+- The builder states that `snow-globe-parse` had then run only on the seven PRD §3.3 examples. The
   artifacts show the freeze, not that order.
 - Two caveats:
   - The reading was written after the parser's source and unit tests had been read, to learn
@@ -283,7 +285,7 @@ differences.
 ## Where recordings live
 
 ```
-$LOOKOUT_DATA_DIR/fixtures/voice/            default ~/lookout-data/fixtures/voice/, outside iCloud and git
+$SNOW_GLOBE_DATA_DIR/fixtures/voice/            default <data dir>/fixtures/voice/, outside iCloud and git
   scripted/<script-hash>/<id>.<take>.wav     one file per take, e.g. scripted/3b4256f1cf51/t001.1.wav
   scripted/<script-hash>/<id>.<take>.json    its sidecar
   real-use/<YYYYMMDDTHHMMSSZ>.wav            an opt-in real-use utterance, named by its UTC key-down time
@@ -293,7 +295,7 @@ $LOOKOUT_DATA_DIR/fixtures/voice/            default ~/lookout-data/fixtures/voi
 
 - **Never in the repository.** `.gitignore` ignores every common audio format and any
   `fixtures/voice/` folder, but that is a backstop, not the plan.
-- **Never in iCloud.** `~/Documents` syncs; `~/lookout-data` doesn't (D-017).
+- **Never in iCloud.** `~/Documents` syncs; the data dir (`~/lookout-data` until the rename's live switch, then `~/snow-globe-data`) doesn't (D-017, D-080).
 - **`<script-hash>`** is what `check.py --no-parser` prints, today `3b4256f1cf51`: the first 12
   hex digits of SHA-256 over each row's id, split and text.
   - Changing what is read starts a new folder, so a recording is never scored against a line it
@@ -330,7 +332,7 @@ $LOOKOUT_DATA_DIR/fixtures/voice/            default ~/lookout-data/fixtures/voi
 2. **Where and with what:** a quiet room, and the microphone the idle trials will use, the
    MacBook Air's built-in one unless the lead says otherwise. One speaker, one microphone and
    one room is a known bias that the report states (PRD §10.6).
-3. **How:** hold the hotkey, read the line, release, as you would ask Lookout for real.
+3. **How:** hold the hotkey, read the line, release, as you would ask Snow Globe for real.
    - Don't pause before speaking or before releasing: the report measures how often you are still
      speaking at key-up, and an unnatural pause would hide it.
    - The REC indicator shows while you hold the key and switches itself off when you release
@@ -359,7 +361,7 @@ work (`TODO(M1)`, PLAN.md M1 1c).
 
 ## Scoring, proposed for the lead
 
-- **Place and time accuracy:** re-parse the engine's final transcript with lookout-core at the
+- **Place and time accuracy:** re-parse the engine's final transcript with snow-globe-core at the
   row's reference clock, then compare with the expected columns as `check.py` does. The live
   runs keep the real clock, for latency.
 - **Follow-ups are measured, not supplied.**
@@ -385,7 +387,7 @@ work (`TODO(M1)`, PLAN.md M1 1c).
     "am" and "a m" as one word. Any alias counts as its place's name, and "Mt" as "Mount".
   - `TODO(M1)`: the normaliser itself, in the scorer.
 - **Transcripts** the scorer needs (WER and the re-parse) stay out of the trace, which never
-  holds text (PRD §10.5). They go beside the run's results under `$LOOKOUT_DATA_DIR`, outside git
+  holds text (PRD §10.5). They go beside the run's results under `$SNOW_GLOBE_DATA_DIR`, outside git
   and iCloud, with the recordings' retention (`TODO(M1)`).
 
 ## Real-use utterances (≥ 30, PRD §10.6)

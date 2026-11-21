@@ -5,12 +5,12 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from lookout_common.storage import LocalStorage
+from snow_globe_common.storage import LocalStorage
 
-from lookout_forecast.availability import LagModel
-from lookout_forecast.bucket import parse_list_page
-from lookout_forecast.discovery import RunListing, group_runs
-from lookout_forecast.laglog import (
+from snow_globe_forecast.availability import LagModel
+from snow_globe_forecast.bucket import parse_list_page
+from snow_globe_forecast.discovery import RunListing, group_runs
+from snow_globe_forecast.laglog import (
     MAX_LAG_S,
     METHOD_LIVE,
     METHOD_SURVEY,

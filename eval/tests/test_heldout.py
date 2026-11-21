@@ -1,8 +1,8 @@
 """The committed held-out split and its guards (D-019, D-022, D-024; PRD §13.2, §13.9).
 
-One test per rule: the committed periods, the archive guard's date rule (lookout-capture's
+One test per rule: the committed periods, the archive guard's date rule (snow-globe-capture's
 cases, reproduced without importing capture), the quarantine, the scoring exclusions, and
-the loader's strictness. No network; nothing under ~/lookout-data is read.
+the loader's strictness. No network; nothing under ~/snow-globe-data is read.
 """
 
 from __future__ import annotations
@@ -20,18 +20,18 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from conftest import FIXTURES
-from lookout_common.manifest import load_manifest
-from lookout_common.storage import LocalStorage
-from lookout_common.timeutil import parse_nps_archive_time
+from snow_globe_common.manifest import load_manifest
+from snow_globe_common.storage import LocalStorage
+from snow_globe_common.timeutil import parse_nps_archive_time
 
-from lookout_eval.frames import (
+from snow_globe_eval.frames import (
     FrameRecord,
     read_sidecar_for_path,
     record_from_path,
     scan_frames,
     storage_reader,
 )
-from lookout_eval.heldout import (
+from snow_globe_eval.heldout import (
     HELDOUT_PERIODS_RESOURCE,
     LeakageError,
     QuarantineGuard,
@@ -47,11 +47,13 @@ from lookout_eval.heldout import (
     path_quarantine_reason,
     split_from_dict,
 )
-from lookout_eval.leakage import FrameStore
+from snow_globe_eval.leakage import FrameStore
 
-SPLIT_FILE = Path(__file__).resolve().parents[1] / "src" / "lookout_eval" / HELDOUT_PERIODS_RESOURCE
+SPLIT_FILE = (
+    Path(__file__).resolve().parents[1] / "src" / "snow_globe_eval" / HELDOUT_PERIODS_RESOURCE
+)
 CAPTURE_HELDOUT = (
-    Path(__file__).resolve().parents[2] / "workers/capture/src/lookout_capture/heldout.py"
+    Path(__file__).resolve().parents[2] / "workers/capture/src/snow_globe_capture/heldout.py"
 )
 RAINIER = "rainier.paradise-mountain"
 PORE = "point-reyes.beach"
@@ -90,11 +92,12 @@ def test_the_committed_split_is_versioned_and_hashed() -> None:
     split = committed_split()
     raw = SPLIT_FILE.read_bytes()
     assert split.version == 1 and split.sha256 == hashlib.sha256(raw).hexdigest()
+    # The committed file keeps the kind it was hashed with (D-038, D-080); records cite it so.
     assert split.to_record() == {
         "kind": "lookout.heldout-periods",
         "version": 1,
         "sha256": hashlib.sha256(raw).hexdigest(),
-        "source": "lookout_eval/heldout_periods.json",
+        "source": "snow_globe_eval/heldout_periods.json",
         "decisions": ["D-019", "D-022", "D-024"],
     }
     assert split.decided == date(2026, 11, 19) and split.freeze == date(2026, 12, 14)
@@ -176,10 +179,10 @@ def test_fit_bounds_follow_the_design() -> None:
         split.viewpoint("golden-gate.bridge")
 
 
-# --- the archive guard: lookout-capture's rule, reproduced --------------------------------------
+# --- the archive guard: snow-globe-capture's rule, reproduced -----------------------------------
 
 
-def test_the_archive_guard_matches_lookout_captures_cases() -> None:
+def test_the_archive_guard_matches_snow_globe_captures_cases() -> None:
     """The same five cases as workers/capture/tests/test_archive.py (no import of capture)."""
     assert (
         archive_guard_reason(
@@ -273,7 +276,7 @@ def test_the_summer_edge_fails_closed_without_local_time_string() -> None:
 
 
 #: The last ImageCreateDateTime of 31 May 2026 (local standard time, NPS's convention) still
-#: before UTC midnight, per zone; the same table as lookout-capture's test_archive.py.
+#: before UTC midnight, per zone; the same table as snow-globe-capture's test_archive.py.
 UTC_EDGE = {
     "America/Los_Angeles": ("03:59:59 PM", "04:00:00 PM", "Pacific"),
     "America/Phoenix": ("04:59:59 PM", "05:00:00 PM", "US Mountain"),
@@ -289,7 +292,7 @@ def test_the_guard_also_reads_utc_so_31_may_local_evening_is_held_out(zone: str)
     any reading of its date, local or UTC, is on or after 1 Jun 2026. A 31 May local-evening
     frame is already 1 Jun in UTC, so the guard turns at UTC midnight: one second earlier is
     allowed, UTC midnight is refused, with or without a LocalTimeString. Same cases as
-    lookout-capture's test of ``held_out_reason``."""
+    snow-globe-capture's test of ``held_out_reason``."""
     last_ok, first_out, region = UTC_EDGE[zone]
     daylight = zone != "America/Phoenix"
     kind = "Daylight" if daylight else "Standard"
@@ -313,7 +316,7 @@ def test_the_guard_also_reads_utc_so_31_may_local_evening_is_held_out(zone: str)
 def test_every_utc_reading_counts_and_a_date_without_a_clock_fails_closed() -> None:
     """``nps_utc_dates``: the instant under both conventions, each local clock converted in the
     camera's zone (both sides of a DST fold), and for a reading with a date but no readable
-    clock every UTC date its local day touches. Same cases as lookout-capture's."""
+    clock every UTC date its local day touches. Same cases as snow-globe-capture's."""
     assert nps_utc_dates("", "5/31/2026 11:30 PM Pacific Daylight Time", LA) == [date(2026, 6, 1)]
     assert nps_utc_dates("", "5/31/2026", LA) == [date(2026, 5, 31), date(2026, 6, 1)]
     assert archive_guard_reason("", "5/31/2026", LA) is not None
@@ -329,7 +332,7 @@ def test_every_utc_reading_counts_and_a_date_without_a_clock_fails_closed() -> N
 
 
 def _load_capture_rule(monkeypatch: pytest.MonkeyPatch):
-    """lookout-capture's heldout.py, loaded from its file (eval does not depend on capture).
+    """snow-globe-capture's heldout.py, loaded from its file (eval does not depend on capture).
 
     It is registered in ``sys.modules`` only for this test (its dataclass needs that).
     """
@@ -343,7 +346,7 @@ def _load_capture_rule(monkeypatch: pytest.MonkeyPatch):
     try:
         spec.loader.exec_module(module)
     except ImportError as exc:  # it grew a dependency eval's venv lacks
-        pytest.skip(f"lookout_capture/heldout.py needs {exc.name}")
+        pytest.skip(f"snow_globe_capture/heldout.py needs {exc.name}")
     return module
 
 
@@ -395,7 +398,7 @@ def _nps_case(rng: random.Random) -> tuple[str, str, str]:
     return create, label, zone_name
 
 
-def test_the_guard_is_in_parity_with_lookout_captures(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_guard_is_in_parity_with_snow_globe_captures(monkeypatch: pytest.MonkeyPatch) -> None:
     """Fuzz against capture's own rule (its source file, loaded in this test only).
 
     The two read exactly the same dates, local and UTC, and refuse exactly the same assets,
@@ -452,7 +455,7 @@ def test_any_archive_sign_brings_the_archive_guard() -> None:
     assert not plain.is_archive and split.held_out_reason(plain) is None
 
 
-def test_the_guard_date_agrees_with_lookout_capture() -> None:
+def test_the_guard_date_agrees_with_snow_globe_capture() -> None:
     """Drift check: capture's HELD_OUT_FROM and the committed archive guard name one date."""
     if not CAPTURE_HELDOUT.is_file():
         pytest.skip("workers/capture is not in this checkout")
@@ -461,7 +464,7 @@ def test_the_guard_date_agrees_with_lookout_capture() -> None:
         CAPTURE_HELDOUT.read_text(encoding="utf-8"),
         re.MULTILINE,
     )
-    assert match, "HELD_OUT_FROM not found in lookout_capture/heldout.py"
+    assert match, "HELD_OUT_FROM not found in snow_globe_capture/heldout.py"
     capture_date = date(*(int(g) for g in match.groups()))
     assert capture_date == committed_split().archive_guard.from_day
 
@@ -558,8 +561,8 @@ def test_the_scoring_mask() -> None:
 
 
 def test_quarantined_keys_and_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    root = tmp_path / "lookout-data"
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(root))
+    root = tmp_path / "snow-globe-data"
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(root))
     assert key_quarantine_reason("quarantine/held-out-breach/archive/x.jpg")
     assert key_quarantine_reason("archive/point-reyes.beach/2026-01-15/x.jpg") is None
     assert key_quarantine_reason("archive/quarantine-notes/x.jpg") is None  # exact name only
@@ -586,8 +589,8 @@ def test_quarantined_keys_and_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 def test_the_catalogue_never_reads_the_quarantine(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = tmp_path / "lookout-data"
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(root))
+    root = tmp_path / "snow-globe-data"
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(root))
     folder = root / "quarantine" / "breach" / "archive" / PORE / "2026-07-15"
     folder.mkdir(parents=True)
     frame = folder / "20260715T201500Z_c7dc841d.jpg"
@@ -627,8 +630,8 @@ def test_the_quarantine_is_matched_in_any_letter_case(
 ) -> None:
     """Review finding: on this Mac's case-insensitive APFS, <root>/QUARANTINE/... opens the
     quarantined files, and the check used to compare the folder name as spelled."""
-    root = tmp_path / "lookout-data"
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(root))
+    root = tmp_path / "snow-globe-data"
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(root))
     frame = _quarantined_frame(root)
     tail = frame.relative_to(root / "quarantine")
     for spelling in ("QUARANTINE", "Quarantine", "qUaRaNtInE"):
@@ -651,7 +654,7 @@ def test_the_quarantine_is_matched_by_identity(
     'quarantine' component and no matching spelling, so only the folder's identity tells."""
     if not _case_insensitive(tmp_path):
         pytest.skip("a case-sensitive file system: spelling variants are other folders")
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(tmp_path / "lookout-data"))
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(tmp_path / "snow-globe-data"))
     offsite = tmp_path / "offsite"
     (offsite / "breach").mkdir(parents=True)
     (offsite / "breach" / "c.jpg").write_bytes(b"QUARANTINED-BYTES")
@@ -673,9 +676,9 @@ def test_each_quarantine_layer_alone_catches_a_linked_folder(
 ) -> None:
     """A quarantine folder that is a symlink elsewhere: the resolved-path check catches its
     target even when the identity check is unavailable (defence in depth)."""
-    import lookout_eval.heldout as heldout
+    import snow_globe_eval.heldout as heldout
 
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(tmp_path / "lookout-data"))
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(tmp_path / "snow-globe-data"))
     offsite = tmp_path / "offsite"
     offsite.mkdir()
     (offsite / "c.jpg").write_bytes(b"QUARANTINED-BYTES")
@@ -694,8 +697,8 @@ def test_the_catalogue_refuses_links_into_the_quarantine(
 ) -> None:
     """Review finding: scan_frames listed a frames/ file that links into the quarantine, and
     a key-based reader then read the quarantined bytes."""
-    root = tmp_path / "lookout-data"
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(root))
+    root = tmp_path / "snow-globe-data"
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(root))
     frame = _quarantined_frame(root)
     storage = LocalStorage(root, check=False)
     day = root / "frames" / RAINIER / "2026-11-18"
@@ -725,7 +728,7 @@ def test_a_sidecar_is_checked_against_the_given_data_root(
 ) -> None:
     """A data root whose quarantine folder is a symlink elsewhere: a sidecar that links there
     is refused only when the check knows that root, so record_from_path passes it on."""
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(tmp_path / "lookout-data"))
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(tmp_path / "snow-globe-data"))
     offsite = tmp_path / "offsite"
     offsite.mkdir()
     (offsite / "breach.json").write_text("{}")
@@ -737,7 +740,7 @@ def test_a_sidecar_is_checked_against_the_given_data_root(
     frame = folder / "20261118T200000Z_aaaaaaaaaaaa.jpg"
     frame.write_bytes(b"a development frame")
     frame.with_suffix(".json").symlink_to(offsite / "breach.json")
-    assert read_sidecar_for_path(frame) == {}  # $LOOKOUT_DATA_DIR does not name this root
+    assert read_sidecar_for_path(frame) == {}  # $SNOW_GLOBE_DATA_DIR does not name this root
     with pytest.raises(LeakageError, match="D-022"):
         read_sidecar_for_path(frame, roots=(root,))
     with pytest.raises(LeakageError, match="D-022"):
@@ -748,8 +751,8 @@ def test_the_store_reader_checks_the_quarantine_at_every_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A link made after the catalogue was scanned is refused when the store reads it."""
-    root = tmp_path / "lookout-data"
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(root))
+    root = tmp_path / "snow-globe-data"
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(root))
     quarantined = _quarantined_frame(root)
     day = root / "frames" / RAINIER / "2026-11-18"
     day.mkdir(parents=True)

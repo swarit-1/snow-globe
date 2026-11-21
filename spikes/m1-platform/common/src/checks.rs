@@ -82,8 +82,8 @@ pub const CHECKS: [CheckSpec; 11] = [
         n: 6,
         slug: "speech",
         plan_item: "the Swift static library (C ABI) returning DictationTranscriber partials",
-        criterion: "In every trial lk_speech_start succeeds, at least one PARTIAL with non-empty \
-            text arrives, exactly one FINAL arrives and it comes after lk_speech_finish was \
+        criterion: "In every trial sg_speech_start succeeds, at least one PARTIAL with non-empty \
+            text arrives, exactly one FINAL arrives and it comes after sg_speech_finish was \
             called, and no ERROR arrives.",
         permission: "Microphone; Speech Recognition if the library asks for it; the en-US \
             dictation asset installed",

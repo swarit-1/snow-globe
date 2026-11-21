@@ -1,12 +1,12 @@
 [project]
-name = "lookout-eval"
-version = "0.1.0"
-description = "Lookout evaluation: landmark extractor, verification scores, baselines, leakage guard, ephemeris wrapper and the backtest pair (PRD §13)."
+name = "snow-globe-eval"
+version = "0.2.0"
+description = "Snow Globe evaluation: landmark extractor, verification scores, baselines, leakage guard, ephemeris wrapper and the backtest pair (PRD §13)."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "lookout-common",
+    "snow-globe-common",
     "numpy>=2.1",
     "pillow>=11.0",
     "jsonschema>=4.23",
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-lookout-eval = "lookout_eval.cli:main"
+snow-globe-eval = "snow_globe_eval.cli:main"
 
 [dependency-groups]
 dev = [
@@ -22,29 +22,29 @@ dev = [
     "ruff>=0.9",
     "hypothesis>=6.120",
     # ecCodes at the forecast worker's locked versions (workers/forecast/uv.lock, D-026), so that
-    # tests/test_pair_forecast.py can run lookout-forecast's real extractor offline against its
+    # tests/test_pair_forecast.py can run snow-globe-forecast's real extractor offline against its
     # fake bucket. That test puts ../workers/forecast/src on sys.path for itself only.
     "eccodes==2.50.1",
     "eccodeslib==2.50.0.34; sys_platform != 'win32'",
 ]
 # oculus-core's Python bindings, built from source with maturin (feature "python", crate in core/).
 # Needs a Rust toolchain and network on first sync. Opt out with `uv sync --no-group oculus`; the
-# ephemeris then needs LOOKOUT_EPHEMERIS=noaa (see src/lookout_eval/ephemeris.py).
+# ephemeris then needs SNOW_GLOBE_EPHEMERIS=noaa (see src/snow_globe_eval/ephemeris.py).
 oculus = [
     "oculus-core-py",
 ]
-# Only `lookout-eval backtest-pair --forecast auto` uses lookout-forecast (imported lazily, to
+# Only `snow-globe-eval backtest-pair --forecast auto` uses snow-globe-forecast (imported lazily, to
 # backfill an archived HRRR run). Not installed by default: `uv sync --group forecast`.
 forecast = [
-    "lookout-forecast",
+    "snow-globe-forecast",
 ]
 
 [tool.uv]
 default-groups = ["dev", "oculus"]
 
 [tool.uv.sources]
-lookout-common = { path = "../workers/common", editable = true }
-lookout-forecast = { path = "../workers/forecast", editable = true }
+snow-globe-common = { path = "../workers/common", editable = true }
+snow-globe-forecast = { path = "../workers/forecast", editable = true }
 oculus-core-py = { git = "https://github.com/swarit-1/oculus", rev = "1b5410b01f127514fa37656eff2b7d73be7ea8da", subdirectory = "core/bindings/python" }
 
 [build-system]

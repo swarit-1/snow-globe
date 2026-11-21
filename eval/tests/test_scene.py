@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 from conftest import REPO_RENDERER, FixedEphemeris, NoaaSunFixedMoon, needs_node
-from lookout_common.manifest import load_manifest
+from snow_globe_common.manifest import load_manifest
 from synth_forecast import clear_sky, low_deck, make_doc
 
-from lookout_eval.ephemeris import moon_position, sun_position
-from lookout_eval.forecast_io import ForecastRun
-from lookout_eval.scene import (
+from snow_globe_eval.ephemeris import moon_position, sun_position
+from snow_globe_eval.forecast_io import ForecastRun
+from snow_globe_eval.scene import (
     LOW_TOP_M,
     PlateIdentity,
     RendererValidatorUnavailableError,
@@ -186,9 +186,9 @@ def test_lead_beyond_the_renderers_range_is_refused() -> None:
 
 def test_renderer_discovery(renderer_dir, monkeypatch: pytest.MonkeyPatch) -> None:
     assert renderer_version(renderer_dir) == renderer_version(REPO_RENDERER)
-    monkeypatch.setenv("LOOKOUT_RENDERER_DIR", str(renderer_dir))
+    monkeypatch.setenv("SNOW_GLOBE_RENDERER_DIR", str(renderer_dir))
     assert find_renderer_dir() == renderer_dir.resolve()
-    monkeypatch.delenv("LOOKOUT_RENDERER_DIR")
+    monkeypatch.delenv("SNOW_GLOBE_RENDERER_DIR")
     assert find_renderer_dir() == REPO_RENDERER.resolve()
 
 

@@ -10,9 +10,14 @@ from datetime import timedelta
 import pytest
 from jsonschema import Draft202012Validator
 
-from lookout_forecast.extract import ExtractOptions, Extractor
-from lookout_forecast.fields import resolve_fields
-from lookout_forecast.output import DocumentError, encode_document, load_schema, validate_document
+from snow_globe_forecast.extract import ExtractOptions, Extractor
+from snow_globe_forecast.fields import resolve_fields
+from snow_globe_forecast.output import (
+    DocumentError,
+    encode_document,
+    load_schema,
+    validate_document,
+)
 
 from .conftest import RAINIER, RUN
 

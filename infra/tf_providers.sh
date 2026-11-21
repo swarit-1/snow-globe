@@ -3,14 +3,14 @@
 #
 # `terraform init` normally asks registry.terraform.io for the provider's versions on every run, even with the lock
 # file and a warm plugin cache, so offline it fails. The plugin cache (TF_PLUGIN_CACHE_DIR, by default
-# $LOOKOUT_DATA_DIR/cache/terraform-plugins, outside iCloud) already has the unpacked layout of a Terraform
+# <data dir>/cache/terraform-plugins, outside iCloud; see tfp_data_dir) already has the unpacked layout of a Terraform
 # filesystem mirror, <host>/<namespace>/<type>/<version>/<os>_<arch>/. So once it holds every provider a module's
 # .terraform.lock.hcl locks, for this machine's platform, init can install from it with -plugin-dir and never
 # touch the network. That is used only when the cached package's h1: hash (Go's dirhash, as Terraform records it)
 # is in the lock file, which is the check Terraform then makes itself. A cache restored from another platform's run
 # (CI's linux_amd64, whose h1: the committed lock files do not hold) therefore still goes to the registry.
 #
-# Modes, from LOOKOUT_TF_INIT:
+# Modes, from SNOW_GLOBE_TF_INIT (or, as before the rename, LOOKOUT_TF_INIT; D-080):
 #   auto      (default) offline when the cache matches the lock file; otherwise, or if the offline init fails, the
 #             registry, which also fills the cache for next time
 #   offline   never the registry: exit 1 with what is missing and the one-time command, before running init
@@ -44,9 +44,47 @@ tfp_tf() {
   fi
 }
 
-# tfp_cache_dir: the plugin cache, with infra/test.sh's default.
+# tfp_data_dir: the data dir, resolved as the workers resolve it (D-080): $SNOW_GLOBE_DATA_DIR, else the deprecated
+# $LOOKOUT_DATA_DIR (blank counts as unset; surrounding whitespace is dropped), else ~/snow-globe-data if it
+# exists, else ~/lookout-data if it exists (the folder's name before the rename), else ~/snow-globe-data.
+# Symlinks are followed and nothing is created. While both folders exist and are different folders (something
+# made ~/snow-globe-data before the rename's live switch), it prints why on stderr and returns 1.
+tfp_data_dir() {
+  local v new="$HOME/snow-globe-data" old="$HOME/lookout-data"
+  for v in "${SNOW_GLOBE_DATA_DIR:-}" "${LOOKOUT_DATA_DIR:-}"; do
+    v="${v#"${v%%[![:space:]]*}"}"
+    v="${v%"${v##*[![:space:]]}"}"
+    if [ -n "$v" ]; then
+      printf '%s\n' "$v"
+      return 0
+    fi
+  done
+  if [ -e "$new" ] && [ -e "$old" ] && ! [ "$new" -ef "$old" ]; then
+    printf '%s\n' "both $new and $old exist and are different folders, so the data dir is ambiguous (D-080):" \
+      "until the rename's live switch the data is in $old, and after it $old is a symlink to $new." \
+      "Set SNOW_GLOBE_DATA_DIR to the folder you mean, and tell the lead which one is stray." >&2
+    return 1
+  elif [ -e "$new" ] || [ ! -e "$old" ]; then
+    printf '%s\n' "$new"
+  else
+    printf '%s\n' "$old"
+  fi
+}
+
+# tfp_cache_dir: the plugin cache, with infra/test.sh's default (returns 1 when tfp_data_dir does).
 tfp_cache_dir() {
-  printf '%s\n' "${TF_PLUGIN_CACHE_DIR:-${LOOKOUT_DATA_DIR:-$HOME/lookout-data}/cache/terraform-plugins}"
+  local data
+  if [ -n "${TF_PLUGIN_CACHE_DIR:-}" ]; then
+    printf '%s\n' "$TF_PLUGIN_CACHE_DIR"
+    return 0
+  fi
+  data="$(tfp_data_dir)" || return 1
+  printf '%s\n' "$data/cache/terraform-plugins"
+}
+
+# tfp_mode: auto, offline or registry, from SNOW_GLOBE_TF_INIT, else the deprecated LOOKOUT_TF_INIT (D-080).
+tfp_mode() {
+  printf '%s\n' "${SNOW_GLOBE_TF_INIT:-${LOOKOUT_TF_INIT:-auto}}"
 }
 
 # tfp_platform: sets TFP_PLATFORM to this machine's Terraform platform, e.g. darwin_arm64 (once per shell).
@@ -104,7 +142,7 @@ _TFP_MEMO_H1=""
 TFP_REASON=""
 tfp_offline_ready() {
   local dir="$1" cache="${2:-}" lock providers src ver hashes pkg found=""
-  [ -n "$cache" ] || cache="$(tfp_cache_dir)"
+  [ -n "$cache" ] || cache="$(tfp_cache_dir)" || return 1
   lock="$dir/.terraform.lock.hcl"
   if ! tfp_platform; then
     TFP_REASON="cannot tell this machine's Terraform platform (terraform version -json)"
@@ -151,17 +189,18 @@ EOF
 # tfp_init MODULE_DIR LOG: `terraform init -backend=false` for one module, offline when possible (see the modes
 # above). Prints one line saying which way it went; Terraform's own output goes to LOG. Returns init's status.
 tfp_init() {
-  local dir="$1" log="$2" mode="${LOOKOUT_TF_INIT:-auto}" cache
-  cache="$(tfp_cache_dir)"
+  local dir="$1" log="$2" mode cache
+  mode="$(tfp_mode)"
+  cache="$(tfp_cache_dir)" || return 1
   case "$mode" in
     auto | offline | registry) ;;
     *)
-      tfp_log "LOOKOUT_TF_INIT must be auto, offline or registry, not '$mode'"
+      tfp_log "SNOW_GLOBE_TF_INIT must be auto, offline or registry, not '$mode'"
       return 2
       ;;
   esac
   if [ "$mode" = registry ]; then
-    tfp_log "registry.terraform.io (LOOKOUT_TF_INIT=registry)"
+    tfp_log "registry.terraform.io (SNOW_GLOBE_TF_INIT=registry)"
   elif tfp_offline_ready "$dir" "$cache"; then
     tfp_log "offline from the plugin cache: $TFP_REASON"
     if (
@@ -175,7 +214,7 @@ tfp_init() {
       return 0
     fi
     if [ "$mode" = offline ]; then
-      tfp_log "the offline init failed, and LOOKOUT_TF_INIT=offline allows no registry fallback"
+      tfp_log "the offline init failed, and SNOW_GLOBE_TF_INIT=offline allows no registry fallback"
       return 1
     fi
     tfp_log "the offline init failed ($(grep -m 1 -E '^Error' "$log" || echo 'see the log')); trying the registry"
@@ -192,11 +231,12 @@ tfp_init() {
 
 # tfp_tflint TF_DIR: tflint over TF_DIR and its modules (config TF_DIR/.tflint.hcl), when tflint is installed. In
 # auto and registry modes it first runs `tflint --init`, which fetches the rulesets the config pins from GitHub
-# when they are missing. LOOKOUT_TF_INIT=offline never runs --init: tflint then uses only rulesets already installed,
+# when they are missing. SNOW_GLOBE_TF_INIT=offline never runs --init: tflint then uses only rulesets already installed,
 # and if one is missing it fails, and this names the one-time command. Prints "ok" or "SKIP ..."; returns tflint's
 # failure.
 tfp_tflint() {
-  local dir="$1" mode="${LOOKOUT_TF_INIT:-auto}"
+  local dir="$1" mode
+  mode="$(tfp_mode)"
   if ! command -v tflint >/dev/null 2>&1; then
     echo "SKIP tflint not installed"
     return 0
@@ -206,7 +246,7 @@ tfp_tflint() {
   fi
   if ! (cd "$dir" && tflint --recursive --config "$dir/.tflint.hcl"); then
     if [ "$mode" = offline ]; then
-      tfp_log "tflint failed with LOOKOUT_TF_INIT=offline, which skips tflint --init; if a ruleset is missing," \
+      tfp_log "tflint failed with SNOW_GLOBE_TF_INIT=offline, which skips tflint --init; if a ruleset is missing," \
         "install it once, with network: (cd infra/terraform && tflint --init)"
     fi
     return 1
@@ -229,9 +269,9 @@ tfp_main() {
       done
       ;;
     fetch)
-      log="$(mktemp "${TMPDIR:-/tmp}/lookout-tf-fetch.XXXXXX")"
+      log="$(mktemp "${TMPDIR:-/tmp}/snow-globe-tf-fetch.XXXXXX")"
       for dir in $TFP_MODULES; do
-        if LOOKOUT_TF_INIT=registry tfp_init "$infra/$dir" "$log"; then
+        if SNOW_GLOBE_TF_INIT=registry tfp_init "$infra/$dir" "$log"; then
           echo "infra/$dir: providers fetched into $(tfp_cache_dir)"
         else
           cat "$log"

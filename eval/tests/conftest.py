@@ -1,7 +1,7 @@
-"""Shared fixtures for lookout-eval tests.
+"""Shared fixtures for snow-globe-eval tests.
 
-Tests never touch the network and never write under ~/lookout-data: anything that writes
-gets a temporary LOOKOUT_DATA_DIR. Tests that need the local sample frames or the full NPS
+Tests never touch the network and never write under ~/snow-globe-data: anything that writes
+gets a temporary SNOW_GLOBE_DATA_DIR. Tests that need the local sample frames or the full NPS
 sample response skip when those files are absent (as in CI).
 """
 
@@ -15,12 +15,18 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from snow_globe_common.paths import AmbiguousDataDirError, default_data_dir
 
-from lookout_eval.ephemeris import NoaaBackend
-from lookout_eval.scene import NODE_MIN_MAJOR, node_executable
+from snow_globe_eval.ephemeris import NoaaBackend
+from snow_globe_eval.scene import NODE_MIN_MAJOR, node_executable
 
 FIXTURES = Path(__file__).parent / "fixtures"
-SAMPLES = Path("~/lookout-data/samples").expanduser()
+#: Sample files on the dev machine: ``~/snow-globe-data/samples``, or ``~/lookout-data/samples``
+#: until the data folder is moved (D-080).
+try:
+    SAMPLES = default_data_dir() / "samples"
+except AmbiguousDataDirError:  # both default folders exist apart (D-080): the sample tests skip
+    SAMPLES = Path("/nonexistent/snow-globe-samples")
 REPO_RENDERER = Path(__file__).resolve().parents[2] / "renderer"
 
 HAS_OCULUS = importlib.util.find_spec("oculus_core") is not None
@@ -94,9 +100,9 @@ def nps_subset() -> dict:
 
 @pytest.fixture
 def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
-    root = tmp_path / "lookout-data"
+    root = tmp_path / "snow-globe-data"
     root.mkdir()
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(root))
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(root))
     yield root
 
 

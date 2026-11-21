@@ -9,7 +9,7 @@ arrives. These tests fail on capture 0.2.1 before answer times, which kept 300.0
 send and counted the image cap on send times.
 
 Also here: the send deadline that bounds an answer a crash kept from the state
-(:mod:`lookout_capture.fetch`), on the wall clock and on a monotonic clock that counts system
+(:mod:`snow_globe_capture.fetch`), on the wall clock and on a monotonic clock that counts system
 sleep; the answer time of a failed request, and the bound on one that may still reach nps.gov
 after it failed; the total deadline on a body that trickles; redirects, which are never
 followed; the ``last_poll_at`` older code reads after a crash (a rollback); and the in-process
@@ -29,11 +29,11 @@ from typing import Any
 import httpcore
 import httpx
 import pytest
-from lookout_common.http import polite_client
-from lookout_common.manifest import load_manifests
-from lookout_common.storage import LocalStorage
+from snow_globe_common.http import polite_client
+from snow_globe_common.manifest import load_manifests
+from snow_globe_common.storage import LocalStorage
 
-from lookout_capture.fetch import (
+from snow_globe_capture.fetch import (
     FAILED_AFTER_SEND_BOUND_S,
     LIVE_IMAGE_DEADLINE_S,
     LIVE_SEND_DEADLINE_S,
@@ -42,8 +42,8 @@ from lookout_capture.fetch import (
     fetch,
     steady_clock,
 )
-from lookout_capture.live import MIN_POLL_INTERVAL_S, POLL_MARGIN_S, CaptureRunner
-from lookout_capture.state import CameraState, camera_state_key, cap_decision, iso_ms_up
+from snow_globe_capture.live import MIN_POLL_INTERVAL_S, POLL_MARGIN_S, CaptureRunner
+from snow_globe_capture.state import CameraState, camera_state_key, cap_decision, iso_ms_up
 
 from .conftest import FakeClock, make_jpeg
 from .receipts import (

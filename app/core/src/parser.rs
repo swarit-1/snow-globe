@@ -706,6 +706,15 @@ mod tests {
             p.canonical("how does look rock look at quarter to five"),
             "look rock at quarter to five"
         );
+        // The app's name, old or new (D-080), is a carrier: it never reaches the place matcher.
+        for said in [
+            "hey snow globe, is Rainier out tomorrow at 4?",
+            "Snow Globe, is Rainier out tomorrow at 4?",
+            "hey snowglobe is rainier out tomorrow at 4",
+            "hey lookout is Rainier out tomorrow at 4",
+        ] {
+            assert_eq!(p.canonical(said), "rainier tomorrow at 4", "{said}");
+        }
         // A stray trailing "from" is dropped without touching the time words after it.
         assert_eq!(p.canonical("rainier from tomorrow"), "rainier tomorrow");
         assert_eq!(p.canonical("rainier tomorrow from"), "rainier tomorrow");

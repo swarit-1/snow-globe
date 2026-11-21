@@ -1,4 +1,4 @@
-# The reviewed list of external symbols liblookout_speech.a (release build) imports, and of the
+# The reviewed list of external symbols libsnow_globe_speech.a (release build) imports, and of the
 # Objective-C selector names it contains, as @selector(name). One per line: the name, a TAB,
 # then the demangled name for the reviewer.
 #

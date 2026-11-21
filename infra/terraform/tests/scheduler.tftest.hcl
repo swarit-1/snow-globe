@@ -14,37 +14,37 @@ mock_provider "aws" {
   override_resource {
     target          = aws_ecr_repository.lambda
     override_during = plan
-    values          = { repository_url = "123456789012.dkr.ecr.us-east-1.amazonaws.com/lookout/lambda" }
+    values          = { repository_url = "123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-globe/lambda" }
   }
   override_resource {
     target          = aws_sns_topic.alarms
     override_during = plan
-    values          = { arn = "arn:aws:sns:us-east-1:123456789012:lookout-alarms" }
+    values          = { arn = "arn:aws:sns:us-east-1:123456789012:snow-globe-alarms" }
   }
   override_resource {
     target          = aws_iam_role.job["capture"]
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-capture-lambda", id = "lookout-capture-lambda" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-capture-lambda", id = "snow-globe-capture-lambda" }
   }
   override_resource {
     target          = aws_iam_role.job["forecast"]
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-forecast-lambda", id = "lookout-forecast-lambda" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-forecast-lambda", id = "snow-globe-forecast-lambda" }
   }
   override_resource {
     target          = aws_iam_role.scheduler
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-scheduler", id = "lookout-scheduler" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-scheduler", id = "snow-globe-scheduler" }
   }
   override_resource {
     target          = aws_iam_role.budget_action
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-budget-action", id = "lookout-budget-action" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-budget-action", id = "snow-globe-budget-action" }
   }
   override_resource {
     target          = aws_iam_policy.budget_hard_stop
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:policy/lookout-budget-hard-stop" }
+    values          = { arn = "arn:aws:iam::123456789012:policy/snow-globe-budget-hard-stop" }
   }
 }
 
@@ -55,8 +55,8 @@ variables {
   alarm_email                     = "alerts@example.com"
   image_tag                       = "0123456789ab"
   region                          = "us-east-1"
-  project                         = "lookout"
-  user_agent                      = "Lookout/0.1 (webcam research capture; fetch-on-change)"
+  project                         = "snow-globe"
+  user_agent                      = "SnowGlobe/0.1 (webcam research capture; fetch-on-change)"
   capture_schedule_expression     = "rate(5 minutes)"
   forecast_schedule_expression    = "rate(5 minutes)"
   capture_schedule_enabled        = true
@@ -83,8 +83,8 @@ run "schedules_match_spec" {
     error_message = "the forecast worker runs every 5 minutes (PRD §11.2)"
   }
   assert {
-    condition     = alltrue([for s in aws_scheduler_schedule.job : s.state == "ENABLED" && s.group_name == "lookout"])
-    error_message = "schedules are enabled by default, in the lookout group"
+    condition     = alltrue([for s in aws_scheduler_schedule.job : s.state == "ENABLED" && s.group_name == "snow-globe"])
+    error_message = "schedules are enabled by default, in the snow-globe group"
   }
   assert {
     condition     = alltrue([for s in aws_scheduler_schedule.job : s.flexible_time_window[0].mode == "OFF"])
@@ -131,15 +131,15 @@ run "scheduler_role_can_only_invoke_the_two_jobs" {
   }
   assert {
     condition = toset(jsondecode(aws_iam_role_policy.scheduler.policy).Statement[0].Resource) == toset([
-      "arn:aws:lambda:us-east-1:123456789012:function:lookout-capture",
-      "arn:aws:lambda:us-east-1:123456789012:function:lookout-capture:*",
-      "arn:aws:lambda:us-east-1:123456789012:function:lookout-forecast",
-      "arn:aws:lambda:us-east-1:123456789012:function:lookout-forecast:*",
+      "arn:aws:lambda:us-east-1:123456789012:function:snow-globe-capture",
+      "arn:aws:lambda:us-east-1:123456789012:function:snow-globe-capture:*",
+      "arn:aws:lambda:us-east-1:123456789012:function:snow-globe-forecast",
+      "arn:aws:lambda:us-east-1:123456789012:function:snow-globe-forecast:*",
     ])
-    error_message = "the scheduler may only invoke the two Lookout jobs"
+    error_message = "the scheduler may only invoke the two Snow Globe jobs"
   }
   assert {
-    condition     = aws_iam_role_policy.scheduler.role == "lookout-scheduler" && alltrue([for s in aws_scheduler_schedule.job : s.target[0].role_arn == "arn:aws:iam::123456789012:role/lookout-scheduler"])
+    condition     = aws_iam_role_policy.scheduler.role == "snow-globe-scheduler" && alltrue([for s in aws_scheduler_schedule.job : s.target[0].role_arn == "arn:aws:iam::123456789012:role/snow-globe-scheduler"])
     error_message = "the schedules run as the scheduler role, which holds the invoke policy"
   }
 }

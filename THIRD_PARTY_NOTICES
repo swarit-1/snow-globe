@@ -1,5 +1,5 @@
 THIRD_PARTY_NOTICES
-Lookout (repository: snow-globe)
+Snow Globe (repository: snow-globe)
 ===============================================================================
 
 First version, 20 Nov 2026, written by hand from the lock files and manifests
@@ -12,17 +12,22 @@ library (section 6) and the Lambda image built from 8246a8b (section 7). No
 third-party package version changed in any lock file. Checked again on 20 Nov
 (about 16:00 UTC) on top of commit 8459e7e: still no third-party version
 change; lookout-capture 0.2.1 is the only uncommitted package version, and
-lookout-forecast 0.2.0 is committed (08a996c). It implements PRD.md
+lookout-forecast 0.2.0 is committed (08a996c). Revised on 21 Nov for the
+rename (DECISIONS.md D-080): the project is Snow Globe, its own packages are
+renamed (snow-globe-*, imported as snow_globe_*; @snow-globe/renderer; the
+Swift package SnowGlobeSpeech), and each went up one minor version. The notes
+above keep the names of their day. No third-party package version changed.
+It implements PRD.md
 §12 and the licence ledger of §15.4. At M5 a version generated from the
 licence ledger replaces it (PLAN.md, M5). docs/checks' `notices` check keeps
 it in step with every uv.lock, Cargo.lock and package.json git sees: each
 third-party package they pin must be named here at its version. It does not
 read the Terraform lock files (infra/terraform/.terraform.lock.hcl and
-infra/terraform/bootstrap/.terraform.lock.hcl), and Lookout's own package
+infra/terraform/bootstrap/.terraform.lock.hcl), and Snow Globe's own package
 versions are kept here by hand.
 
 Scope
-- Data sources, and code or algorithms used in Lookout's own source.
+- Data sources, and code or algorithms used in Snow Globe's own source.
 - Rust: each crate's direct dependencies at the versions its lock file pins,
   with licence counts for every other crate the lock file holds.
 - Python: each project's direct dependencies; then every third-party package
@@ -43,11 +48,12 @@ Scope
   image, whose bundled libraries differ from the macOS ones in 4f (section
   7); and the renderer's transitive development tools, which never ship.
 
-Lookout's own licence
+Snow Globe's own licence
 - Not chosen yet. The Python packages declare "MIT" in their pyproject.toml,
   the renderer's package.json says "UNLICENSED" (private), and the Rust crates
-  declare none. The repository has no LICENSE file. The owner chooses one
-  before the repository is made public.
+  declare none. The repository has no LICENSE file. The owner chooses one. The
+  repository was first pushed on 21 Nov 2026 without one (D-080), so none is
+  granted yet.
 
 
 1. DATA SOURCES
@@ -96,7 +102,7 @@ Planned, not used yet
   - GOES-18 (s3://noaa-goes18): US government, public domain.
 
 
-2. CODE AND ALGORITHMS USED IN LOOKOUT'S SOURCE
+2. CODE AND ALGORITHMS USED IN SNOW GLOBE'S SOURCE
 -------------------------------------------------------------------------------
 
 oculus-core (https://github.com/swarit-1/oculus, crate core/, rev 1b5410b)
@@ -116,8 +122,8 @@ Inverse normal CDF rational approximation, by Peter J. Acklam
 NOAA solar position equations (NOAA Global Monitoring Laboratory solar
 calculator)
   US government work, public domain. Transcribed in
-  eval/src/lookout_eval/noaa_solar.py (an independent check of oculus-core),
-  workers/capture/src/lookout_capture/sun.py (the Sun position in capture
+  eval/src/snow_globe_eval/noaa_solar.py (an independent check of oculus-core),
+  workers/capture/src/snow_globe_capture/sun.py (the Sun position in capture
   sidecars), renderer/src/ephemeris/sun.ts (the renderer's Sun check) and the
   app/core tests.
 
@@ -141,7 +147,7 @@ Planned, not in the code yet
 3. RUST
 -------------------------------------------------------------------------------
 
-3a. app/core: crate lookout-core 0.1.0 (ships in the app from M1)
+3a. app/core: crate snow-globe-core 0.2.0 (ships in the app from M1)
     Direct dependencies, from app/Cargo.lock:
 
     Crate          Version   Kind     Licence
@@ -194,7 +200,7 @@ Planned, not in the code yet
 4. PYTHON (uv projects; versions from each uv.lock)
 -------------------------------------------------------------------------------
 
-4a. workers/common: lookout-common 0.1.0 (declares MIT)
+4a. workers/common: snow-globe-common 0.2.0 (declares MIT)
     httpx        0.28.1   BSD-3-Clause
     jsonschema   4.26.0   MIT
     tzdata       2026.6   Apache-2.0 (the zone data itself is public domain)
@@ -203,39 +209,44 @@ Planned, not in the code yet
     Development only: pytest 9.2.0 (MIT), ruff 0.17.5 (MIT),
     moto 5.2.5 (Apache-2.0).
 
-4b. workers/capture: lookout-capture 0.2.1 (declares MIT; 0.2.1 is the
-    working tree, and 0.2.0, committed in df1838a, is what runs)
-    lookout-common   0.1.0    this repository, with the "s3" extra
-    httpx            0.28.1   BSD-3-Clause
-    pillow           13.0.0   MIT-CMU
+4b. workers/capture: snow-globe-capture 0.3.0 (declares MIT; 0.3.0, the
+    renamed package, is the working tree, and lookout-capture 0.2.1,
+    committed in b9520e2, is what runs, from the snapshot of 3cd2ca7)
+    snow-globe-common  0.2.0    this repository, with the "s3" extra
+    httpx              0.28.1   BSD-3-Clause
+    pillow             13.0.0   MIT-CMU
     Development only: pytest, ruff, moto, boto3 (as above).
 
-4c. workers/forecast: lookout-forecast 0.2.0 (declares MIT; 0.2.0 is
+4c. workers/forecast: snow-globe-forecast 0.3.0 (declares MIT; 0.3.0, the
+    renamed package, is the working tree; lookout-forecast 0.2.0 is
     committed in 08a996c, and 0.1.0, committed in 09e2ec8, is what runs)
-    lookout-common   0.1.0       this repository, with the "s3" extra
-    httpx            0.28.1      BSD-3-Clause
-    jsonschema       4.26.0      MIT
-    numpy            2.5.5       BSD-3-Clause AND 0BSD AND MIT AND Zlib AND
-                                 CC0-1.0
-    eccodes          2.50.1      Apache-2.0 (ECMWF)
-    eccodeslib       2.50.0.34   Apache-2.0 (ECMWF; its licence file, as its
-                                 METADATA names no licence). It bundles native
-                                 libraries (4f).
+    snow-globe-common  0.2.0       this repository, with the "s3" extra
+    httpx              0.28.1      BSD-3-Clause
+    jsonschema         4.26.0      MIT
+    numpy              2.5.5       BSD-3-Clause AND 0BSD AND MIT AND Zlib AND
+                                   CC0-1.0
+    eccodes            2.50.1      Apache-2.0 (ECMWF)
+    eccodeslib         2.50.0.34   Apache-2.0 (ECMWF; its licence file, as its
+                                   METADATA names no licence). It bundles
+                                   native libraries (4f).
     Pulled in by these and named here because they are ECMWF's too:
-    eckitlib         2.5.0.34    Apache-2.0 (ECMWF; its licence file).
-                                 eccodeslib requires it. It holds ECMWF's 13
-                                 libeckit libraries and bundles 3 others (4f).
-    findlibs         0.1.5       Apache-2.0 (ECMWF); eccodes requires it.
+    eckitlib           2.5.0.34    Apache-2.0 (ECMWF; its licence file).
+                                   eccodeslib requires it. It holds ECMWF's 13
+                                   libeckit libraries and bundles 3 others
+                                   (4f).
+    findlibs           0.1.5       Apache-2.0 (ECMWF); eccodes requires it.
     Development only: pytest, ruff (as above).
 
-4d. eval: lookout-eval 0.1.0 (declares MIT)
-    lookout-common   0.1.0      this repository
-    numpy            2.5.5      as above
-    pillow           13.0.0     MIT-CMU
-    jsonschema       4.26.0     MIT
-    scipy            1.18.1     BSD-3-Clause
-    oculus-core-py   0.1.0      MIT (optional "oculus" group; git rev 1b5410b)
-    lookout-forecast 0.2.0      this repository (optional "forecast" group)
+4d. eval: snow-globe-eval 0.2.0 (declares MIT)
+    snow-globe-common    0.2.0      this repository
+    numpy                2.5.5      as above
+    pillow               13.0.0     MIT-CMU
+    jsonschema           4.26.0     MIT
+    scipy                1.18.1     BSD-3-Clause
+    oculus-core-py       0.1.0      MIT (optional "oculus" group; git rev
+                                    1b5410b)
+    snow-globe-forecast  0.3.0      this repository (optional "forecast"
+                                    group)
     Development only: pytest, ruff (as above), hypothesis 6.170.15 (MPL-2.0),
     and, so that the backtest pair's real-extractor test runs (D-062),
     eccodes 2.50.1 and eccodeslib 2.50.0.34 (Apache-2.0, ECMWF), the forecast
@@ -322,7 +333,7 @@ Planned, not in the code yet
       in the Lambda image (section 7).
 
 
-5. NODE (renderer/package.json: @lookout/renderer, private)
+5. NODE (renderer/package.json: @snow-globe/renderer, private)
 -------------------------------------------------------------------------------
 
     Package                Version   Licence       Use
@@ -347,7 +358,7 @@ Planned, not in the code yet
     third-party licences), which renders through SwiftShader (Apache-2.0).
 
 
-6. SWIFT (app/speech-macos: Swift package LookoutSpeech, library 0.2.0)
+6. SWIFT (app/speech-macos: Swift package SnowGlobeSpeech, library 0.3.0)
 -------------------------------------------------------------------------------
 
     No third-party packages: Package.swift declares no package dependencies,
@@ -369,13 +380,14 @@ Planned, not in the code yet
     pinned by digest in infra/lambda/Dockerfile. It installs, with uv 0.11.6
     (MIT OR Apache-2.0; its image is pinned by digest too), the locked runtime
     closures of capture and forecast: the 28 third-party packages of the
-    capture and forecast rows in 4e, plus this repository's lookout-common,
-    lookout-capture and lookout-forecast. The package lists of the first local
-    build and of the build from commit 8246a8b (20 Nov; lookout-capture 0.2.0,
-    lookout-forecast 0.1.0, 31 distributions in /var/task) match them. They
-    are the Linux wheels, whose bundled native libraries differ from the
-    macOS ones in 4f (numpy's licence file names OpenBLAS and the GCC runtime
-    for such builds) and are not listed yet: TODO(M5).
+    capture and forecast rows in 4e, plus this repository's snow-globe-common,
+    snow-globe-capture and snow-globe-forecast. The package lists of the first
+    local build and of the build from commit 8246a8b (20 Nov, before the
+    rename; lookout-capture 0.2.0, lookout-forecast 0.1.0, 31 distributions in
+    /var/task) match them. They are the Linux wheels, whose bundled native
+    libraries differ from the macOS ones in 4f (numpy's licence file names
+    OpenBLAS and the GCC runtime for such builds) and are not listed yet:
+    TODO(M5).
     The base image also carries AWS's own Python packages behind /var/task on
     the runtime's path: awslambdaric 4.2.2, boto3 and botocore 1.43.127,
     jmespath 1.1.0, pip 26.2.2, python-dateutil 2.9.0.post0, s3transfer

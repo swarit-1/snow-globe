@@ -37,6 +37,9 @@ pub const MULTIWORD_FILLERS: &[&[&str]] = &[
     &["looking", "like"],
     &["look", "like"],
     &["looks", "like"],
+    // The product's name (D-080), said to the app as "hey snow globe, ...". "lookout", its name
+    // before the rename, stays a single filler word below.
+    &["snow", "globe"],
     &["gonna", "be"],
     &["show", "me"],
     &["give", "me"],
@@ -154,6 +157,7 @@ pub const FILLER_WORDS: &[&str] = &[
     "smoke",
     "snapshot",
     "snow",
+    "snowglobe",
     "snowing",
     "so",
     "stars",
@@ -215,7 +219,7 @@ pub const GENERIC_PLACE_WORDS: &[&str] = &[
 
 /// Words for a kind of place ("beach", "mountain", "science center") and the modifiers that start
 /// many names ("big", "grand", "mount", "point", "south"). Each is part of the names of many places
-/// Lookout does not cover ("Pebble Beach", "Stone Mountain", "Sunset Point", "Big Sur"), so a fuzzy
+/// Snow Globe does not cover ("Pebble Beach", "Stone Mountain", "Sunset Point", "Big Sur"), so a fuzzy
 /// or phonetic match must rest on some other word or on the whole name (PRD §7.5: a miss returns
 /// the closest places, never a guess). Unlike [`GENERIC_PLACE_WORDS`] they still count towards the
 /// similarity score, so "smokey mountain" matches "smoky mountains".
@@ -579,13 +583,22 @@ mod tests {
     fn filler_tables_hold_no_time_or_place_words() {
         // These words carry meaning for the time grammar or name places, so they must never be
         // fillers: removing them would change the answer. "moon" stays too: "the moon at
-        // midnight" names a place Lookout does not have, and must miss rather than follow up.
+        // midnight" names a place Snow Globe does not have, and must miss rather than follow up.
         for w in [
             "from", "now", "next", "this", "half", "past", "noon", "mountain", "point", "grand",
             "rock", "moon", "smoky", "great",
         ] {
             assert!(!is_filler(w), "{w} must not be a filler word");
         }
+    }
+
+    #[test]
+    fn the_product_names_are_fillers_but_snow_alone_stays_a_weather_word() {
+        // "hey snow globe" and "hey lookout" address the app (D-080); "snow" on its own is a
+        // weather word, and "globe" on its own is not a filler (Globe, Arizona is a place).
+        assert!(MULTIWORD_FILLERS.contains(&&["snow", "globe"][..]));
+        assert!(is_filler("snowglobe") && is_filler("lookout") && is_filler("snow"));
+        assert!(!is_filler("globe"));
     }
 
     #[test]

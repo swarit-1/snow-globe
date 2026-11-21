@@ -1,7 +1,7 @@
-//! `lookout-parse`: print the query for an utterance (PRD §7.3), for debugging and scripts.
+//! `snow-globe-parse`: print the query for an utterance (PRD §7.3), for debugging and scripts.
 //!
 //! ```text
-//! lookout-parse "<utterance>" [--now <RFC3339>] [--machine-tz <IANA>] [--context <place or viewpoint id>]
+//! snow-globe-parse "<utterance>" [--now <RFC3339>] [--machine-tz <IANA>] [--context <place or viewpoint id>]
 //!               [--manifests <dir>] [--pretty]
 //! ```
 //!
@@ -30,7 +30,7 @@ pub const EXIT_PARSE_ERROR: i32 = 2;
 pub const EXIT_USAGE: i32 = 64;
 
 /// The usage text.
-pub const USAGE: &str = "usage: lookout-parse \"<utterance>\" [--now <RFC3339>] [--machine-tz <IANA>] \
+pub const USAGE: &str = "usage: snow-globe-parse \"<utterance>\" [--now <RFC3339>] [--machine-tz <IANA>] \
 [--context <place_id|viewpoint_id>] [--manifests <dir>] [--pretty]";
 
 /// What a CLI run produced.
@@ -48,7 +48,7 @@ fn usage(msg: &str) -> CliOutput {
     CliOutput {
         code: EXIT_USAGE,
         stdout: String::new(),
-        stderr: format!("lookout-parse: {msg}\n{USAGE}\n"),
+        stderr: format!("snow-globe-parse: {msg}\n{USAGE}\n"),
     }
 }
 
@@ -194,7 +194,7 @@ pub fn run(args: &[String]) -> CliOutput {
             CliOutput {
                 code: EXIT_PARSE_ERROR,
                 stdout: format!("{}\n", json.unwrap_or_default()),
-                stderr: format!("lookout-parse: {e}\n"),
+                stderr: format!("snow-globe-parse: {e}\n"),
             }
         }
     }

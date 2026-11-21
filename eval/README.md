@@ -1,16 +1,18 @@
-# lookout-eval
+# snow-globe-eval
 
-Verification for Lookout (PRD §13): verification scores, the ephemeris wrapper, daylight, the frame quality
+Renamed from `lookout-eval` on 21 Nov 2026 (D-080); 0.2.0 is the same code under the Snow Globe names. It reads every file and log written under the old ones: `lookout.*` kinds, `lookout-capture/<version>` stamps (the data report compares releases, so the rename alone is never a restart), and the committed held-out split and landmark boxes, which keep their old `kind` because their SHA-256 values are on record. Measurements below dated before 21 Nov were taken under the old names.
+
+Verification for Snow Globe (PRD §13): verification scores, the ephemeris wrapper, daylight, the frame quality
 gates, extractor v−1, baselines, the committed held-out split and the leakage guard, and the backtest pair.
 Python 3.13, uv.
 
 ```sh
 cd eval && uv sync && uv run pytest -q && uv run ruff check .
-uv run lookout-eval ephem-check            # oculus-core vs the NPS archive's SolarElevationAngle
-uv run lookout-eval backtest-pair --help   # one v-1 pair: SceneSpec -> headless render -> extractor
-uv run lookout-eval heldout                # the committed held-out split, with UTC instants
-uv run lookout-eval heldout --check FRAME  # may this frame be used for development or fits? (metadata only)
-uv run lookout-eval data-report            # the M0.5 gate's 72 h log evidence (offline, read-only); --json
+uv run snow-globe-eval ephem-check            # oculus-core vs the NPS archive's SolarElevationAngle
+uv run snow-globe-eval backtest-pair --help   # one v-1 pair: SceneSpec -> headless render -> extractor
+uv run snow-globe-eval heldout                # the committed held-out split, with UTC instants
+uv run snow-globe-eval heldout --check FRAME  # may this frame be used for development or fits? (metadata only)
+uv run snow-globe-eval data-report            # the M0.5 gate's 72 h log evidence (offline, read-only); --json
 ```
 
 Outside pytest, iCloud's hidden `.pth` files mean the commands need `PYTHONPATH=src:../workers/common/src`
@@ -18,7 +20,7 @@ Outside pytest, iCloud's hidden `.pth` files mean the commands need `PYTHONPATH=
 
 The default suite also runs the renderer's own `validateScene()` (`renderer/src/scene.ts`) on eval-built
 scenes under Node 24, without a browser; it skips with a reason when Node 24 is missing. The real headless
-render is opt-in: `LOOKOUT_EVAL_RENDER=1 uv run pytest -q tests/test_renderer_contract.py`.
+render is opt-in: `SNOW_GLOBE_EVAL_RENDER=1 uv run pytest -q tests/test_renderer_contract.py`.
 
 ## Setup and the oculus-core pin
 
@@ -35,12 +37,12 @@ build has no such commit. Until 20 Nov the suffix was a constant that still said
 pair's four records say `0.1.0+06809e6` although they ran the `1b5410b` build
 ([docs/evidence/m05-backtest-pair.md](../docs/evidence/m05-backtest-pair.md) §9).
 
-Without oculus-core, use `uv sync --no-group oculus` and set `LOOKOUT_EPHEMERIS=noaa` (Sun only); nothing
+Without oculus-core, use `uv sync --no-group oculus` and set `SNOW_GLOBE_EPHEMERIS=noaa` (Sun only); nothing
 falls back silently. The suite passes in such a venv, with the oculus-only tests skipped.
 
-The optional `forecast` group installs lookout-forecast. It is used only by
+The optional `forecast` group installs snow-globe-forecast. It is used only by
 `backtest-pair --forecast auto`, which backfills one HRRR run from NOAA (network):
-`uv sync --group forecast`. The M0.5 pair did not use it: it ran `python -m lookout_eval.pair_forecast`
+`uv sync --group forecast`. The M0.5 pair did not use it: it ran `python -m snow_globe_eval.pair_forecast`
 inside workers/forecast's environment (which has ecCodes) on the frozen snapshot of committed code, then
 passed the file with `--forecast` and the printed summary with `--forecast-summary`. Both paths choose and
 extract the same way (`pair_forecast.py`). The commands are in
@@ -48,21 +50,21 @@ extract the same way (`pair_forecast.py`). The commands are in
 
 Since D-054 the choice lists each candidate run (one S3 listing request each, counted in the summary's
 `choice_transfer`) and never dates an archived hour before its own trusted S3 stamps, as the extractor
-does when it writes the file. That needs lookout-forecast 0.2.0 or later (in the repo since 08a996c); the
+does when it writes the file. That needs forecast 0.2.0 or later (then `lookout-forecast`, in the repo since 08a996c); the
 running jobs' snapshot (034c46b) holds 0.1.0, which `pair_forecast` refuses. With the lag model of its
 day the M0.5 pair's choice is unchanged by the floor (a test replays the two runs' recorded listings).
 Today's lag model, with the survey lags of D-053, would choose another run for it (2024011418, its
 f25/f26 modelled at 19:31:36Z, before the 19:45Z issue time), floor or no floor; the recorded pair keeps
 the run it was made with.
 
-## Modules (`src/lookout_eval/`)
+## Modules (`src/snow_globe_eval/`)
 
 | Module | PRD | What it does |
 |---|---|---|
 | `scores.py` | §13.4, §13.5, §13.7 | Contingency with excluded/partial masks; POD, POFD, PSS, FAR, CSI, bias (`None` when undefined); skill score from whole-period totals; Wilson interval; paired ΔPSS and single PSS with a day-block bootstrap; Holm–Bonferroni |
 | `ephemeris.py` | §8.4 | oculus-core Sun/Moon (geometric) plus refraction (Sæmundsson, or NOAA's for comparison); explicit backend choice |
 | `noaa_solar.py` | §8.4 | Independent NOAA GML solar algorithm (Meeus ch. 25/28): fallback and cross-check |
-| `ephem_check.py` | §8.4 | NPS `SolarElevationAngle` cross-check (`lookout-eval ephem-check`) |
+| `ephem_check.py` | §8.4 | NPS `SolarElevationAngle` cross-check (`snow-globe-eval ephem-check`) |
 | `daylight.py` | §8.6 | Day from the ephemeris Sun altitude only; thresholds are parameters (P1 3°, cloud fraction 10°) |
 | `gates.py` | §8.6 | The frame quality gates: Fresh, Daylight and Usable frame applied; Same view, Clear lens and the Colour-mode cut-off not yet (reported as "not checked"); exclusion mask and counts |
 | `extractor.py` | §13.3 | v−1 landmark visibility from normalised Sobel energy against a Sun-binned clear-day reference; camera-in-cloud flag; camera-fault class (dark, saturated, blank) |
@@ -70,18 +72,18 @@ the run it was made with.
 | `heldout.py`, `heldout_periods.json` | §13.2, §13.9 | The committed held-out split (D-019, D-022, D-024): periods per viewpoint and design, the archive guard, the quarantine, scoring exclusions; strict, versioned loader |
 | `leakage.py` | §13.1, §13.9 | `FrameStore` with issue-time and fit views that raise `LeakageError`, under the committed split; no labels on held-out frames outside the sealed scoring; `frame_file_verdict` for one file |
 | `baselines.py` | §13.6, §9.1 | Persistence (a), (b) and the dev-only choice; climatology; S_rule; analog (Tier 0) |
-| `forecast_io.py` | §8.3 | Reads lookout-forecast run files: interpolation, availability, datums, winds, the summit ray |
+| `forecast_io.py` | §8.3 | Reads snow-globe-forecast run files: interpolation, availability, datums, winds, the summit ray |
 | `scene.py` | §9.2, §9.5 | SceneSpec for renderer 0.2.0 (`run_init_utc`, plate id and hashes); schema plus cross-field checks; the renderer's own `validateScene()` under Node (`renderer_validate.mjs`) |
-| `backtest_pair.py`, `cli.py` | §16 M0.5 | The v−1 pair and the `lookout-eval` console script. Record and scene under `scores/pairs/<viewpoint>/`, render under `renders/pairs/<viewpoint>/`; every input's hash, image time and availability; wall time per stage; `--tag` for repeat runs |
-| `pair_forecast.py` | §8.3, §13.9, §16 M0.5 | The pair's HRRR run: lookout-forecast's own `select_run_for_issue`, `LagModel` and `listed_availability` (0.2.0 or later, D-054), so an archived hour is never chosen before its own S3 stamps; then its `Extractor` for only the scene's fields and the two bracketing hours, under a 60 MB GRIB cap. A reused file must record the availability the choice gives; a refusal says which side differs and suggests re-extracting only when that would help. Runs inside lookout-forecast's environment (`python -m lookout_eval.pair_forecast`) |
+| `backtest_pair.py`, `cli.py` | §16 M0.5 | The v−1 pair and the `snow-globe-eval` console script. Record and scene under `scores/pairs/<viewpoint>/`, render under `renders/pairs/<viewpoint>/`; every input's hash, image time and availability; wall time per stage; `--tag` for repeat runs |
+| `pair_forecast.py` | §8.3, §13.9, §16 M0.5 | The pair's HRRR run: snow-globe-forecast's own `select_run_for_issue`, `LagModel` and `listed_availability` (0.2.0 or later, D-054), so an archived hour is never chosen before its own S3 stamps; then its `Extractor` for only the scene's fields and the two bracketing hours, under a 60 MB GRIB cap. A reused file must record the availability the choice gives; a refusal says which side differs and suggests re-extracting only when that would help. Runs inside snow-globe-forecast's environment (`python -m snow_globe_eval.pair_forecast`) |
 | `landmark_boxes.py`, `landmark_boxes_v1.json` | §13.3, §16 M0.5 | By-eye landmark boxes in normalised image coordinates, drawn on the plate; they fit any resolution of the drawn frame's aspect ratio only; not in the viewpoint manifest; replaced by the M2 pose solve |
 | `pair_score.py` | §13.4, §13.5 | One pair's P1 cell (event "visible"; partial masked; in-cloud excluded, hidden in the sensitivity) as a one-pair `Contingency`, plus the ratio error |
 | `registration.py` | §8.6 | How far a frame's aim differs from the plate's (phase correlation of gradient images): a diagnostic in the pair record; the Same view gate itself stays "not checked" |
-| `data_report/` | §16 M0.5, §15.3 | `lookout-eval data-report`: the M0.5 gate's log evidence from `$LOOKOUT_DATA_DIR`, read-only. Per viewpoint: polls, image GETs, frames and thumbnails by storage policy (checked against the disk), rate caps, errors, poll gaps send to send, the most GETs in a rolling hour, the bounds at nps.gov (the least poll gap and 5-GET span nps.gov can have seen, and the pairs and windows not provably 300 s or 3600 s apart), and the distinct live HRRR runs with their hours and fields; outages, restarts and their excess, exclusions and the 72 h clock by the gate rule. Never opens an image, `archive/` or `quarantine/` |
+| `data_report/` | §16 M0.5, §15.3 | `snow-globe-eval data-report`: the M0.5 gate's log evidence from `$SNOW_GLOBE_DATA_DIR`, read-only. Per viewpoint: polls, image GETs, frames and thumbnails by storage policy (checked against the disk), rate caps, errors, poll gaps send to send, the most GETs in a rolling hour, the bounds at nps.gov (the least poll gap and 5-GET span nps.gov can have seen, and the pairs and windows not provably 300 s or 3600 s apart), and the distinct live HRRR runs with their hours and fields; outages, restarts and their excess, exclusions and the 72 h clock by the gate rule. Never opens an image, `archive/` or `quarantine/` |
 
 ## Choices worth knowing
 
-- **The held-out split** is committed in `src/lookout_eval/heldout_periods.json` (version 1). Every pair
+- **The held-out split** is committed in `src/snow_globe_eval/heldout_periods.json` (version 1). Every pair
   record names its version and SHA-256. Local days are in each viewpoint's manifest zone; a test checks the
   zones match.
 
@@ -105,10 +107,10 @@ the run it was made with.
 
     The standard-time reading follows NPS's summer convention. It decides the summer edge when
     `LocalTimeString` is missing: "05/31/2026 11:30:00 PM" is 00:30 PDT on 1 Jun. NPS strings that are
-    present but unreadable are refused. This is lookout-capture's `heldout.py` rule, reproduced (eval does
+    present but unreadable are refused. This is snow-globe-capture's `heldout.py` rule, reproduced (eval does
     not import capture). A test loads capture's own file and fuzzes the two rules: eval finds every date
     capture finds, so it is never looser.
-  - **Quarantine (D-022):** anything under `$LOOKOUT_DATA_DIR/quarantine/` is refused on every path, sealed
+  - **Quarantine (D-022):** anything under `$SNOW_GLOBE_DATA_DIR/quarantine/` is refused on every path, sealed
     or not. That covers any folder of that name in any letter case, symlinks resolved, and the folder found
     by identity (device and inode), since this Mac's disk is case-insensitive. The rule applies to the store,
     the catalogue (`scan_frames` checks where each listed frame and sidecar resolves), sidecar reads, the
@@ -168,7 +170,7 @@ the run it was made with.
 
 ## The data report (PLAN.md M0.5 gate 1)
 
-`lookout-eval data-report [--since ISO] [--until ISO] [--json [PATH]]` reads `capture_log/`,
+`snow-globe-eval data-report [--since ISO] [--until ISO] [--json [PATH]]` reads `capture_log/`,
 `forecast_log/` (and `forecast_log/lag_survey/`), the sidecars under `frames/` and `thumbs/`,
 `forecast/hrrr/` and `state/`, and writes nothing (only `--json PATH`, where you say). The window starts by
 default at 12:24:23 UTC on 19 Nov 2026, when the loop took over all 8 cameras, and ends now. The rules,
@@ -224,7 +226,7 @@ in full in `data_report/__init__.py`:
 
 ## Measured (this machine, MacBook Air M4, 19 Nov 2026)
 
-**Ephemeris vs NPS.** `lookout-eval ephem-check`, 88 `pore` assets of 17 Nov, Point Reyes camera position:
+**Ephemeris vs NPS.** `snow-globe-eval ephem-check`, 88 `pore` assets of 17 Nov, Point Reyes camera position:
 - With the Sun up (39 assets), NPS differs from our refracted altitude by at most 0.0026° (RMS 0.0015°).
   It differs from the geometric altitude by up to 0.4768° (RMS 0.1174°). **So NPS reports a refracted
   altitude.**
@@ -265,7 +267,7 @@ same image as PNG differs by at most 1.19 % (quality 50), 0.91 % (75), 0.55 % (9
   - Listing the 100,000 records: 24 ms (issue-time view) and 92 ms (fit view).
 - `scan_frames`' per-file quarantine checks (file and sidecar, where they resolve) add 20 µs a frame
   (+31 %) on a synthetic catalogue of 20,000 frames: 1.74 s against 1.33 s, medians of 5.
-- Against lookout-capture's own rule, 12,000 fuzzed NPS string pairs (3 seeds): capture never refuses a
+- Against snow-globe-capture's own rule, 12,000 fuzzed NPS string pairs (3 seeds): capture never refuses a
   frame that eval allows. Eval alone refuses 138–159 per 4,000, all at the summer edge, through the
   standard-time reading.
 - Mutation check: 47 of 48 deliberate breaks of the rules were caught by the suite. Each break was made in
@@ -306,8 +308,8 @@ all (renderer timing, three runs, SwiftShader).
   - per-layer cloud bases from model levels instead of the pressure-band mapping in `scene.py`, and the
     `PRES:cloud base` cross-check before `HGT:cloud base` is used (the M0.5 pair's camera cell had a
     phantom 1.6–2.0 km base under a ~10 km one; harmless there only because low cover was 0 %);
-  - `pair_forecast.py` should use lookout-forecast 0.2.0's explicit hour list (`ExtractOptions.hours`,
-    `plan_run(hours=)`, D-053) and stop substituting `lookout_forecast.extract.run_hours` for one call;
+  - `pair_forecast.py` should use the forecast worker's explicit hour list (since 0.2.0) (`ExtractOptions.hours`,
+    `plan_run(hours=)`, D-053) and stop substituting `snow_globe_forecast.extract.run_hours` for one call;
   - `pair_forecast.py` should let the extractor write to a scratch storage and copy only the forecast
     file into `forecast/hrrr/`: today an archived extraction also adds a `run` event to the live
     `forecast_log/` and a state marker (the M0.5 pair's are line 475 of `forecast_log/2026-11-19.jsonl`
@@ -321,6 +323,6 @@ all (renderer timing, three runs, SwiftShader).
   scores; see [docs/evidence/m05-backtest-pair.md](../docs/evidence/m05-backtest-pair.md).
   `backtest-pair --forecast auto` itself has still not reached NOAA: it needs `uv sync --group forecast`
   (the dev group now brings ecCodes, at the forecast worker's locked versions, so that
-  `tests/test_pair_forecast.py` runs the real extractor offline in `make test`; lookout-forecast itself
-  comes only with the `forecast` group). `pair_forecast.py` did reach NOAA, from lookout-forecast's
+  `tests/test_pair_forecast.py` runs the real extractor offline in `make test`; snow-globe-forecast itself
+  comes only with the `forecast` group). `pair_forecast.py` did reach NOAA, from snow-globe-forecast's
   environment.

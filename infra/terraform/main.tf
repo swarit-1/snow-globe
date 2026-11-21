@@ -27,30 +27,30 @@ locals {
 
   # Paths inside the Lambda image (infra/lambda/Dockerfile). /tmp is the only writable path in Lambda.
   manifest_dir = "/var/task/viewpoints/manifests"
-  scratch_dir  = "/tmp/lookout-data"
+  scratch_dir  = "/tmp/snow-globe-data"
 
   # One entry per scheduled job (PRD §11.2). Both jobs run from the same image, and Terraform sets each one's
   # handler as the image CMD.
   #
   # Data-bucket access, as IAM key patterns (CLAUDE.md data layout). A job reads and writes only its own outputs,
-  # its own state documents (state/<job>/) and its own locks (state/locks/<job>..., the lookout_common lock
+  # its own state documents (state/<job>/) and its own locks (state/locks/<job>..., the snow_globe_common lock
   # names "<job>/..." or "<job>-..."). So neither job can overwrite or delete the other's state: the capture
   # job's NPS rate-limit history stays out of the forecast job's reach.
   #
-  # Capture (lookout-capture 0.2.0, PRD §8.7 as decided in D-028) also writes a 640 px thumbnail of every download
+  # Capture (lookout-capture 0.2.0, before D-080; PRD §8.7 as decided in D-028) also writes a 640 px thumbnail of every download
   # to thumbs/, and stages each download of the six hourly cameras under cache/staging/frames/ until its hour is
   # decided; the nearest frame is then copied to frames/ and every staged copy deleted (workers/capture/README.md,
-  # "IAM"; lookout_capture.retention). Forecast keeps its GRIB subsets on the function's local disk
-  # (lookout_common.paths.cache_dir(), /tmp on Lambda), never in the bucket, so it has no cache/ grant.
+  # "IAM"; snow_globe_capture.retention). Forecast keeps its GRIB subsets on the function's local disk
+  # (snow_globe_common.paths.cache_dir(), /tmp on Lambda), never in the bucket, so it has no cache/ grant.
   #
   # s3_delete is narrower still: releasing a lock and removing capture's own staged copies are the only deletes a
-  # worker makes (lookout_common.storage has no delete method; retention.delete_staged refuses any key outside
+  # worker makes (snow_globe_common.storage has no delete method; retention.delete_staged refuses any key outside
   # cache/staging/). No role may delete a frame, thumbnail, forecast or log, none has s3:DeleteObjectVersion, and
   # the bucket is versioned (storage.tf), so an overwrite is recoverable for var.data_noncurrent_version_days.
   jobs = {
     capture = {
-      description          = "Lookout capture: polls NPS camera feeds, stores changed frames (PRD 11.2, 15.3)"
-      handler              = "lookout_capture.lambda_handler.handler"
+      description          = "Snow Globe capture: polls NPS camera feeds, stores changed frames (PRD 11.2, 15.3)"
+      handler              = "snow_globe_capture.lambda_handler.handler"
       timeout_s            = 120
       memory_mb            = 512
       ephemeral_storage_mb = 512
@@ -60,8 +60,8 @@ locals {
       s3_delete            = ["cache/staging/*", "state/locks/capture*"]
     }
     forecast = {
-      description          = "Lookout forecast: HRRR byte-range extraction per viewpoint, availability lag (PRD 8.3, 11.2)"
-      handler              = "lookout_forecast.lambda_handler.handler"
+      description          = "Snow Globe forecast: HRRR byte-range extraction per viewpoint, availability lag (PRD 8.3, 11.2)"
+      handler              = "snow_globe_forecast.lambda_handler.handler"
       timeout_s            = 600
       memory_mb            = 2048
       ephemeral_storage_mb = 2048
@@ -158,7 +158,7 @@ locals {
   scheduler_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid      = "InvokeLookoutJobs"
+      Sid      = "InvokeSnowGlobeJobs"
       Effect   = "Allow"
       Action   = ["lambda:InvokeFunction"]
       Resource = local.job_invoke_arns

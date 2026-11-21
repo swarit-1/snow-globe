@@ -2,7 +2,7 @@
 //!
 //! - `m1-report show <run-id|path> [--write]` prints every check's verdict; `--write` appends the
 //!   cross-process verdicts (check 9 `inject`, check 8 `sck-tag-join`) to the run file.
-//! - `m1-report list` lists the runs under `$LOOKOUT_DATA_DIR/spikes/m1/`.
+//! - `m1-report list` lists the runs under `$SNOW_GLOBE_DATA_DIR/spikes/m1/`.
 //! - `m1-report note <run-id> <check> key=value...` appends an owner observation, for example
 //!   `m1-report note <run> consent prompt_seen=false scenario=after-reboot`.
 //! - `m1-report checks` prints the eleven checks, criteria and permissions.
@@ -70,7 +70,7 @@ fn run() -> Result<ExitCode, String> {
         }
         Some("list") => {
             args.finish()?;
-            let dir = paths::spike_dir();
+            let dir = paths::spike_dir()?;
             let mut entries: Vec<_> = std::fs::read_dir(&dir)
                 .map_err(|e| format!("{}: {e}", dir.display()))?
                 .filter_map(Result::ok)

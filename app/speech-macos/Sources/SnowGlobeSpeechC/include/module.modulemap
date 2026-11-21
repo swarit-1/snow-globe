@@ -1,0 +1,6 @@
+// Exposes the public C ABI header (app/speech-macos/include/snow_globe_speech.h) to the Swift
+// targets, so the Swift implementation and the tests use the header's own types and constants.
+module SnowGlobeSpeechC {
+    header "../../../include/snow_globe_speech.h"
+    export *
+}

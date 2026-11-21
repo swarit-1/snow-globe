@@ -1,0 +1,29 @@
+{
+  "kind": "lookout.backtest-pair",
+  "schema_version": 1,
+  "label": "v-1",
+  "pair_id": "20240115T194500Z_L24h_7838502574",
+  "tag": "run1",
+  "output_name": "20240115T194500Z_L24h_7838502574.run1",
+  "created_utc": "2026-11-19T23:25:45Z",
+  "status": "scored",
+  "viewpoint_id": "grand-canyon.yavapai",
+  "valid_time_utc": "2024-01-15T19:45:00Z",
+  "issue_time_utc": "2024-01-14T19:45:00Z",
+  "lead_nominal_h": 24.0,
+  "versions": {
+    "lookout_eval": "0.1.0",
+    "lookout_common": "0.1.0",
+    "extractor": "v-1",
+    "renderer_version_ts": "0.2.0",
+    "ephemeris": "oculus-core 0.1.0+06809e6",
+    "python": "3.13.13",
+    "numpy": "2.5.5",
+    "scipy": "1.18.1",
+    "pillow": "13.0.0",
+    "git": {
+      "commit": "3ac98b3c21b84857612254acbbd19bc2ca15025e",
+      "dirty": true
+    }
+  }
+}

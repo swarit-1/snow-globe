@@ -1,5 +1,7 @@
 # M0.5 backtest pair, v−1: Grand Canyon, 15 Jan 2024, 24 h lead
 
+> **Rename note, 21 Nov 2026:** the product is now Snow Globe (D-080). This file records runs of 19–20 Nov, so its commands, modules, paths and variables keep the names those runs used. Their `lookout-*`, `lookout_*` and `LOOKOUT_*` are today's `snow-globe-*`, `snow_globe_*` and `SNOW_GLOBE_*`, and the two hashed `eval/src/lookout_eval/` files now sit, byte for byte, in `eval/src/snow_globe_eval/`.
+
 **Gate item** (PRD §16 M0.5, PLAN.md M0.5): "One backtest pair end to end: an archived frame plus an archived HRRR run, then a crude headless render, then a crude extractor score, labelled v−1."
 
 **Measured** on 19 Nov 2026 (day G), 23:13–23:35 UTC, on the MacBook Air M4 (macOS 26.5.1), and run a fourth time at 00:16 UTC on 20 Nov on the code after the adversarial review's fixes (section 14). The pair is labelled **v−1** in its record. It is a test of the pipeline, not a forecast result: one pair carries no skill information, and both extractor calls are biased by known v−1 artefacts (below). No v−1 pair counts toward a metric (the record says so since run 4).

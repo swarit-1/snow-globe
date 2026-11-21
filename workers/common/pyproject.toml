@@ -1,7 +1,7 @@
 [project]
-name = "lookout-common"
-version = "0.1.0"
-description = "Shared helpers for Lookout workers: data paths, viewpoint manifests, storage (local/S3), polite HTTP, time parsing, JSONL logs, image helpers."
+name = "snow-globe-common"
+version = "0.2.0"
+description = "Shared helpers for Snow Globe workers: data paths, viewpoint manifests, storage (local/S3), polite HTTP, time parsing, JSONL logs, image helpers."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.13,<3.14"
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-lookout-viewpoints-check = "lookout_common.manifest:main"
+snow-globe-viewpoints-check = "snow_globe_common.manifest:main"
 
 [project.optional-dependencies]
 s3 = ["boto3>=1.36"]

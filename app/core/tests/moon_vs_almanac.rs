@@ -1,4 +1,4 @@
-//! The Moon (PRD §8.4, §14 "Moon ≤ 0.3°"; §5.3 caption "Moon 41% lit"): `lookout_core::solar`'s
+//! The Moon (PRD §8.4, §14 "Moon ≤ 0.3°"; §5.3 caption "Moon 41% lit"): `snow_globe_core::solar`'s
 //! wrapper of oculus-core against the independent Astronomical Almanac low-precision Moon in
 //! `tests/common`.
 //!
@@ -11,8 +11,8 @@ mod common;
 
 use chrono::{DateTime, Duration, Utc};
 use common::{Stats, almanac_moon};
-use lookout_core::places::PlaceTable;
-use lookout_core::solar::moon_position;
+use snow_globe_core::places::PlaceTable;
+use snow_globe_core::solar::moon_position;
 
 #[test]
 fn moon_matches_the_almanac_formulae() {

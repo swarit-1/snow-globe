@@ -1,9 +1,9 @@
-//! The `lookout-parse` binary itself (PRD §7.3): run as a process, as a script would.
+//! The `snow-globe-parse` binary itself (PRD §7.3): run as a process, as a script would.
 
 use std::process::Command;
 
 fn run(args: &[&str]) -> (i32, String, String) {
-    let out = Command::new(env!("CARGO_BIN_EXE_lookout-parse"))
+    let out = Command::new(env!("CARGO_BIN_EXE_snow-globe-parse"))
         .args(args)
         .output()
         .expect("binary runs");
@@ -63,7 +63,7 @@ fn errors_and_usage() {
     assert_eq!(code, 64, "{stderr}");
     let (code, stdout, _) = run(&["--help"]);
     assert_eq!(code, 0);
-    assert!(stdout.starts_with("usage: lookout-parse"));
+    assert!(stdout.starts_with("usage: snow-globe-parse"));
     let (code, stdout, _) = run(&[
         "rainier at 9",
         "--now",

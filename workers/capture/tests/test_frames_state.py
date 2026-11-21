@@ -5,16 +5,16 @@ from __future__ import annotations
 import io
 from datetime import UTC, datetime, timedelta
 
-from lookout_common.images import exif_summary
 from PIL import Image
+from snow_globe_common.images import exif_summary
 
-from lookout_capture.fetch import UNANSWERED_REQUEST_BOUND_S
-from lookout_capture.frames import (
+from snow_globe_capture.fetch import UNANSWERED_REQUEST_BOUND_S
+from snow_globe_capture.frames import (
     TINY_FILE_BYTES,
     choose_image_time,
     process_image,
 )
-from lookout_capture.state import (
+from snow_globe_capture.state import (
     STAMP_RESOLUTION_S,
     UNCONFIRMED_SEND_SLACK_S,
     CameraState,
@@ -22,7 +22,7 @@ from lookout_capture.state import (
     get_answer_bound,
     iso_ms_up,
 )
-from lookout_capture.sun import solar_elevation_deg
+from snow_globe_capture.sun import solar_elevation_deg
 
 from .conftest import make_jpeg
 
@@ -415,7 +415,7 @@ def test_dst_shaped_gap_with_agreeing_upload_is_still_overruled():
 def test_laplacian_variance_ranks_sharp_above_blurred_and_flat_is_zero():
     from PIL import ImageFilter
 
-    from lookout_capture.frames import laplacian_variance
+    from snow_globe_capture.frames import laplacian_variance
 
     sharp = Image.open(io.BytesIO(make_jpeg(1280, 720, pattern=3)))
     blurred = sharp.filter(ImageFilter.GaussianBlur(4))
@@ -433,7 +433,7 @@ def test_laplacian_variance_ranks_sharp_above_blurred_and_flat_is_zero():
 
 
 def test_sun_position_and_gate_flags():
-    from lookout_capture.frames import gate_flags, sun_position
+    from snow_globe_capture.frames import gate_flags, sun_position
 
     noon = sun_position(utc(2026, 11, 17, 20, 0), 37.99604, -123.02)  # Point Reyes, midday
     night = sun_position(utc(2026, 11, 19, 10, 45), 37.99604, -123.02)

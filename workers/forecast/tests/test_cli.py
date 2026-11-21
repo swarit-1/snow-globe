@@ -1,4 +1,4 @@
-"""The lookout-forecast command line against the fake bucket (PRD §8.3, §11.2)."""
+"""The snow-globe-forecast command line against the fake bucket (PRD §8.3, §11.2)."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from lookout_common.storage import LockTimeoutError
+from snow_globe_common.storage import LockTimeoutError
 
-from lookout_forecast import cli, discovery
-from lookout_forecast.bucket import HrrrBucket
-from lookout_forecast.extract import Extractor
-from lookout_forecast.hrrr import run_prefix
-from lookout_forecast.output import validate_document
+from snow_globe_forecast import cli, discovery
+from snow_globe_forecast.bucket import HrrrBucket
+from snow_globe_forecast.extract import Extractor
+from snow_globe_forecast.hrrr import run_prefix
+from snow_globe_forecast.output import validate_document
 
 from .conftest import RAINIER
 
@@ -146,9 +146,9 @@ def test_now_is_recent() -> None:
 
 
 def test_environment_defaults_apply_without_flags(wired, monkeypatch, capsys) -> None:
-    monkeypatch.setenv("LOOKOUT_FORECAST_FIELDS", "VIS,TERRAIN")
-    monkeypatch.setenv("LOOKOUT_FORECAST_MAX_FH", "0")
-    monkeypatch.setenv("LOOKOUT_FORECAST_MAX_MB", "0.0001")
+    monkeypatch.setenv("SNOW_GLOBE_FORECAST_FIELDS", "VIS,TERRAIN")
+    monkeypatch.setenv("SNOW_GLOBE_FORECAST_MAX_FH", "0")
+    monkeypatch.setenv("SNOW_GLOBE_FORECAST_MAX_MB", "0.0001")
     assert cli.main(["run", "2026111907", "--only", RAINIER]) == cli.EXIT_CAP
     assert cli.main(["run", "2026111907", "--only", RAINIER, "--max-mb", "100", "--json"]) == 0
     event = json.loads(capsys.readouterr().out)
@@ -159,12 +159,12 @@ def test_laptop_runs_are_capped_by_default(wired, monkeypatch, capsys) -> None:
     """Review finding 6: with a clean environment nothing limited the download."""
     args = cli.build_parser().parse_args(["latest"])
     assert cli._options(args).max_bytes == 150_000_000
-    monkeypatch.setenv("LOOKOUT_FORECAST_MAX_MB", "40")
+    monkeypatch.setenv("SNOW_GLOBE_FORECAST_MAX_MB", "40")
     assert cli._options(args).max_bytes == 40_000_000
-    monkeypatch.setenv("LOOKOUT_FORECAST_MAX_MB", "0")
+    monkeypatch.setenv("SNOW_GLOBE_FORECAST_MAX_MB", "0")
     assert cli.main(["run", "2026111907", *ARGS]) == cli.EXIT_ERROR
     assert "must be > 0" in capsys.readouterr().err
-    monkeypatch.delenv("LOOKOUT_FORECAST_MAX_MB")
+    monkeypatch.delenv("SNOW_GLOBE_FORECAST_MAX_MB")
     monkeypatch.setattr(cli, "DEFAULT_CLI_MAX_MB", 0.001)  # 1 kB: below any fake run
     assert cli.main(["run", "2026111907", *ARGS]) == cli.EXIT_CAP
     err = capsys.readouterr().err
@@ -261,7 +261,7 @@ def test_lag_survey_lists_only_and_writes_nothing(wired, data_root, capsys) -> N
 
 def test_lag_survey_log_writes_survey_events_once(wired, data_root, monkeypatch, capsys) -> None:
     """D-027: --log logs each listed (run, hour) once, in the survey log only."""
-    from lookout_forecast import laglog
+    from snow_globe_forecast import laglog
 
     monkeypatch.setattr(laglog, "utcnow", lambda: NOW)
     args = ["lag-survey", "--start", "2026111905", "--end", "2026111908", "--log"]
@@ -304,7 +304,7 @@ def test_lag_survey_ends_at_the_newest_complete_run_by_default(wired, capsys) ->
 
 def test_status_counts_lags_by_method(wired, data_root, monkeypatch, capsys) -> None:
     cli.main(["run", "2026111907", "--max-fh", "0", *ARGS])  # 19 live lags
-    from lookout_forecast import laglog
+    from snow_globe_forecast import laglog
 
     monkeypatch.setattr(laglog, "utcnow", lambda: NOW)
     cli.main(["lag-survey", "--start", "2026111905", "--end", "2026111907", "--log"])
@@ -336,7 +336,7 @@ def test_lag_check_lists_runs_and_writes_nothing(wired, data_root, capsys) -> No
 
 
 def test_run_hours_extracts_exactly_those_hours(wired, data_root, monkeypatch, capsys) -> None:
-    monkeypatch.setenv("LOOKOUT_FORECAST_MAX_FH", "0")  # --hours wins over the environment
+    monkeypatch.setenv("SNOW_GLOBE_FORECAST_MAX_FH", "0")  # --hours wins over the environment
     assert cli.main(["run", "2026111907", "--hours", "3", "1", "--json", *ARGS]) == 0
     event = json.loads(capsys.readouterr().out)
     assert event["hours"] == [1, 3]
@@ -362,7 +362,7 @@ def test_plan_hours(wired, capsys) -> None:
 
 def test_tick_is_one_handler_call(monkeypatch, capsys) -> None:
     """``tick`` runs the Lambda's code path: handler({}, None), nothing changed on the way."""
-    from lookout_forecast import lambda_handler
+    from snow_globe_forecast import lambda_handler
 
     calls: list[tuple] = []
     summary = {"now_utc": "2026-11-19T09:40:00Z", "extracted": 0, "runs": [], "transfer": {}}
@@ -372,19 +372,19 @@ def test_tick_is_one_handler_call(monkeypatch, capsys) -> None:
         return summary
 
     monkeypatch.setattr(lambda_handler, "handler", spy)
-    assert cli.main(["tick"]) == cli.EXIT_ERROR  # no LOOKOUT_FORECAST_MAX_MB: refused
-    assert "LOOKOUT_FORECAST_MAX_MB is not set" in capsys.readouterr().err and calls == []
-    monkeypatch.setenv("LOOKOUT_FORECAST_MAX_MB", "40")
+    assert cli.main(["tick"]) == cli.EXIT_ERROR  # no SNOW_GLOBE_FORECAST_MAX_MB: refused
+    assert "SNOW_GLOBE_FORECAST_MAX_MB is not set" in capsys.readouterr().err and calls == []
+    monkeypatch.setenv("SNOW_GLOBE_FORECAST_MAX_MB", "40")
     assert cli.main(["tick", "--json"]) == 0
     assert calls == [({}, None)] and json.loads(capsys.readouterr().out) == summary
-    monkeypatch.delenv("LOOKOUT_FORECAST_MAX_MB")
+    monkeypatch.delenv("SNOW_GLOBE_FORECAST_MAX_MB")
     assert cli.main(["tick", "--uncapped"]) == 0 and len(calls) == 2
     assert "extracted 0 run(s)" in capsys.readouterr().out
 
 
 def test_tick_exits_non_zero_when_a_run_fails(monkeypatch, capsys) -> None:
     """Review finding: a loop calling ``tick --json`` could not see failures in the status."""
-    from lookout_forecast import lambda_handler
+    from snow_globe_forecast import lambda_handler
 
     cap = "error: BandwidthCapError: run 2026111907: planned 0.0 MB exceeds the cap"
     rows = {
@@ -397,7 +397,7 @@ def test_tick_exits_non_zero_when_a_run_fails(monkeypatch, capsys) -> None:
         ],
     }
     want = {"ok": 0, "earlier failure": 0, "cap": cli.EXIT_CAP, "other": cli.EXIT_ERROR}
-    monkeypatch.setenv("LOOKOUT_FORECAST_MAX_MB", "40")
+    monkeypatch.setenv("SNOW_GLOBE_FORECAST_MAX_MB", "40")
     for name, runs in rows.items():
         summary = {"now_utc": "2026-11-19T09:40:00Z", "extracted": 0, "runs": runs, "transfer": {}}
         monkeypatch.setattr(lambda_handler, "handler", lambda event, context, s=summary: s)
@@ -408,15 +408,15 @@ def test_tick_exits_non_zero_when_a_run_fails(monkeypatch, capsys) -> None:
 def test_tick_end_to_end_with_the_environment_profile(
     fake, small_grid, data_root, manifests, monkeypatch, capsys
 ) -> None:
-    from lookout_forecast import lambda_handler
+    from snow_globe_forecast import lambda_handler
 
     fake.add_run(R07, fields=FIELDS, hours=range(19))
     for name, value in {
-        "LOOKOUT_FORECAST_FIELDS": "VIS,TERRAIN",
-        "LOOKOUT_FORECAST_MAX_FH": "1",
-        "LOOKOUT_FORECAST_MAX_MB": "50",
-        "LOOKOUT_FORECAST_LOOKBACK_H": "3",
-        "LOOKOUT_FORECAST_MAX_RUNS": "1",
+        "SNOW_GLOBE_FORECAST_FIELDS": "VIS,TERRAIN",
+        "SNOW_GLOBE_FORECAST_MAX_FH": "1",
+        "SNOW_GLOBE_FORECAST_MAX_MB": "50",
+        "SNOW_GLOBE_FORECAST_LOOKBACK_H": "3",
+        "SNOW_GLOBE_FORECAST_MAX_RUNS": "1",
     }.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(

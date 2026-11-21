@@ -1,4 +1,8 @@
-# @lookout/renderer — Tier 1 renderer v0
+# @snow-globe/renderer — Tier 1 renderer v0
+
+Renamed from `@lookout/renderer` on 21 Nov 2026 (D-080); package 0.2.0. The rename changed no pixel, so
+`RENDERER_VERSION` (below) and the goldens are unchanged, and the seed domain stays `lookout-seed-v1`:
+changing it would change every render.
 
 WebGL2 (GLSL ES 3.00, highp) renderer for PRD §9.2, with a float64 CPU reference of the cloud-mask
 logic and a headless runner on Playwright Chromium + SwiftShader. Version **0.2.0**, stage **v0**: it serves
@@ -14,7 +18,7 @@ pnpm render --scene s.json --plate p.jpg [--sky-mask m.png] [--depth d.png] --ou
 pnpm bench              # per-frame times, SwiftShader and (if available) Chromium's GPU path
 pnpm montecarlo [--case above|deck|thin|cirrus]   # PRD §9.5 coverage Monte Carlo table (M1.5 gate evidence)
 pnpm goldens:update     # regenerate the synthetic plate and the three goldens (review before committing)
-pnpm build              # dist/lookout-renderer.js (ESM) and .iife.js
+pnpm build              # dist/snow-globe-renderer.js (ESM) and .iife.js
 ```
 
 `pnpm render` writes `out.png` and `out.json` (renderer version, GL renderer string, scene hash, input
@@ -22,7 +26,8 @@ and output SHA-256, render, readback and encode ms). Relative paths resolve agai
 run from. It refuses:
 
 - an `--out` or `--meta` path inside the repository (symlinks resolved): renders belong under
-  `$LOOKOUT_DATA_DIR` (default `~/lookout-data`), per CLAUDE.md;
+  the data dir (`$SNOW_GLOBE_DATA_DIR`, else `$LOOKOUT_DATA_DIR`, else `~/snow-globe-data` or, until it
+  is moved, `~/lookout-data`), per CLAUDE.md;
 - a plate, sky mask or depth file whose SHA-256 is not the one `scene.plate` names.
 
 The only images in the repo are the **synthetic** plate and goldens in `goldens/` (procedural, no camera
@@ -70,7 +75,7 @@ reject duplicate layer names. Eval validates with Python `jsonschema` (Draft 202
   are true.
   - The plate is therefore in `scene_hash`, which feeds PRD §10.3 paint gating and the cache keys.
   - `pnpm render` checks the hashes against the files.
-  - `LookoutRenderer.render()` checks the hashes a caller attests (`inputs.plateSha256` etc.). Decoded
+  - `SnowGlobeRenderer.render()` checks the hashes a caller attests (`inputs.plateSha256` etc.). Decoded
     pixels carry no file hash, so a browser caller that attests nothing is not checked.
 - **Sun:** still supplied by the caller (geometric altitude, azimuth clockwise from north).
   - `validateScene()` rejects a Sun more than **1°** from the NOAA/Meeus solar position for the valid time
@@ -205,7 +210,7 @@ Results:
 ## Coverage Monte Carlo (PRD §9.5, the M1.5 gate)
 
 `src/cpu/montecarlo.ts`, `pnpm montecarlo --case above|deck|thin|cirrus`. Tables from 2026-11-19 are in
-`$LOOKOUT_DATA_DIR/cache/renderer/montecarlo/`.
+`$SNOW_GLOBE_DATA_DIR/cache/renderer/montecarlo/`.
 
 Each case uses 1,000 seeds × cover 0.1–0.9 × 6 elevation bands × 72 rays per band. Every ray crosses one
 slab twice:
@@ -262,7 +267,7 @@ slabs, fog and Sun shadows.
 
 The machine is fanless, and repeated runs vary a lot: the clear scene, which this change does not touch,
 measured SwiftShader 720p p50 70.3 ms and then 49.6 ms three minutes later. Raw JSON is in
-`$LOOKOUT_DATA_DIR/cache/renderer/bench-2026-11-19T11-*.json`.
+`$SNOW_GLOBE_DATA_DIR/cache/renderer/bench-2026-11-19T11-*.json`.
 
 **SwiftShader** is a CPU rasteriser and **not representative of WKWebView**:
 

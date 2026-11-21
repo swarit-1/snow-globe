@@ -1,6 +1,7 @@
 # M1 owner runbook: what you do in M1, in order
 
-**Updated:** 2026-11-20, about 17:30 UTC.
+**Updated:** 2026-11-21, about 01:20 UTC, for the rename to Snow Globe (D-080). Otherwise as of
+2026-11-20, about 17:30 UTC.
 
 This is everything M1 (Voice to first pixel, Mon 23 Nov → Mon 7 Dec 2026) needs from you, the
 owner, in the order it is needed. Each step says what to run and what to send back. Details live
@@ -20,6 +21,20 @@ in the documents it links to; this page only sequences them.
   code; each says what it waits for.
 - If M0.5 or M1 runs late, the plan puts the freeze-critical work first (PLAN.md, Calendar).
   The speech and harness steps may then wait; the lead will tell you.
+
+**Since 21 Nov: the new names** (D-080). The product is Snow Globe, and this page uses its new
+names. The speech tool is `snow-globe-transcribe`, signed as `dev.snowglobe.transcribe`, and the
+data folder is `~/snow-globe-data`. The commands below reach it as `~/lookout-data`, the symlink the
+switch leaves, so they are right after the switch and never create a second data folder if run
+early by mistake (D-080).
+- **Start the steps below only after the lead's switch.** It comes right after the M0.5 gate
+  closes, at the earliest close the latest `make data-report` gives (it said 23:12 UTC on Sun
+  22 Nov when read at 01:50 UTC on 21 Nov, and every new outage moves it later; PLAN.md, M0.5). The switch moves the data
+  folder to `~/snow-globe-data`, and the lead then rebuilds the speech tool and the spike under
+  the new names. Before the switch, the new builds these steps need do not exist yet.
+- The 20 Nov builds above carry the old names (`lookout-transcribe`, `dev.lookout.transcribe`).
+  Don't use them for step 3: permissions and model reservations may follow the identifier
+  (D-055).
 
 **Ground rules for every step:**
 - Nothing here records audio except step 4, and only while you hold the hotkey.
@@ -54,7 +69,7 @@ Settings** (the Apple menu > System Settings…).
 | Permission | Exact path | For | When |
 |---|---|---|---|
 | Microphone | System Settings > Privacy & Security > Microphone | spike check 5; the app; the recording tool; the harness | step 2, when macOS first asks |
-| Speech Recognition | System Settings > Privacy & Security > Speech Recognition | probably not needed by the on-device transcriber: the library only reads this setting and never asks (D-055); the app | step 3, only if `lookout-transcribe status` reports code 2 |
+| Speech Recognition | System Settings > Privacy & Security > Speech Recognition | probably not needed by the on-device transcriber: the library only reads this setting and never asks (D-055); the app | step 3, only if `snow-globe-transcribe status` reports code 2 |
 | Screen Recording | System Settings > Privacy & Security > Screen & System Audio Recording | spike checks 8, 10 and 11; the harness only | step 2 |
 | Input Monitoring | System Settings > Privacy & Security > Input Monitoring | spike check 9 with `--tap` and check 1 with `--key-state`; the harness only | step 2, only if you run those options |
 | Accessibility | System Settings > Privacy & Security > Accessibility | spike check 9 (`CGEventPost`); the harness's key injection | step 2 |
@@ -96,8 +111,8 @@ fixed before any run (D-033). In order:
    ```sh
    cargo build --release --offline --locked -p m1-spike-app --features speech
    ```
-   It links library 0.2.0 from `~/lookout-data/cache/speech-macos`. Step 3.4 checks the binary
-   before checks 6 and 7.
+   It links the renamed library from `~/lookout-data/cache/speech-macos`. Step 3.4 checks the
+   binary before checks 6 and 7.
 2. **Checks 1–4, no permission:**
    - 1, hotkey press and release, modifier-first included;
    - 2, a panel over another app that keeps focus;
@@ -115,8 +130,7 @@ fixed before any run (D-033). In order:
      harness would use.
    - A prompt on a repeat run is the PRD §18.1 risk: stop and report.
 7. **Checks 6 and 7, Swift partials and network silence:** step 3, after check 5. It starts with
-   the speech library's model check, and runs on the 0.2.0 speech build of the spike from
-   step 2.1.
+   the speech library's model check, and runs on the speech build of the spike from step 2.1.
    - **Don't run the Build block again after that rebuild.** Its `cargo build --release
      --workspace` rebuilds `m1-spike` without the speech feature, and checks 6 and 7 then record
      `skipped`. Step 3.4 checks the binary, and says how to rebuild it if needed.
@@ -126,7 +140,7 @@ run file before going on.
 
 **Report back, for every run:**
 - the output of `m1-report list`, and `m1-report show <run-id>` for each run;
-- the run files themselves, `~/lookout-data/spikes/m1/<run-id>.jsonl`. They hold no audio, no
+- the run files themselves, `~/snow-globe-data/spikes/m1/<run-id>.jsonl`. They hold no audio, no
   transcripts, no frames and no names; the spike README lists exactly what they hold;
 - three observations the checks can't make for you:
   - check 1: does a modifier-first release fire when the modifier goes up, or when Space does?
@@ -138,14 +152,14 @@ DECISIONS.md").
 
 ## 3. The speech library's first real run, then spike checks 6 and 7 (Mon 23 Nov)
 
-The library is ready (0.2.0, D-055), and step 2.1 rebuilt the spike against it, as the lead did
-at 12:36 UTC on 20 Nov (D-074). Run this in the spike terminal of step 1, after check 5, so
-Microphone is already granted. The details are in [app/speech-macos/README.md](../../app/speech-macos/README.md), "What
+The library is ready (D-055, renamed in D-080), and step 2.1 rebuilt the spike against it, as
+the lead did at 12:36 UTC on 20 Nov (D-074). Run this in the spike terminal of step 1, after
+check 5, so Microphone is already granted. The details are in [app/speech-macos/README.md](../../app/speech-macos/README.md), "What
 needs the owner", and in the spike README, checks 6 and 7.
 
 1. **Check the on-device model.** No permission is needed, and nothing is downloaded or recorded:
    ```sh
-   T=~/lookout-data/cache/speech-macos/release/lookout-transcribe
+   T=~/lookout-data/cache/speech-macos/release/snow-globe-transcribe
    $T status --locale en-US
    ```
    - It prints the library's status code (0 ready, 1 model not installed, 2 Speech Recognition
@@ -170,15 +184,15 @@ needs the owner", and in the spike README, checks 6 and 7.
    appears during `status`, `install-assets` or check 6.
    - If `status` reports code 2, the setting is denied or restricted, and the library honours
      that. Switch it on for the terminal in that pane, and say so in your report.
-4. **Check that the spike is a 0.2.0 speech build.** `m1-spike` in the spike README's `$BIN`
-   (`~/lookout-data/cache/cargo-target/release`) should be step 2.1's build with
-   `--features speech` against library 0.2.0 (the lead's own build of 12:36 UTC was
-   12,991,256 bytes, D-074). This needs no permission:
+4. **Check that the spike is a speech build of the renamed library.** `m1-spike` in the spike
+   README's `$BIN` (`~/lookout-data/cache/cargo-target/release`) should be step 2.1's build
+   with `--features speech`. The lead's build of 12:36 UTC on 20 Nov, under the old names, was
+   12,991,256 bytes (D-074). This needs no permission:
    ```sh
-   strings -a ~/lookout-data/cache/cargo-target/release/m1-spike | grep 'lookout-speech 0.2.0'
+   strings -a ~/lookout-data/cache/cargo-target/release/m1-spike | grep 'snow-globe-speech 0.3.0'
    ```
-   - It should print one line: `lookout-speech 0.2.0 (SpeechAnalyzer + DictationTranscriber, on
-     device only; macOS SDK 260200)`.
+   - It should print one line: `snow-globe-speech 0.3.0 (SpeechAnalyzer + DictationTranscriber,
+     on device only; macOS SDK 260200)`.
    - If it prints nothing, the spike was rebuilt without the speech feature, for example by the
      Build block after step 2.1. Rebuild it as in step 2.1, then check again:
      ```sh
@@ -216,10 +230,10 @@ Waits for the recording tool (`TODO(M1)`, M1-09). Everything about reading the s
      beside each line ("1:30" is "one thirty").
    - A quiet room, the built-in microphone, and nobody else's voice.
    - Hold the hotkey, read, release, as you would for real.
-   - Recordings go to `~/lookout-data/fixtures/voice/scripted/<script-hash>/`, never into the
+   - Recordings go to `~/snow-globe-data/fixtures/voice/scripted/<script-hash>/`, never into the
      repo or iCloud.
 2. **Consent:** the tool asks you twice, and records each answer in
-   `~/lookout-data/fixtures/voice/consent.jsonl`:
+   `~/snow-globe-data/fixtures/voice/consent.jsonl`:
    - whether the set may be replayed through on-device engines;
    - separately, whether it may be streamed to Deepgram in the bake-off (step 5). Answer that
      one only after you have approved Deepgram's first call.
@@ -343,8 +357,8 @@ Send no audio; the traces hold timings only (PRD §10.5).
 | When | What | Waits for |
 |---|---|---|
 | now | AC power; no macOS upgrade; some free disk | — |
-| Mon 23 Nov | Spike checks 1–5 and 8–11 (one day; check 11 runs over several days), and their permissions | nothing |
-| Mon 23 Nov, after check 5 | The speech library's first real run (`lookout-transcribe status`, and `install-assets` only if it reports code 1), then spike checks 6 and 7 (step 3) | nothing: library 0.2.0 is ready, and step 2.1 rebuilds the spike with it (D-074) |
+| Mon 23 Nov | Spike checks 1–5 and 8–11 (one day; check 11 runs over several days), and their permissions | the lead's switch after the M0.5 gate (D-080) |
+| Mon 23 Nov, after check 5 | The speech library's first real run (`snow-globe-transcribe status`, and `install-assets` only if it reports code 1), then spike checks 6 and 7 (step 3) | the lead's switch and its rebuild under the new names (D-080); step 2.1 then rebuilds the spike with the library (D-074) |
 | when the recording tool lands | The 130 scripted recordings (about 20 min) and the consent answers; then ≥ 30 real-use ones | M1-09 |
 | when you're ready | The Deepgram account and key; then a yes or no to the first call | your decision |
 | after the recordings | About 8 nights of idle runs under `caffeinate -i` (never `-d`, D-068), from a frozen build (M1-12) | M1-09, M1-10 |

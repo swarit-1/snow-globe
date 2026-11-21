@@ -1,0 +1,121 @@
+{
+  "viewpoint_id": "rainier.paradise-mountain",
+  "schema": 1,
+  "created_at": "2026-11-19T10:56:26Z",
+  "seeded": {
+    "at": "2026-11-19T10:56:26Z",
+    "sidecars_read": 16,
+    "latest_key": "frames/rainier.paradise-mountain/2026-11-19/20261119T095614Z_55c668fe762f.jpg",
+    "gets_last_hour": 1
+  },
+  "last_poll_at": "2026-11-21T01:45:05.574Z",
+  "polls": 309,
+  "json_etag": null,
+  "json_last_modified": null,
+  "imagedate_raw": null,
+  "handled_imagedate_raw": null,
+  "head_etag": "\"d2e2076c8239f4be4859a32961a87f3f\"",
+  "head_last_modified": "Sat, 21 Nov 2026 01:44:16 GMT",
+  "settled_etag": "\"d0a067cb70b55ac879054b61dcf7c5ed\"",
+  "settled_last_modified": "Sat, 21 Nov 2026 01:34:14 GMT",
+  "last_image": {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T013404Z_e11461ad766f.jpg",
+    "frame_key": "frames/rainier.paradise-mountain/2026-11-21/20261121T013404Z_e11461ad766f.jpg",
+    "thumb_key": "thumbs/rainier.paradise-mountain/2026-11-21/20261121T013404Z_e11461ad766f.jpg",
+    "frame_policy": "every",
+    "sha256": "e11461ad766fbb90674234e3907045683cc6f43bdb19b713acdce0c8f2e2e613",
+    "etag": "\"d0a067cb70b55ac879054b61dcf7c5ed\"",
+    "last_modified": "Sat, 21 Nov 2026 01:34:14 GMT",
+    "content_length": 391960,
+    "width": 1920,
+    "height": 1080,
+    "image_time_utc": "2026-11-21T01:34:04.982000Z",
+    "fetched_at_utc": "2026-11-21T01:34:49.192Z",
+    "json_imagedate_raw": null,
+    "dhash64": "4f8f878783c78703",
+    "capture_version": "lookout-capture/0.2.1"
+  },
+  "gets": [
+    {
+      "t": "2026-11-20T23:55:37.144Z",
+      "status": "ok",
+      "source": "self",
+      "reserved_at": "2026-11-20T23:55:36.140Z",
+      "answered_at": "2026-11-20T23:55:37.527Z"
+    },
+    {
+      "t": "2026-11-21T00:10:57.159Z",
+      "status": "ok",
+      "source": "self",
+      "reserved_at": "2026-11-21T00:10:56.155Z",
+      "answered_at": "2026-11-21T00:10:57.398Z"
+    },
+    {
+      "t": "2026-11-21T00:26:31.241Z",
+      "status": "ok",
+      "source": "self",
+      "reserved_at": "2026-11-21T00:26:30.237Z",
+      "answered_at": "2026-11-21T00:26:31.519Z"
+    },
+    {
+      "t": "2026-11-21T00:42:01.426Z",
+      "status": "ok",
+      "source": "self",
+      "reserved_at": "2026-11-21T00:42:00.421Z",
+      "answered_at": "2026-11-21T00:42:01.618Z"
+    },
+    {
+      "t": "2026-11-21T00:57:20.684Z",
+      "status": "ok",
+      "source": "self",
+      "reserved_at": "2026-11-21T00:57:19.680Z",
+      "answered_at": "2026-11-21T00:57:20.906Z"
+    },
+    {
+      "t": "2026-11-21T01:13:18.944Z",
+      "status": "ok",
+      "source": "self",
+      "reserved_at": "2026-11-21T01:13:17.941Z",
+      "answered_at": "2026-11-21T01:13:19.110Z"
+    },
+    {
+      "t": "2026-11-21T01:34:48.980Z",
+      "status": "ok",
+      "source": "self",
+      "reserved_at": "2026-11-21T01:34:47.976Z",
+      "answered_at": "2026-11-21T01:34:49.193Z"
+    }
+  ],
+  "recent_shas": {
+    "72ef57d6f20a0adf0a87bb25844f8c2d025e94f1af8ae83a3313fb4f2880e6b0": "frames/rainier.paradise-mountain/2026-11-21/20261121T005701Z_72ef57d6f20a.jpg",
+    "c983e337d182052a3b543f346fd94ceeb69981751443d4a32e5ecd689dc2c708": "frames/rainier.paradise-mountain/2026-11-21/20261121T011304Z_c983e337d182.jpg",
+    "e11461ad766fbb90674234e3907045683cc6f43bdb19b713acdce0c8f2e2e613": "frames/rainier.paradise-mountain/2026-11-21/20261121T013404Z_e11461ad766f.jpg"
+  },
+  "known_sidecars": [
+    "thumbs/rainier.paradise-mountain/2026-11-21/20261121T011304Z_c983e337d182.json",
+    "frames/rainier.paradise-mountain/2026-11-21/20261121T013404Z_e11461ad766f.json",
+    "thumbs/rainier.paradise-mountain/2026-11-21/20261121T013404Z_e11461ad766f.json"
+  ],
+  "failures": 0,
+  "image_failures": 0,
+  "store_failures": 0,
+  "not_before": null,
+  "last_error": {
+    "t": "2026-11-20T05:42:30Z",
+    "stage": "image",
+    "status": null,
+    "error": "ReadTimeout: The read operation timed out"
+  },
+  "counters": {
+    "stored": 105,
+    "rate_capped": 203,
+    "error": 1
+  },
+  "staged": [],
+  "staging_scan_at": null,
+  "last_promotion": null,
+  "thumbs_pending": [],
+  "last_answer_at": "2026-11-21T01:45:05.611Z",
+  "last_answer_bound": null,
+  "poll_reserved_at": null
+}

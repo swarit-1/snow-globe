@@ -14,37 +14,37 @@ mock_provider "aws" {
   override_resource {
     target          = aws_ecr_repository.lambda
     override_during = plan
-    values          = { repository_url = "123456789012.dkr.ecr.us-east-1.amazonaws.com/lookout/lambda" }
+    values          = { repository_url = "123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-globe/lambda" }
   }
   override_resource {
     target          = aws_sns_topic.alarms
     override_during = plan
-    values          = { arn = "arn:aws:sns:us-east-1:123456789012:lookout-alarms" }
+    values          = { arn = "arn:aws:sns:us-east-1:123456789012:snow-globe-alarms" }
   }
   override_resource {
     target          = aws_iam_role.job["capture"]
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-capture-lambda", id = "lookout-capture-lambda" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-capture-lambda", id = "snow-globe-capture-lambda" }
   }
   override_resource {
     target          = aws_iam_role.job["forecast"]
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-forecast-lambda", id = "lookout-forecast-lambda" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-forecast-lambda", id = "snow-globe-forecast-lambda" }
   }
   override_resource {
     target          = aws_iam_role.scheduler
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-scheduler", id = "lookout-scheduler" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-scheduler", id = "snow-globe-scheduler" }
   }
   override_resource {
     target          = aws_iam_role.budget_action
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-budget-action", id = "lookout-budget-action" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-budget-action", id = "snow-globe-budget-action" }
   }
   override_resource {
     target          = aws_iam_policy.budget_hard_stop
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:policy/lookout-budget-hard-stop" }
+    values          = { arn = "arn:aws:iam::123456789012:policy/snow-globe-budget-hard-stop" }
   }
 }
 
@@ -55,8 +55,8 @@ variables {
   alarm_email                     = "alerts@example.com"
   image_tag                       = "0123456789ab"
   region                          = "us-east-1"
-  project                         = "lookout"
-  user_agent                      = "Lookout/0.1 (webcam research capture; fetch-on-change)"
+  project                         = "snow-globe"
+  user_agent                      = "SnowGlobe/0.1 (webcam research capture; fetch-on-change)"
   capture_schedule_expression     = "rate(5 minutes)"
   forecast_schedule_expression    = "rate(5 minutes)"
   capture_schedule_enabled        = true
@@ -83,7 +83,7 @@ run "alarm_email_is_subscribed" {
     error_message = "only CloudWatch may publish to the alarm topic"
   }
   assert {
-    condition     = jsondecode(aws_sns_topic_policy.alarms.policy).Statement[0].Condition.ArnLike["aws:SourceArn"] == "arn:aws:cloudwatch:us-east-1:123456789012:alarm:lookout-*"
+    condition     = jsondecode(aws_sns_topic_policy.alarms.policy).Statement[0].Condition.ArnLike["aws:SourceArn"] == "arn:aws:cloudwatch:us-east-1:123456789012:alarm:snow-globe-*"
     error_message = "only this project's alarms may publish (confused-deputy guard)"
   }
   assert {
@@ -92,7 +92,7 @@ run "alarm_email_is_subscribed" {
   }
   # Every alarm name must match the topic policy's alarm:<project>-* pattern, or its emails would be refused.
   assert {
-    condition     = alltrue([for a in concat(values(aws_cloudwatch_metric_alarm.job_errors), values(aws_cloudwatch_metric_alarm.job_not_running)) : startswith(a.alarm_name, "lookout-")])
+    condition     = alltrue([for a in concat(values(aws_cloudwatch_metric_alarm.job_errors), values(aws_cloudwatch_metric_alarm.job_not_running)) : startswith(a.alarm_name, "snow-globe-")])
     error_message = "alarm names must start with the project prefix"
   }
 }
@@ -116,7 +116,7 @@ run "error_alarms_match_spec" {
   command = plan
 
   assert {
-    condition     = alltrue([for name, a in aws_cloudwatch_metric_alarm.job_errors : a.namespace == "AWS/Lambda" && a.metric_name == "Errors" && a.dimensions["FunctionName"] == "lookout-${name}"])
+    condition     = alltrue([for name, a in aws_cloudwatch_metric_alarm.job_errors : a.namespace == "AWS/Lambda" && a.metric_name == "Errors" && a.dimensions["FunctionName"] == "snow-globe-${name}"])
     error_message = "one Errors alarm per function"
   }
   assert {
@@ -128,7 +128,7 @@ run "error_alarms_match_spec" {
     error_message = "errors in 2 of the last 3 fifteen-minute windows"
   }
   assert {
-    condition     = alltrue([for a in concat(values(aws_cloudwatch_metric_alarm.job_errors), values(aws_cloudwatch_metric_alarm.job_not_running)) : a.alarm_actions == toset(["arn:aws:sns:us-east-1:123456789012:lookout-alarms"]) && a.ok_actions == toset(["arn:aws:sns:us-east-1:123456789012:lookout-alarms"])])
+    condition     = alltrue([for a in concat(values(aws_cloudwatch_metric_alarm.job_errors), values(aws_cloudwatch_metric_alarm.job_not_running)) : a.alarm_actions == toset(["arn:aws:sns:us-east-1:123456789012:snow-globe-alarms"]) && a.ok_actions == toset(["arn:aws:sns:us-east-1:123456789012:snow-globe-alarms"])])
     error_message = "every alarm notifies the alarm topic, on alarm and on recovery"
   }
 }
@@ -137,7 +137,7 @@ run "missing_invocation_alarms_match_spec" {
   command = plan
 
   assert {
-    condition     = alltrue([for name, a in aws_cloudwatch_metric_alarm.job_not_running : a.metric_name == "Invocations" && a.dimensions["FunctionName"] == "lookout-${name}"])
+    condition     = alltrue([for name, a in aws_cloudwatch_metric_alarm.job_not_running : a.metric_name == "Invocations" && a.dimensions["FunctionName"] == "snow-globe-${name}"])
     error_message = "one Invocations alarm per function"
   }
   assert {
@@ -222,7 +222,7 @@ run "hard_stop_matches_spec" {
   }
   assert {
     condition = (
-      aws_budgets_budget_action.hard_stop[0].budget_name == "lookout-monthly" &&
+      aws_budgets_budget_action.hard_stop[0].budget_name == "snow-globe-monthly" &&
       aws_budgets_budget_action.hard_stop[0].action_type == "APPLY_IAM_POLICY" &&
       aws_budgets_budget_action.hard_stop[0].approval_model == "AUTOMATIC" &&
       aws_budgets_budget_action.hard_stop[0].notification_type == "ACTUAL"
@@ -235,15 +235,15 @@ run "hard_stop_matches_spec" {
   }
   assert {
     condition = (
-      aws_budgets_budget_action.hard_stop[0].definition[0].iam_action_definition[0].policy_arn == "arn:aws:iam::123456789012:policy/lookout-budget-hard-stop" &&
-      aws_budgets_budget_action.hard_stop[0].definition[0].iam_action_definition[0].roles == toset(["lookout-scheduler"]) &&
+      aws_budgets_budget_action.hard_stop[0].definition[0].iam_action_definition[0].policy_arn == "arn:aws:iam::123456789012:policy/snow-globe-budget-hard-stop" &&
+      aws_budgets_budget_action.hard_stop[0].definition[0].iam_action_definition[0].roles == toset(["snow-globe-scheduler"]) &&
       length(coalesce(aws_budgets_budget_action.hard_stop[0].definition[0].iam_action_definition[0].users, [])) == 0 &&
       length(coalesce(aws_budgets_budget_action.hard_stop[0].definition[0].iam_action_definition[0].groups, [])) == 0
     )
     error_message = "the stop attaches the hard-stop policy to the scheduler role only"
   }
   assert {
-    condition     = aws_budgets_budget_action.hard_stop[0].execution_role_arn == "arn:aws:iam::123456789012:role/lookout-budget-action"
+    condition     = aws_budgets_budget_action.hard_stop[0].execution_role_arn == "arn:aws:iam::123456789012:role/snow-globe-budget-action"
     error_message = "AWS Budgets runs the action as the budget-action role"
   }
   assert {
@@ -280,13 +280,13 @@ run "budget_action_role_is_least_privilege" {
     condition = (
       length(jsondecode(aws_iam_role_policy.budget_action[0].policy).Statement) == 1 &&
       toset(jsondecode(aws_iam_role_policy.budget_action[0].policy).Statement[0].Action) == toset(["iam:AttachRolePolicy", "iam:DetachRolePolicy"]) &&
-      jsondecode(aws_iam_role_policy.budget_action[0].policy).Statement[0].Resource == "arn:aws:iam::123456789012:role/lookout-scheduler" &&
-      jsondecode(aws_iam_role_policy.budget_action[0].policy).Statement[0].Condition.ArnEquals["iam:PolicyARN"] == "arn:aws:iam::123456789012:policy/lookout-budget-hard-stop"
+      jsondecode(aws_iam_role_policy.budget_action[0].policy).Statement[0].Resource == "arn:aws:iam::123456789012:role/snow-globe-scheduler" &&
+      jsondecode(aws_iam_role_policy.budget_action[0].policy).Statement[0].Condition.ArnEquals["iam:PolicyARN"] == "arn:aws:iam::123456789012:policy/snow-globe-budget-hard-stop"
     )
     error_message = "the action role may only attach or detach the hard-stop policy on the scheduler role"
   }
   assert {
-    condition     = aws_iam_role_policy.budget_action[0].role == "lookout-budget-action"
+    condition     = aws_iam_role_policy.budget_action[0].role == "snow-globe-budget-action"
     error_message = "the attach permission belongs to the budget-action role"
   }
 }
@@ -333,8 +333,8 @@ run "budget_can_be_scoped_to_the_project_tag" {
     error_message = "tag-scoped budget uses a TagKeyValue filter"
   }
   assert {
-    condition     = one([for f in aws_budgets_budget.monthly.cost_filter : f.values]) == tolist(["user:project$lookout"])
-    error_message = "tag filter value must be user:project$lookout"
+    condition     = one([for f in aws_budgets_budget.monthly.cost_filter : f.values]) == tolist(["user:project$snow-globe"])
+    error_message = "tag filter value must be user:project$snow-globe"
   }
 }
 

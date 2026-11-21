@@ -7,9 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import pytest
-from lookout_common.http import DEFAULT_USER_AGENT
+from snow_globe_common.http import DEFAULT_USER_AGENT
 
-from lookout_forecast.bucket import (
+from snow_globe_forecast.bucket import (
     BucketError,
     HrrrBucket,
     ObjectNotFoundError,

@@ -13,12 +13,12 @@ use tauri_nspanel::{CollectionBehavior, PanelBuilder, PanelHandle, PanelLevel, S
 
 pub const PANEL_LABEL: &str = "spike-panel";
 /// The title `m1-sck` looks for.
-pub const PANEL_TITLE: &str = "Lookout M1 spike panel";
+pub const PANEL_TITLE: &str = "Snow Globe M1 spike panel";
 pub const PANEL_W: f64 = 480.0;
 pub const PANEL_H: f64 = 300.0;
 
 tauri_nspanel::tauri_panel! {
-    panel!(LookoutSpikePanel {
+    panel!(SnowGlobeSpikePanel {
         config: {
             can_become_key_window: true,
             is_floating_panel: true
@@ -58,7 +58,7 @@ pub fn build(
     x: f64,
     y: f64,
 ) -> tauri::Result<PanelHandle<Wry>> {
-    let panel = PanelBuilder::<_, LookoutSpikePanel<Wry>>::new(app, PANEL_LABEL)
+    let panel = PanelBuilder::<_, SnowGlobeSpikePanel<Wry>>::new(app, PANEL_LABEL)
         .url(WebviewUrl::App("index.html".into()))
         .title(PANEL_TITLE)
         .size(Size::Logical(LogicalSize::new(PANEL_W, PANEL_H)))

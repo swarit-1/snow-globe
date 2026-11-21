@@ -13,37 +13,37 @@ mock_provider "aws" {
   override_resource {
     target          = aws_ecr_repository.lambda
     override_during = plan
-    values          = { repository_url = "123456789012.dkr.ecr.us-east-1.amazonaws.com/lookout/lambda" }
+    values          = { repository_url = "123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-globe/lambda" }
   }
   override_resource {
     target          = aws_sns_topic.alarms
     override_during = plan
-    values          = { arn = "arn:aws:sns:us-east-1:123456789012:lookout-alarms" }
+    values          = { arn = "arn:aws:sns:us-east-1:123456789012:snow-globe-alarms" }
   }
   override_resource {
     target          = aws_iam_role.job["capture"]
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-capture-lambda", id = "lookout-capture-lambda" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-capture-lambda", id = "snow-globe-capture-lambda" }
   }
   override_resource {
     target          = aws_iam_role.job["forecast"]
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-forecast-lambda", id = "lookout-forecast-lambda" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-forecast-lambda", id = "snow-globe-forecast-lambda" }
   }
   override_resource {
     target          = aws_iam_role.scheduler
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-scheduler", id = "lookout-scheduler" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-scheduler", id = "snow-globe-scheduler" }
   }
   override_resource {
     target          = aws_iam_role.budget_action
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:role/lookout-budget-action", id = "lookout-budget-action" }
+    values          = { arn = "arn:aws:iam::123456789012:role/snow-globe-budget-action", id = "snow-globe-budget-action" }
   }
   override_resource {
     target          = aws_iam_policy.budget_hard_stop
     override_during = plan
-    values          = { arn = "arn:aws:iam::123456789012:policy/lookout-budget-hard-stop" }
+    values          = { arn = "arn:aws:iam::123456789012:policy/snow-globe-budget-hard-stop" }
   }
 }
 
@@ -54,8 +54,8 @@ variables {
   alarm_email                     = "alerts@example.com"
   image_tag                       = "0123456789ab"
   region                          = "us-east-1"
-  project                         = "lookout"
-  user_agent                      = "Lookout/0.1 (webcam research capture; fetch-on-change)"
+  project                         = "snow-globe"
+  user_agent                      = "SnowGlobe/0.1 (webcam research capture; fetch-on-change)"
   capture_schedule_expression     = "rate(5 minutes)"
   forecast_schedule_expression    = "rate(5 minutes)"
   capture_schedule_enabled        = true
@@ -74,7 +74,7 @@ run "data_bucket_is_private_and_encrypted" {
   command = plan
 
   assert {
-    condition     = aws_s3_bucket.data.bucket == "lookout-data-123456789012"
+    condition     = aws_s3_bucket.data.bucket == "snow-globe-data-123456789012"
     error_message = "data bucket name"
   }
   assert {
@@ -214,7 +214,7 @@ run "ecr_scans_on_push_and_keeps_5_images" {
   command = plan
 
   assert {
-    condition     = aws_ecr_repository.lambda.name == "lookout/lambda"
+    condition     = aws_ecr_repository.lambda.name == "snow-globe/lambda"
     error_message = "ECR repository name"
   }
   assert {
@@ -243,7 +243,7 @@ run "ecr_pull_is_limited_to_this_projects_functions" {
     error_message = "only the Lambda service may pull"
   }
   assert {
-    condition     = jsondecode(aws_ecr_repository_policy.lambda.policy).Statement[0].Condition.StringLike["aws:sourceArn"] == "arn:aws:lambda:us-east-1:123456789012:function:lookout-*"
+    condition     = jsondecode(aws_ecr_repository_policy.lambda.policy).Statement[0].Condition.StringLike["aws:sourceArn"] == "arn:aws:lambda:us-east-1:123456789012:function:snow-globe-*"
     error_message = "pulls must be limited to this project's functions"
   }
 }
@@ -254,8 +254,8 @@ run "default_tags_name_the_project" {
   command = plan
 
   assert {
-    condition     = local.tags.project == "lookout"
-    error_message = "every resource carries project=lookout through the provider's default_tags"
+    condition     = local.tags.project == "snow-globe"
+    error_message = "every resource carries project=snow-globe through the provider's default_tags"
   }
   assert {
     condition     = var.region == "us-east-1"
@@ -267,11 +267,11 @@ run "bucket_name_can_be_overridden" {
   command = plan
 
   variables {
-    data_bucket_name = "my-lookout-bucket"
+    data_bucket_name = "my-snow-globe-bucket"
   }
 
   assert {
-    condition     = aws_s3_bucket.data.bucket == "my-lookout-bucket" && aws_lambda_function.job["capture"].environment[0].variables["LOOKOUT_S3_BUCKET"] == "my-lookout-bucket"
+    condition     = aws_s3_bucket.data.bucket == "my-snow-globe-bucket" && aws_lambda_function.job["capture"].environment[0].variables["SNOW_GLOBE_S3_BUCKET"] == "my-snow-globe-bucket"
     error_message = "an explicit bucket name must reach the bucket and the workers"
   }
 }

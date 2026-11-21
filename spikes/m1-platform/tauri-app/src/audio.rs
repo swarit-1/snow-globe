@@ -173,7 +173,7 @@ impl CaptureStats {
     }
 }
 
-/// How long `lk_speech_push_f32` blocked the audio thread (the ABI allows about 1 ms).
+/// How long `sg_speech_push_f32` blocked the audio thread (the ABI allows about 1 ms).
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct PushSummary {
     pub pushes: u64,

@@ -4,7 +4,7 @@
  *
  * Renders one SceneSpec headless (Chromium + SwiftShader by default) and writes out.png plus out.json
  * (renderer_version, GL renderer string, scene hash, render ms). Relative paths resolve against the
- * directory pnpm was run from. Renders of real camera plates belong under $LOOKOUT_DATA_DIR, not in git.
+ * directory pnpm was run from. Renders of real camera plates belong under $SNOW_GLOBE_DATA_DIR, not in git.
  */
 import { parseArgs, userPath } from '../src/node/args.ts';
 import { renderToFiles } from '../src/node/render-files.ts';

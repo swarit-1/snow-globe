@@ -1,4 +1,4 @@
-"""Tests for ``lookout-eval data-report`` (PRD §16 M0.5; PLAN.md gate 1).
+"""Tests for ``snow-globe-eval data-report`` (PRD §16 M0.5; PLAN.md gate 1).
 
 Every test builds a small synthetic data dir under ``tmp_path``: day logs in the jobs' own
 record shapes, sidecars and forecast files. No real data is read and nothing is fetched.
@@ -16,11 +16,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from lookout_common.timeutil import isoformat_z
+from snow_globe_common.timeutil import isoformat_z
 
-from lookout_eval import cli
-from lookout_eval.data_report import REPORT_KIND, ReportOptions, build_report, format_report
-from lookout_eval.data_report.common import (
+from snow_globe_eval import cli
+from snow_globe_eval.data_report import REPORT_KIND, ReportOptions, build_report, format_report
+from snow_globe_eval.data_report.common import (
     Request,
     Window,
     clip,
@@ -32,7 +32,7 @@ from lookout_eval.data_report.common import (
     provable_spans,
     without_home,
 )
-from lookout_eval.data_report.forecast import KIND_LATE, KIND_NO_RUN
+from snow_globe_eval.data_report.forecast import KIND_LATE, KIND_NO_RUN
 
 T0 = datetime(2026, 11, 19, 12, 24, 23, tzinfo=UTC)
 #: The forecast scan starts 6 h before the window's first hour (forecast.py ``_SCAN_BACK``).
@@ -152,7 +152,7 @@ def lag_record(moment: datetime, run: datetime, fh: int, lag_s: float = 3000.0) 
 
 
 class Data:
-    """A synthetic ``$LOOKOUT_DATA_DIR``."""
+    """A synthetic ``$SNOW_GLOBE_DATA_DIR``."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -309,13 +309,13 @@ def test_close_time_matches_a_sweep() -> None:
 def test_without_home_rewrites_every_string() -> None:
     home = Path("/Users/someone")
     doc = {
-        "data_dir": "/Users/someone/lookout-data",
-        "lock": {"command": "loop --archive-queue /Users/someone/lookout-data/q.json"},
+        "data_dir": "/Users/someone/snow-globe-data",
+        "lock": {"command": "loop --archive-queue /Users/someone/snow-globe-data/q.json"},
         "list": ["/Users/someone", "/Users/someoneelse/x", 3, None],
     }
     assert without_home(doc, home) == {
-        "data_dir": "~/lookout-data",
-        "lock": {"command": "loop --archive-queue ~/lookout-data/q.json"},
+        "data_dir": "~/snow-globe-data",
+        "lock": {"command": "loop --archive-queue ~/snow-globe-data/q.json"},
         "list": ["~", "/Users/someoneelse/x", 3, None],
     }
 
@@ -935,7 +935,7 @@ def test_the_old_loop_s_last_poll_is_before_the_restart(tmp_path: Path) -> None:
 
 def test_a_cli_once_poll_does_not_measure_a_restart(tmp_path: Path) -> None:
     """Review finding (no test pinned it): only the scheduled runners' polls are the
-    continuous record, as everywhere in the report, so a ``lookout-capture once`` poll during
+    continuous record, as everywhere in the report, so a ``snow-globe-capture once`` poll during
     the restart does not shorten its gap (485.0 s from 1500.9 s, not 199.0 s)."""
     data = Data(tmp_path / "d")
     _old_loop_then(
@@ -1135,21 +1135,25 @@ def test_the_home_directory_is_written_as_tilde(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     home = tmp_path / "home"
-    data = Data(home / "lookout-data")
+    data = Data(home / "snow-globe-data")
     data.capture(*passes_every(20, 7200))
-    queue = home / "lookout-data" / "state" / "archive" / "queue.json"
+    queue = home / "snow-globe-data" / "state" / "archive" / "queue.json"
     data.json(
         "state/locks/nps-fetcher.lock",
-        {"pid": 1, "command": f"lookout-capture loop --archive-queue {queue}", "started_at": "x"},
+        {
+            "pid": 1,
+            "command": f"snow-globe-capture loop --archive-queue {queue}",
+            "started_at": "x",
+        },
     )
     monkeypatch.setenv("HOME", str(home))
     rep = report(data)
-    assert rep["data_dir"] == "~/lookout-data"
+    assert rep["data_dir"] == "~/snow-globe-data"
     assert rep["capture"]["current_fetcher_lock"]["command"] == (
-        "lookout-capture loop --archive-queue ~/lookout-data/state/archive/queue.json"
+        "snow-globe-capture loop --archive-queue ~/snow-globe-data/state/archive/queue.json"
     )
     assert str(home) not in json.dumps(rep)
-    assert "data dir: ~/lookout-data" in format_report(rep)
+    assert "data dir: ~/snow-globe-data" in format_report(rep)
 
 
 # --- forecast -----------------------------------------------------------------------------------

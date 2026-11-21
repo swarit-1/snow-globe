@@ -12,14 +12,14 @@ import pytest
 from botocore.exceptions import ClientError
 from moto import mock_aws
 
-from lookout_common import jsonl
-from lookout_common import storage as st
-from lookout_common.paths import UnsafeDataDirError
-from lookout_common.storage import KeyNotFoundError, LocalStorage, LockTimeoutError, S3Storage
+from snow_globe_common import jsonl
+from snow_globe_common import storage as st
+from snow_globe_common.paths import UnsafeDataDirError
+from snow_globe_common.storage import KeyNotFoundError, LocalStorage, LockTimeoutError, S3Storage
 
 from .conftest import REPO_ROOT
 
-BUCKET = "lookout-test-bucket"
+BUCKET = "snow-globe-test-bucket"
 
 
 @pytest.fixture
@@ -38,7 +38,7 @@ def store(request, tmp_path: Path, aws_env) -> Iterator[st.Storage]:
     with mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket=BUCKET)
-        yield S3Storage(BUCKET, "lookout/dev", client=client)
+        yield S3Storage(BUCKET, "snow-globe/dev", client=client)
 
 
 # --- the shared contract ----------------------------------------------------------------
@@ -187,12 +187,12 @@ def test_local_lock_is_exclusive_across_processes(tmp_path: Path):
 
 # --- S3 specifics -------------------------------------------------------------------------
 def test_s3_prefix_is_applied_and_stripped(s3_client):
-    store = S3Storage(BUCKET, "/lookout/dev/", client=s3_client)
-    assert store.prefix == "lookout/dev/"
+    store = S3Storage(BUCKET, "/snow-globe/dev/", client=s3_client)
+    assert store.prefix == "snow-globe/dev/"
     store.put_bytes("frames/a.b/x.jpg", b"x")
     raw = s3_client.list_objects_v2(Bucket=BUCKET)["Contents"]
-    assert [o["Key"] for o in raw] == ["lookout/dev/frames/a.b/x.jpg"]
-    head = s3_client.head_object(Bucket=BUCKET, Key="lookout/dev/frames/a.b/x.jpg")
+    assert [o["Key"] for o in raw] == ["snow-globe/dev/frames/a.b/x.jpg"]
+    head = s3_client.head_object(Bucket=BUCKET, Key="snow-globe/dev/frames/a.b/x.jpg")
     assert head["ContentType"] == "image/jpeg"
     assert store.list_prefix("frames/") == ["frames/a.b/x.jpg"]
     assert S3Storage(BUCKET, "", client=s3_client).prefix == ""
@@ -375,19 +375,19 @@ def test_storage_from_env_local_default(data_root: Path):
 
 
 def test_storage_from_env_s3(monkeypatch: pytest.MonkeyPatch, s3_client):
-    monkeypatch.setenv("LOOKOUT_STORAGE", "s3")
-    with pytest.raises(ValueError, match="LOOKOUT_S3_BUCKET"):
+    monkeypatch.setenv("SNOW_GLOBE_STORAGE", "s3")
+    with pytest.raises(ValueError, match="SNOW_GLOBE_S3_BUCKET"):
         st.storage_from_env()
-    monkeypatch.setenv("LOOKOUT_S3_BUCKET", BUCKET)
-    monkeypatch.setenv("LOOKOUT_S3_PREFIX", "lookout")
+    monkeypatch.setenv("SNOW_GLOBE_S3_BUCKET", BUCKET)
+    monkeypatch.setenv("SNOW_GLOBE_S3_PREFIX", "snow-globe")
     store = st.storage_from_env()
-    assert isinstance(store, S3Storage) and store.prefix == "lookout/"
+    assert isinstance(store, S3Storage) and store.prefix == "snow-globe/"
     store.write_json("state/ping.json", {"ok": True})
     assert store.read_json("state/ping.json") == {"ok": True}
 
 
 def test_storage_from_env_rejects_unknown(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("LOOKOUT_STORAGE", "gcs")
+    monkeypatch.setenv("SNOW_GLOBE_STORAGE", "gcs")
     with pytest.raises(ValueError):
         st.storage_from_env()
 

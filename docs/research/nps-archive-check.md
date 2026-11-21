@@ -1,8 +1,10 @@
 # NPS archive check (M0.5), 19 Nov 2026
 
+> **Rename note, 21 Nov 2026:** the product is now Snow Globe (D-080). This report records a run of 19 Nov, so it keeps that run's names. Its `lookout-capture`, `lookout_capture`, `lookout_common`, `$LOOKOUT_DATA_DIR` and `Lookout/0.1` User-Agent are today's `snow-globe-capture`, `snow_globe_capture`, `snow_globe_common`, `$SNOW_GLOBE_DATA_DIR` and `SnowGlobe/0.1`.
+
 **Question** (PRD §13.2, §13.9): for each NPS air-quality camera, can evaluation use **design H**? Design H pairs archived frames with archived HRRRv4 runs, inside one camera epoch. **Design P** is the sealed prospective window. This report feeds D-018 and D-019.
 
-**Tool:** `lookout-capture archive-check` ([`workers/capture/src/lookout_capture/archive_check.py`](../../workers/capture/src/lookout_capture/archive_check.py)). It ran on 19 Nov 2026 between 08:46 and 10:41 UTC.
+**Tool:** `lookout-capture archive-check` ([`workers/capture/src/snow_globe_capture/archive_check.py`](../../workers/capture/src/snow_globe_capture/archive_check.py) since the rename). It ran on 19 Nov 2026 between 08:46 and 10:41 UTC.
 
 **Data:**
 - The machine-readable result was written to `$LOOKOUT_DATA_DIR/archive/archive_check_2026-11-19.json`. It holds fields derived from frames past the held-out guard (below), so it is now in the quarantine folder (D-022). Its `request_totals_from_runs` misses one interrupted run (see "Budget used").

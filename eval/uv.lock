@@ -291,116 +291,6 @@ wheels = [
 ]
 
 [[package]]
-name = "lookout-common"
-version = "0.1.0"
-source = { editable = "../workers/common" }
-dependencies = [
-    { name = "httpx" },
-    { name = "jsonschema" },
-    { name = "pillow" },
-    { name = "tzdata" },
-]
-
-[package.optional-dependencies]
-s3 = [
-    { name = "boto3" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "boto3", marker = "extra == 's3'", specifier = ">=1.36" },
-    { name = "httpx", specifier = ">=0.28" },
-    { name = "jsonschema", specifier = ">=4.23" },
-    { name = "pillow", specifier = ">=11.0" },
-    { name = "tzdata", specifier = ">=2025.2" },
-]
-provides-extras = ["s3"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "boto3", specifier = ">=1.36" },
-    { name = "moto", extras = ["s3"], specifier = ">=5.1" },
-    { name = "pytest", specifier = ">=8.3" },
-    { name = "ruff", specifier = ">=0.9" },
-]
-
-[[package]]
-name = "lookout-eval"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "jsonschema" },
-    { name = "lookout-common" },
-    { name = "numpy" },
-    { name = "pillow" },
-    { name = "scipy" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "eccodes" },
-    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
-    { name = "hypothesis" },
-    { name = "pytest" },
-    { name = "ruff" },
-]
-forecast = [
-    { name = "lookout-forecast" },
-]
-oculus = [
-    { name = "oculus-core-py" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "jsonschema", specifier = ">=4.23" },
-    { name = "lookout-common", editable = "../workers/common" },
-    { name = "numpy", specifier = ">=2.1" },
-    { name = "pillow", specifier = ">=11.0" },
-    { name = "scipy", specifier = ">=1.14" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "eccodes", specifier = "==2.50.1" },
-    { name = "eccodeslib", marker = "sys_platform != 'win32'", specifier = "==2.50.0.34" },
-    { name = "hypothesis", specifier = ">=6.120" },
-    { name = "pytest", specifier = ">=8.3" },
-    { name = "ruff", specifier = ">=0.9" },
-]
-forecast = [{ name = "lookout-forecast", editable = "../workers/forecast" }]
-oculus = [{ name = "oculus-core-py", git = "https://github.com/swarit-1/oculus?subdirectory=core%2Fbindings%2Fpython&rev=1b5410b01f127514fa37656eff2b7d73be7ea8da" }]
-
-[[package]]
-name = "lookout-forecast"
-version = "0.2.0"
-source = { editable = "../workers/forecast" }
-dependencies = [
-    { name = "eccodes" },
-    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
-    { name = "httpx" },
-    { name = "jsonschema" },
-    { name = "lookout-common", extra = ["s3"] },
-    { name = "numpy" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "eccodes", specifier = ">=2.50" },
-    { name = "eccodeslib", marker = "sys_platform != 'win32'", specifier = ">=2.50" },
-    { name = "httpx", specifier = ">=0.28" },
-    { name = "jsonschema", specifier = ">=4.23" },
-    { name = "lookout-common", extras = ["s3"], editable = "../workers/common" },
-    { name = "numpy", specifier = ">=2.2" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.3" },
-    { name = "ruff", specifier = ">=0.9" },
-]
-
-[[package]]
 name = "numpy"
 version = "2.5.5"
 source = { registry = "https://pypi.org/simple" }
@@ -609,6 +499,116 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "snow-globe-common"
+version = "0.2.0"
+source = { editable = "../workers/common" }
+dependencies = [
+    { name = "httpx" },
+    { name = "jsonschema" },
+    { name = "pillow" },
+    { name = "tzdata" },
+]
+
+[package.optional-dependencies]
+s3 = [
+    { name = "boto3" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "boto3", marker = "extra == 's3'", specifier = ">=1.36" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "pillow", specifier = ">=11.0" },
+    { name = "tzdata", specifier = ">=2025.2" },
+]
+provides-extras = ["s3"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "boto3", specifier = ">=1.36" },
+    { name = "moto", extras = ["s3"], specifier = ">=5.1" },
+    { name = "pytest", specifier = ">=8.3" },
+    { name = "ruff", specifier = ">=0.9" },
+]
+
+[[package]]
+name = "snow-globe-eval"
+version = "0.2.0"
+source = { editable = "." }
+dependencies = [
+    { name = "jsonschema" },
+    { name = "numpy" },
+    { name = "pillow" },
+    { name = "scipy" },
+    { name = "snow-globe-common" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "eccodes" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
+    { name = "hypothesis" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+forecast = [
+    { name = "snow-globe-forecast" },
+]
+oculus = [
+    { name = "oculus-core-py" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "numpy", specifier = ">=2.1" },
+    { name = "pillow", specifier = ">=11.0" },
+    { name = "scipy", specifier = ">=1.14" },
+    { name = "snow-globe-common", editable = "../workers/common" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "eccodes", specifier = "==2.50.1" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'", specifier = "==2.50.0.34" },
+    { name = "hypothesis", specifier = ">=6.120" },
+    { name = "pytest", specifier = ">=8.3" },
+    { name = "ruff", specifier = ">=0.9" },
+]
+forecast = [{ name = "snow-globe-forecast", editable = "../workers/forecast" }]
+oculus = [{ name = "oculus-core-py", git = "https://github.com/swarit-1/oculus?subdirectory=core%2Fbindings%2Fpython&rev=1b5410b01f127514fa37656eff2b7d73be7ea8da" }]
+
+[[package]]
+name = "snow-globe-forecast"
+version = "0.3.0"
+source = { editable = "../workers/forecast" }
+dependencies = [
+    { name = "eccodes" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
+    { name = "httpx" },
+    { name = "jsonschema" },
+    { name = "numpy" },
+    { name = "snow-globe-common", extra = ["s3"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "eccodes", specifier = ">=2.50" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'", specifier = ">=2.50" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "numpy", specifier = ">=2.2" },
+    { name = "snow-globe-common", extras = ["s3"], editable = "../workers/common" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.3" },
+    { name = "ruff", specifier = ">=0.9" },
 ]
 
 [[package]]

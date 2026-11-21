@@ -6,8 +6,8 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from lookout_eval.frames import FrameRecord
-from lookout_eval.leakage import FrameStore, HeldOut, SealedScoring
+from snow_globe_eval.frames import FrameRecord
+from snow_globe_eval.leakage import FrameStore, HeldOut, SealedScoring
 
 VP = "rainier.paradise-mountain"
 START = datetime(2026, 11, 20, 0, 0, tzinfo=UTC)

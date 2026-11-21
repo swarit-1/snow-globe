@@ -1,9 +1,11 @@
-# Lookout CI: PRD §12 asks for CI on every push. Under PRD §11.3, GitHub Actions runs CI only and
+# Snow Globe CI: PRD §12 asks for CI on every push. Under PRD §11.3, GitHub Actions runs CI only and
 # never schedules the workers.
 #
-# NOT RUN YET. This workflow first runs after the owner allows a push to GitHub. Pushing is an
-# owner-only action (CLAUDE.md). Until then it is checked locally with actionlint, and `make test`
-# runs the same suites on the laptop.
+# First pushed on 21 Nov 2026 (23c0543, D-080). Its first run failed only in the infra job's
+# shellcheck, on two "info" notes that the laptop's newer shellcheck does not raise (SC2317 in
+# infra/lambda/smoke.sh's trap-only cleanup, SC2015 in infra/tests/test_scripts.sh); both are fixed
+# in the code, with no repo-wide change of severity. Pushing stays an owner-only action (CLAUDE.md);
+# the workflow is also checked locally with actionlint, and `make test` runs the same suites.
 #
 # Every job runs the `make test-<suite>` target that `make test` runs locally, so CI runs the same
 # commands as the laptop, for every suite in the Makefile's TEST_SUITES except the LAPTOP_ONLY_SUITES
@@ -62,7 +64,7 @@ jobs:
           - suite: forecast
             lock: workers/forecast/uv.lock
           # bench/ (stdlib unittest, check.py --no-parser, ruff) runs on workers/common's Python
-          # and ruff; its parser tests skip without a fresh release build of lookout-parse.
+          # and ruff; its parser tests skip without a fresh release build of snow-globe-parse.
           - suite: bench
             lock: workers/common/uv.lock
     steps:
@@ -163,12 +165,12 @@ jobs:
           terraform_version: 1.16.1
           terraform_wrapper: false
       # infra/test.sh keeps the AWS provider (~760 MB unpacked) in TF_PLUGIN_CACHE_DIR, by default
-      # $HOME/lookout-data/cache/terraform-plugins. With TF_INIT=auto (the default) the job uses
+      # $HOME/snow-globe-data/cache/terraform-plugins. With TF_INIT=auto (the default) the job uses
       # the registry until the lock files also hold the linux_amd64 h1: hash (infra/README.md,
       # "Network"); then this cache lets it run offline like the laptop.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/lookout-data/cache/terraform-plugins
+          path: ~/snow-globe-data/cache/terraform-plugins
           key: terraform-plugins-${{ runner.os }}-${{ hashFiles('infra/terraform/.terraform.lock.hcl', 'infra/terraform/bootstrap/.terraform.lock.hcl') }}
       # make test-infra syncs workers/common and puts its locked ruff first on PATH, so
       # infra/tests/test_cost.sh's ruff step runs with the pinned version here too, not skipped.

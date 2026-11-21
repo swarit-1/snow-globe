@@ -1,9 +1,9 @@
 /**
  * Browser bundle entry (esbuild): the renderer, the scene contract and the CPU reference, with no Node
- * imports. The headless runner loads the IIFE build, which sets globalThis.LookoutRenderer.
+ * imports. The headless runner loads the IIFE build, which sets globalThis.SnowGlobeRenderer.
  */
 export {
-  LookoutRenderer,
+  SnowGlobeRenderer,
   render,
   flipRows,
   checkInputHashes,

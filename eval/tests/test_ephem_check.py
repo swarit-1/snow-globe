@@ -6,14 +6,14 @@ import json
 
 import pytest
 from conftest import needs_oculus, sample
-from lookout_common.manifest import load_manifest
+from snow_globe_common.manifest import load_manifest
 
-from lookout_eval import ephem_check
-from lookout_eval.ephem_check import format_report, run_check, saemundsson_unclipped_deg
-from lookout_eval.ephemeris import EphemerisUnavailableError, NoaaBackend, refraction_deg
+from snow_globe_eval import ephem_check
+from snow_globe_eval.ephem_check import format_report, run_check, saemundsson_unclipped_deg
+from snow_globe_eval.ephemeris import EphemerisUnavailableError, NoaaBackend, refraction_deg
 
 
-def test_unclipped_formula_matches_lookout_refraction_above_minus_one() -> None:
+def test_unclipped_formula_matches_snow_globe_refraction_above_minus_one() -> None:
     for h in (-1.0, 0.0, 3.0, 10.0, 45.0):
         assert saemundsson_unclipped_deg(h) == pytest.approx(refraction_deg(h), abs=1e-12)
     assert saemundsson_unclipped_deg(-6.0) < 0.0  # sign flip below the pole at -5.11 deg

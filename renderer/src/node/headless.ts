@@ -3,7 +3,7 @@
  * frames as the app without a GPU. Confirms through WEBGL_debug_renderer_info that SwiftShader is really
  * active and refuses to run otherwise.
  *
- * The page is served from an intercepted origin (http://lookout.invalid); no request leaves the machine.
+ * The page is served from an intercepted origin (http://snow-globe.invalid); no request leaves the machine.
  * Inputs travel as raw RGBA bytes via route handlers; outputs come back as base64 pixels.
  */
 import { createHash } from 'node:crypto';
@@ -21,7 +21,7 @@ export const SWIFTSHADER_ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '-
 /** Chromium flags for the Mac's GPU through ANGLE's Metal backend (benchmark comparison only). */
 export const GPU_ARGS = ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'];
 
-const ORIGIN = 'http://lookout.invalid';
+const ORIGIN = 'http://snow-globe.invalid';
 
 export interface HeadlessInputs {
   plate: RawImage;
@@ -118,10 +118,10 @@ export class HeadlessRenderer {
           return route.fulfill({
             status: 200,
             contentType: 'text/html',
-            body: '<!doctype html><html><head><meta charset="utf-8"></head><body><canvas id="c" width="1" height="1"></canvas><script src="/lookout-renderer.js"></script></body></html>',
+            body: '<!doctype html><html><head><meta charset="utf-8"></head><body><canvas id="c" width="1" height="1"></canvas><script src="/snow-globe-renderer.js"></script></body></html>',
           });
         }
-        if (url.pathname === '/lookout-renderer.js') return route.fulfill({ status: 200, contentType: 'text/javascript', body: bundle });
+        if (url.pathname === '/snow-globe-renderer.js') return route.fulfill({ status: 200, contentType: 'text/javascript', body: bundle });
         const m = /^\/input\/([0-9a-f]+)$/.exec(url.pathname);
         const body = m ? served.get(m[1]!) : undefined;
         if (body) return route.fulfill({ status: 200, contentType: 'application/octet-stream', body });
@@ -129,9 +129,9 @@ export class HeadlessRenderer {
       });
       await page.goto(`${ORIGIN}/`);
       const glInfo = (await page.evaluate(() => {
-        const g = globalThis as unknown as { LookoutRenderer: { LookoutRenderer: new (c: HTMLCanvasElement) => { glInfo(): unknown } }; __lookout?: unknown };
-        const r = new g.LookoutRenderer.LookoutRenderer(document.getElementById('c') as HTMLCanvasElement);
-        g.__lookout = { renderer: r, cache: new Map() };
+        const g = globalThis as unknown as { SnowGlobeRenderer: { SnowGlobeRenderer: new (c: HTMLCanvasElement) => { glInfo(): unknown } }; __snowGlobe?: unknown };
+        const r = new g.SnowGlobeRenderer.SnowGlobeRenderer(document.getElementById('c') as HTMLCanvasElement);
+        g.__snowGlobe = { renderer: r, cache: new Map() };
         return r.glInfo();
       })) as GlInfo;
       const renderer = String(glInfo.unmaskedRenderer ?? glInfo.renderer);
@@ -173,7 +173,7 @@ export class HeadlessRenderer {
     return this.page.evaluate(async (a) => {
       type Img = { width: number; height: number; data: Uint8Array };
       const g = globalThis as unknown as {
-        __lookout: {
+        __snowGlobe: {
           renderer: {
             render(s: unknown, i: unknown, o: unknown): { setupMs: number; uploadMs: number; submitMs: number; uploaded: string[] };
             finish(): void;
@@ -183,7 +183,7 @@ export class HeadlessRenderer {
           cache: Map<string, Img>;
         };
       };
-      const st = g.__lookout;
+      const st = g.__snowGlobe;
       const get = async (s: { id: string; width: number; height: number } | null): Promise<Img | null> => {
         if (!s) return null;
         const hit = st.cache.get(s.id);
@@ -273,7 +273,7 @@ export class HeadlessRenderer {
   /** Drops the page's input cache and the runner's served inputs. */
   async clearInputs(): Promise<void> {
     this.served.clear();
-    await this.page.evaluate(() => (globalThis as unknown as { __lookout: { cache: Map<string, unknown> } }).__lookout.cache.clear());
+    await this.page.evaluate(() => (globalThis as unknown as { __snowGlobe: { cache: Map<string, unknown> } }).__snowGlobe.cache.clear());
   }
 
   async close(): Promise<void> {

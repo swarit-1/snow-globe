@@ -8,9 +8,9 @@ import itertools
 from datetime import UTC, datetime
 
 import pytest
-from lookout_common.storage import LocalStorage
+from snow_globe_common.storage import LocalStorage
 
-from lookout_capture.state import CameraState, camera_state_key
+from snow_globe_capture.state import CameraState, camera_state_key
 
 from .conftest import FakeClock
 from .test_live import events, image_gets, runner, set_rainier

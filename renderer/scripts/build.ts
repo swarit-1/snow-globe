@@ -1,4 +1,4 @@
-/** pnpm build — esbuild browser bundles: dist/lookout-renderer.js (ESM) and dist/lookout-renderer.iife.js. */
+/** pnpm build — esbuild browser bundles: dist/snow-globe-renderer.js (ESM) and dist/snow-globe-renderer.iife.js. */
 import { mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildDist } from '../src/node/bundle.ts';

@@ -18,7 +18,7 @@ if ! command -v "$DOCKER" >/dev/null 2>&1 || ! "$DOCKER" buildx version >/dev/nu
   exit 0
 fi
 
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/lookout-dockerignore.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/snow-globe-dockerignore.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 CTX="$WORK/repo"
 
@@ -30,17 +30,17 @@ viewpoints/manifests/rainier.paradise-mountain.json
 viewpoints/schema/viewpoint.schema.json
 workers/capture/README.md
 workers/capture/pyproject.toml
-workers/capture/src/lookout_capture/__init__.py
-workers/capture/src/lookout_capture/lambda_handler.py
+workers/capture/src/snow_globe_capture/__init__.py
+workers/capture/src/snow_globe_capture/lambda_handler.py
 workers/capture/uv.lock
 workers/common/README.md
 workers/common/pyproject.toml
-workers/common/src/lookout_common/__init__.py
-workers/common/src/lookout_common/py.typed
-workers/common/src/lookout_common/schema.json
+workers/common/src/snow_globe_common/__init__.py
+workers/common/src/snow_globe_common/py.typed
+workers/common/src/snow_globe_common/schema.json
 workers/common/uv.lock
 workers/forecast/pyproject.toml
-workers/forecast/src/lookout_forecast/lambda_handler.py
+workers/forecast/src/snow_globe_forecast/lambda_handler.py
 workers/forecast/uv.lock
 "
 # Must not.
@@ -61,13 +61,13 @@ workers/other/pyproject.toml
 workers/common/.venv/lib/python3.13/site-packages/x.py
 workers/common/.ruff_cache/CACHEDIR.TAG
 workers/common/.pytest_cache/v/cache/nodeids
-workers/common/src/lookout_common/__pycache__/x.cpython-313.pyc
+workers/common/src/snow_globe_common/__pycache__/x.cpython-313.pyc
 workers/common/tests/test_storage.py
 workers/common/tests/fixtures/sample.json
 workers/forecast/tests/helpers.py
-workers/capture/src/lookout_capture/test_poll.py
-workers/capture/src/lookout_capture/conftest.py
-workers/capture/dist/lookout_capture-0.1.0-py3-none-any.whl
+workers/capture/src/snow_globe_capture/test_poll.py
+workers/capture/src/snow_globe_capture/conftest.py
+workers/capture/dist/snow_globe_capture-0.1.0-py3-none-any.whl
 workers/capture/.env
 workers/capture/.env.local
 workers/capture/frame.jpg

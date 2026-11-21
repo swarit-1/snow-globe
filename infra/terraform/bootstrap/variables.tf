@@ -7,7 +7,7 @@ variable "region" {
 variable "project" {
   description = "Name prefix, and the value of the `project` tag."
   type        = string
-  default     = "lookout"
+  default     = "snow-globe"
 
   validation {
     condition     = can(regex("^[a-z][a-z0-9-]{1,20}$", var.project))
@@ -24,7 +24,7 @@ variable "state_bucket_name" {
 variable "state_key" {
   description = "Object key of the root module's state inside the bucket (written into the backend_hcl output)."
   type        = string
-  default     = "lookout/terraform.tfstate"
+  default     = "snow-globe/terraform.tfstate"
 }
 
 variable "noncurrent_version_days" {

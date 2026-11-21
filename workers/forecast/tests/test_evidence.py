@@ -8,9 +8,9 @@ import httpx
 import numpy as np
 import pytest
 
-from lookout_forecast.availability import LagModel
-from lookout_forecast.bucket import BucketError, HrrrBucket
-from lookout_forecast.evidence import (
+from snow_globe_forecast.availability import LagModel
+from snow_globe_forecast.bucket import BucketError, HrrrBucket
+from snow_globe_forecast.evidence import (
     _by_band,
     cloud_base_pressure_check,
     haversine_km,
@@ -18,8 +18,8 @@ from lookout_forecast.evidence import (
     lag_check,
     lag_survey,
 )
-from lookout_forecast.hrrr import run_prefix
-from lookout_forecast.laglog import SurveyLogger, read_lag_log
+from snow_globe_forecast.hrrr import run_prefix
+from snow_globe_forecast.laglog import SurveyLogger, read_lag_log
 
 from .conftest import FIXTURES
 
@@ -97,7 +97,7 @@ def test_a_logging_survey_keeps_what_it_listed_when_a_listing_fails(fake, storag
     assert logger.report()["not_flushed"] == 0
 
 
-#: Listings recorded by `lookout-forecast lag-check 2024011412 2024011418 --save-listings`
+#: Listings recorded by `snow-globe-forecast lag-check 2024011412 2024011418 --save-listings`
 #: on 2026-11-20 at 03:13 UTC (one ListObjectsV2 answer each, 24,393 bytes, 98 objects).
 ARCHIVED = {
     "hrrr.20240114/conus/hrrr.t12z.wrfsfcf": FIXTURES / "list_20240114_t12z_full.xml",

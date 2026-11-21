@@ -19,7 +19,7 @@ import { windAt } from '../src/math/advection.ts';
 import { deriveSeed, leadSeconds, type SceneSpec } from '../src/scene.ts';
 
 const run = promisify(execFile);
-const dir = mkdtempSync(join(tmpdir(), 'lookout-renderer-test-'));
+const dir = mkdtempSync(join(tmpdir(), 'snow-globe-renderer-test-'));
 const scenePath = goldenScenePath('low-deck');
 const fileArgs = { scenePath, platePath: SYNTHETIC_PLATE_FILES.plate, skyMaskPath: SYNTHETIC_PLATE_FILES.skyMask, depthPath: SYNTHETIC_PLATE_FILES.depth };
 
@@ -77,7 +77,7 @@ describe('byte-identical renders', () => {
     expect(existsSync(join(dir, 'z.png'))).toBe(false);
   });
 
-  it('refuses to write a render inside the repository (CLAUDE.md: renders live under $LOOKOUT_DATA_DIR)', async () => {
+  it('refuses to write a render inside the repository (CLAUDE.md: renders live under $SNOW_GLOBE_DATA_DIR)', async () => {
     const inside = join(PACKAGE_ROOT, 'refused-render.png');
     await expect(renderToFiles({ ...fileArgs, outPath: inside })).rejects.toThrow(/inside the repository/);
     expect(existsSync(inside)).toBe(false);

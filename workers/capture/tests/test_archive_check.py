@@ -7,12 +7,12 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import httpx
-from lookout_common.http import MinIntervalLimiter
-from lookout_common.manifest import load_manifests
-from lookout_common.storage import LocalStorage
+from snow_globe_common.http import MinIntervalLimiter
+from snow_globe_common.manifest import load_manifests
+from snow_globe_common.storage import LocalStorage
 
-from lookout_capture.archive import ArchiveAsset, ArchiveClient, AvailableDays, RequestBudget
-from lookout_capture.archive_check import (
+from snow_globe_capture.archive import ArchiveAsset, ArchiveClient, AvailableDays, RequestBudget
+from snow_globe_capture.archive_check import (
     convention_check,
     detect_epochs,
     merge_summary,
@@ -20,8 +20,8 @@ from lookout_capture.archive_check import (
     sample_dates,
     summary_key,
 )
-from lookout_capture.heldout import HELD_OUT_FROM
-from lookout_capture.sun import solar_elevation_deg
+from snow_globe_capture.heldout import HELD_OUT_FROM
+from snow_globe_capture.sun import solar_elevation_deg
 
 from .conftest import FakeClock, FakeNPS, fixture_json, make_jpeg
 

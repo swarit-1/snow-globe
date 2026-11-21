@@ -9,7 +9,7 @@
 use std::time::Instant;
 
 use chrono::{DateTime, Utc};
-use lookout_core::{ParseContext, Parser};
+use snow_globe_core::{ParseContext, Parser};
 
 const UTTERANCES: &[(&str, &str)] = &[
     ("clock", "show me rainier at 9"),

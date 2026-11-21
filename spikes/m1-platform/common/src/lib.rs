@@ -4,7 +4,7 @@
 //! is unit-tested with `cargo test`. The checks that do need the platform live in the `tauri-app`,
 //! `sck` and `inject` crates and only call into this crate for logging, timing maths and verdicts.
 //!
-//! - [`jsonl`]: the run log every check writes to `$LOOKOUT_DATA_DIR/spikes/m1/<run-id>.jsonl`.
+//! - [`jsonl`]: the run log every check writes to `$SNOW_GLOBE_DATA_DIR/spikes/m1/<run-id>.jsonl`.
 //! - [`clock`]: the host clock (CLOCK_UPTIME_RAW / `mach_absolute_time`) and how `Instant` maps to it.
 //! - [`stats`]: percentiles, intervals and RMS.
 //! - [`tag`]: the in-surface pixel tag that carries (query_gen, tier) (PRD §10.4).

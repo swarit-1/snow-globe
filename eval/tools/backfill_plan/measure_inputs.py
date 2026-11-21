@@ -3,14 +3,14 @@
 Feeds the measured inputs of docs/research/archive-backfill-plan.md, section 6 (PRD §15.3).
 
 Reads, read-only:
-- $LOOKOUT_DATA_DIR/archive/<vid>/<UTC date>/*.json for dates before 2026-06-01 (sidecars only);
-- the file sizes of $LOOKOUT_DATA_DIR/cache/nps-archive/search/<code>/<date>.json before
+- $SNOW_GLOBE_DATA_DIR/archive/<vid>/<UTC date>/*.json for dates before 2026-06-01 (sidecars only);
+- the file sizes of $SNOW_GLOBE_DATA_DIR/cache/nps-archive/search/<code>/<date>.json before
   2026-06-01;
-- the capture logs of 19 and 20 Nov 2026 (``--logs``, default $LOOKOUT_DATA_DIR/capture_log);
-- the archive queue (``--queue``, default $LOOKOUT_DATA_DIR/state/archive/queue.json), only to
+- the capture logs of 19 and 20 Nov 2026 (``--logs``, default $SNOW_GLOBE_DATA_DIR/capture_log);
+- the archive queue (``--queue``, default $SNOW_GLOBE_DATA_DIR/state/archive/queue.json), only to
   tell the frames of hourly entries from those of midday entries.
 
-Never reads $LOOKOUT_DATA_DIR/quarantine/. Prints one JSON document.
+Never reads $SNOW_GLOBE_DATA_DIR/quarantine/. Prints one JSON document.
 Run with Python 3.13 (it uses itertools.pairwise), from eval/:
     uv run --no-sync python tools/backfill_plan/measure_inputs.py [--logs DIR] [--queue FILE]
 """
@@ -28,7 +28,29 @@ from decimal import Decimal
 from itertools import pairwise
 from pathlib import Path
 
-DATA = Path(os.environ.get("LOOKOUT_DATA_DIR") or Path.home() / "lookout-data").expanduser()
+
+def _data_dir() -> Path:
+    """``$SNOW_GLOBE_DATA_DIR``, else ``$LOOKOUT_DATA_DIR``, else ``~/snow-globe-data`` if it
+    exists, else ``~/lookout-data`` if it exists, else ``~/snow-globe-data``: the workers' order
+    (D-080), written out here because this script imports nothing of the project. Like the
+    workers, it refuses while both folders exist and are different folders."""
+    for name in ("SNOW_GLOBE_DATA_DIR", "LOOKOUT_DATA_DIR"):
+        value = (os.environ.get(name) or "").strip()
+        if value:
+            return Path(value).expanduser()
+    home = Path.home()
+    new, old = home / "snow-globe-data", home / "lookout-data"
+    if new.exists():
+        if old.exists() and not os.path.samefile(new, old):
+            raise SystemExit(
+                f"measure_inputs.py: both {new} and {old} exist and are different folders, so "
+                "the data dir is ambiguous (D-080); set SNOW_GLOBE_DATA_DIR"
+            )
+        return new
+    return old if old.exists() else new
+
+
+DATA = _data_dir()
 GUARD = date(2026, 6, 1)
 SPLIT_V2 = "2026-11-20T02:39:39"  # capture 0.2.0 started (lead's note)
 #: The first archive-queue day: every archive request in this day's log is the queue's (D-052).

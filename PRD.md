@@ -1,5 +1,10 @@
-# Lookout: Product Requirements Document
+# Snow Globe: Product Requirements Document
 
+> **Changelog:** v0.4.2, 21 Nov 2026 (UTC).
+> - **The product is renamed Snow Globe** (your decision of 21 Nov; DECISIONS.md D-080). That changes the title, the version and name lines, §0, §1 row 9's call, §2, §8, §12's tree, §13.4's R1 and §21's headline. "The Lookout draft" still names your draft of 18 Nov, which v0.4 merged. Where a bare "Lookout" meant that draft (§0, §1, §18.2, Appendices B and D), it now says so.
+> - The spec names no package, command, environment variable, path or User-Agent string under the old name, so nothing else changes here. The naming map for the code is in D-080.
+> - No target, gate or cap changed.
+>
 > **Changelog:** v0.4.1, 19–20 Nov 2026 (UTC).
 > - **Factual corrections:** the status, name and companion-docs lines; §0's "Nothing else has been measured"; the §1 calls marked accepted; the oculus-core pin (§2.4, §8.4); Herbie (§8.3, §11.3); the HRRR lag range and Rainier's measured cadence (§8.1); the National Mall (§8.2); G+25 (§16); pointers from the cost lines of §11.3 and §17 to the newer estimate (D-035); Appendix B.
 > - **Factual corrections, 20 Nov (second pass):** the cost pointers of §11.3 and §17 now name the infra estimate of 20 Nov (D-060), which replaces the one D-035 quoted.
@@ -7,13 +12,13 @@
 > - **Two spec updates that record decisions:** §8.7 storage (D-028), and Appendix A, redrawn to the shape of the committed manifest schema (D-044; to be confirmed, or reverted to v0.4's sketch).
 > - No latency, accuracy or cost target changed, and the $3 hosting cap stands.
 >
-> **Version:** v0.4.1, a synthesis of two drafts:
+> **Version:** v0.4.2: v0.4.1 with the product renamed. v0.4 is a synthesis of two drafts:
 > - your **Lookout** draft (18 Nov 2026);
 > - **Snow Globe PRD v0.3** (Milestone 0, two council rounds, commit `d0ba83d`).
 >
 > **Status:** M0.5 in progress since 19 Nov 2026. You accepted every default in [§1](#1-decisions-to-confirm) that day (DECISIONS.md D-012). Progress and measured numbers are in [PRD_PROGRESS.md](PRD_PROGRESS.md).
 >
-> **Name:** Lookout, accepted on 19 Nov (D-016). The repo stays `snow-globe` until you rename it.
+> **Name:** Snow Globe, your rename of 21 Nov 2026 (D-080), which supersedes "Lookout", accepted on 19 Nov (D-016). The repo was already `snow-globe`, so its name now matches the product's.
 >
 > **Date:** 19 Nov 2026. **Owner:** Swarit Srivastava.
 >
@@ -27,7 +32,7 @@
 
 ## 0. TL;DR
 
-Lookout shows what a place will actually look like at a time you say out loud.
+Snow Globe shows what a place will actually look like at a time you say out loud.
 1. Hold a hotkey.
 2. Ask, for example, "is Rainier out tomorrow at 4?". "Show me Golden Gate at 9" works once a Golden Gate camera is licensed.
 3. Release.
@@ -54,8 +59,8 @@ It is a visual forecast, not an image generator. Sun and Moon, cloud layers, clo
 - **Forecast visibility is not haze along the sight line.** It is a near-surface fog diagnostic, so clear-air haze is calibrated per viewpoint instead (§9.3).
 - **The overlay can't both refuse focus and take plain arrow keys.** §5.4 sets the focus model.
 - **The demo needs a camera.** The headline demo is Rainier unless Golden Gate permission arrives by **4 Dec 2026**.
-- **Oculus's AWS stack costs ~$60 a month.** Lookout reuses only its serverless-compatible parts.
-- **From Lookout:**
+- **Oculus's AWS stack costs ~$60 a month.** Snow Globe reuses only its serverless-compatible parts.
+- **From the Lookout draft:**
   - the Hillaire 2020 atmosphere replaces Hosek–Wilkie, because twilight is when people ask;
   - the decisions table, the design section, the time-rule table, routes and jobs, graded asks, and capture of up to eight cameras.
 - **From v0.3:**
@@ -76,7 +81,7 @@ Nothing else had been measured when v0.4 was written. Every number since is in P
 
 ## 1. Decisions to confirm
 
-These choices were assumptions, not decisions, until you set them. Each row has a recommended default; "yes to all defaults" is a valid answer. Rows 1, 2, 3, 5, 6 and 9 are your Lookout rows. Row 4 is new, from the cross-check, and the rest come from v0.3's open questions.
+These choices were assumptions, not decisions, until you set them. Each row has a recommended default; "yes to all defaults" is a valid answer. Rows 1, 2, 3, 5, 6 and 9 come from your Lookout draft. Row 4 is new, from the cross-check, and the rest come from v0.3's open questions.
 
 **You accepted every default on 19 Nov 2026** ("yes to all defaults", DECISIONS.md D-012).
 
@@ -90,7 +95,7 @@ These choices were assumptions, not decisions, until you set them. Each row has 
 | 6 | Speech privacy | On-device by default (SpeechAnalyzer `DictationTranscriber`).<br>• A cloud engine (Deepgram Nova-3) runs in the replay bake-off.<br>• In the product it is off by default, behind a visible toggle. | Cloud-first is simpler but sends audio off the machine by default. If cloud is much faster, you decide with the numbers in hand. | ☑ Accepted, 19 Nov |
 | 7 | Paid vendors | **Now:** Deepgram for the bake-off ($200 sign-up credit, training opt-out on every request) and fal for the Tier 2 kill test (≤ $1).<br>**Later:** Runware, Claude Haiku (only if Foundation Models fails), and the ungrounded-generation baseline (≤ $1). | Nothing is called until you approve that vendor. | ☑ Accepted, 19 Nov |
 | 8 | Hosting | AWS serverless:<br>• Lambda, EventBridge Scheduler, S3, CloudFront and a budget alarm, built from Oculus's `bootstrap`, `storage`, `cdn` and `monitoring` Terraform.<br>• Whatever hosts the Tier 2 proxy must add ≤ 100 ms p95 when idle; Lambda and a Cloudflare Worker are both measured.<br>• GitHub Actions runs CI only.<br>• The repo is public. | • Oculus's full stack (ALB, Fargate, Redis) costs ~$60 a month, by Oculus's own estimate.<br>• GitHub Actions as the scheduler adds jitter, and scheduled workflows in a public repo are disabled after 60 days without activity, which is risky over a holiday sealed window. | ☑ Accepted, 19 Nov |
-| 9 | Name | Lookout. | The repo, bundle id and overlay wordmark follow the name. | ☑ Accepted, 19 Nov |
+| 9 | Name | Lookout. | The repo, bundle id and overlay wordmark follow the name. | ☑ Accepted, 19 Nov; renamed **Snow Globe** on 21 Nov (D-080) |
 | 10 | Fallbacks | Keep the LLM parser fallback (Foundation Models, on device, $0). Unverified places move to Later. | Unverified generation is exactly the "invented weather" image this project argues against. | ☑ Accepted, 19 Nov |
 | 11 | Tier 0 when Tier 1 is close behind | If Tier 1 is ready within ~100 ms, skip painting Tier 0. It still runs and is measured. | Showing both causes a brief flicker. | ☑ Accepted, 19 Nov |
 | 12 | Calendar | Tell me your hours per week; I assume ~25. A milestone more than 25 % late loses the next item on the cut list. | Dates in §16 move. | ☑ Accepted, 19 Nov |
@@ -102,7 +107,7 @@ These choices were assumptions, not decisions, until you set them. Each row has 
 
 ## 2. Product vision and positioning
 
-Lookout answers a question no current tool answers directly: what will this exact view look like at that exact time?
+Snow Globe answers a question no current tool answers directly: what will this exact view look like at that exact time?
 
 | What exists | What it gives you | What is missing |
 |---|---|---|
@@ -118,9 +123,9 @@ Lookout answers a question no current tool answers directly: what will this exac
 - Human raters did "not much better than if they guessed randomly" at telling its images from real ones.
 - The images matched the COSMO-1 forecast's conditions in "at least 89 % of the examined cases".
 
-That shows the idea is sound. Its agreement was scored against the *forecast's* conditions. Lookout's primary score is agreement with the frame the camera *actually recorded* at the valid time.
+That shows the idea is sound. Its agreement was scored against the *forecast's* conditions. Snow Globe's primary score is agreement with the frame the camera *actually recorded* at the valid time.
 
-### 2.1 What Lookout adds
+### 2.1 What Snow Globe adds
 1. A voice interface whose first frame arrives within a third of a second, measured at the composited pixel.
 2. Physics-first rendering from one plate set per viewpoint, so a new viewpoint needs no training.
 3. A score for every prediction against the frame the camera actually recorded, pre-registered against persistence, climatology and analog baselines.
@@ -129,7 +134,7 @@ That shows the idea is sound. Its agreement was scored against the *forecast's* 
 - Data decides. The image model only adds texture, and it can't reach the sky or hazed regions.
 - Every frame is labelled simulated, real or live, with its valid time and the forecast's issue time.
 - Real beats simulated. "Now" shows the live camera when one exists.
-- The skill is NOAA's. Lookout renders the forecast faithfully, and shows how often it is wrong and why.
+- The skill is NOAA's. Snow Globe renders the forecast faithfully, and shows how often it is wrong and why.
 - A measured number outranks a new feature.
 
 ### 2.3 What it is not
@@ -518,7 +523,7 @@ All times are local to the place, never to the asker's machine.
 
 ## 8. Data
 
-Everything Lookout needs is free for a non-commercial project. The evaluation archive exists for the forecast; for the cameras, it is checked in M0.5.
+Everything Snow Globe needs is free for a non-commercial project. The evaluation archive exists for the forecast; for the cameras, it is checked in M0.5.
 
 ### 8.1 Inventory
 
@@ -899,7 +904,7 @@ One small API on Lambda, five scheduled jobs and an on-demand backfill. Keys for
 The repo mirrors Oculus: the PRD, a milestone runbook and a per-ticket progress file sit at the root.
 
 ```
-snow-globe/                 (renamed when you choose a name)
+snow-globe/                 (the product's name too, since D-080)
   PRD.md  PLAN.md  PRD_PROGRESS.md  DECISIONS.md  THIRD_PARTY_NOTICES  Makefile
   app/
     src-tauri/              Rust core: hotkey, audio, speech bridge, parser, cancellation, trace
@@ -980,7 +985,7 @@ This section is frozen, with its commit hash recorded in DECISIONS.md, before an
   - If no hindcast is available, P1 is reported as underpowered, plainly.
 
 **Renderer claims (pre-registered with P1):**
-- **R1, non-inferiority:** PSS(Lookout) ≥ PSS(S) − 0.05 against both forecast-scalar baselines, S_rule and S_mos (§13.6).
+- **R1, non-inferiority:** PSS(Snow Globe) ≥ PSS(S) − 0.05 against both forecast-scalar baselines, S_rule and S_mos (§13.6).
 - **R2, geometry:** for Rainier's obscuration height, sampling along view rays beats sampling the camera's own grid cell. Scored as ordinal error, paired, with a block bootstrap.
 - **R3, analog:** the shader against Tier 0's forecast-class analog, with a pre-registered "no close analog" stratum. If the analog is non-inferior everywhere, the README says the shader buys explainability and coverage, not accuracy.
 
@@ -1255,7 +1260,7 @@ The largest risk is that fog shows no skill at 24 h. The plan reports that resul
 
 **v0.3 council:** four judges (latency engineer, graphics and ML researcher, skeptical hiring manager, privacy and licensing reviewer), two rounds each. Their record is in [docs/council/](docs/council/) and summarised in Appendix C.
 
-**Lookout's six objections, rechecked after the cross-check:**
+**The Lookout draft's six objections, rechecked after the cross-check:**
 
 | Judge | Objection | Answer now | Still open |
 |---|---|---|---|
@@ -1266,7 +1271,7 @@ The largest risk is that fog shows no skill at 24 h. The plan reports that resul
 | Licensing reviewer | May you store and show these frames? | NPS only; confirmation gate; people blurred; licence ledger | The Golden Gate source; NPS's reply |
 | Investor | Who asks this every week? | Out of scope for v1. Decided after M4 results and ten photographer interviews. | Demand |
 
-**Next council round:** add the forecast verifier to the four judges, and give the parts taken from Lookout their first independent review.
+**Next council round:** add the forecast verifier to the four judges, and give the parts taken from the Lookout draft their first independent review.
 
 ---
 
@@ -1311,7 +1316,7 @@ Each is answered by a milestone, not by a guess.
 
 Blanks are filled only from dashboard exports.
 
-> *On a pre-registered, sealed __-day period (base rate: summit visible __ % of daytime frames; climatology PSS __), Lookout's 24-hour visual forecast of Mount Rainier's summit scored a Peirce skill score of __ vs __ for persistence (Δ __, 95 % CI __ to __). The skill is NOAA HRRR's. Rendering it lost none (non-inferiority margin 0.05: __), and sampling the forecast along each view ray beat the camera's own grid cell at predicting cloud height (__).*
+> *On a pre-registered, sealed __-day period (base rate: summit visible __ % of daytime frames; climatology PSS __), Snow Globe's 24-hour visual forecast of Mount Rainier's summit scored a Peirce skill score of __ vs __ for persistence (Δ __, 95 % CI __ to __). The skill is NOAA HRRR's. Rendering it lost none (non-inferiority margin 0.05: __), and sampling the forecast along each view ray beat the camera's own grid cell at predicting cloud height (__).*
 > *Latency after 30 min idle: first forecast-driven frame in __ ms p95 from key release, measured at the composited pixel.*
 
 - Built a voice-driven visual forecast app in Rust, TypeScript, WebGL2, Swift and Python: p95 of __ ms to a first real frame and __ ms to a forecast-driven frame, measured at the composited pixel after idle.
@@ -1411,7 +1416,7 @@ One JSON file per viewpoint, validated in CI against `viewpoints/schema/viewpoin
 **Claude Code's next session:**
 - [x] Bring PLAN.md and DECISIONS.md in line with your §1 calls (the sky model, hosting, the viewpoint plan), and start PRD_PROGRESS.md (19 Nov).
 - [ ] Run M0.5 as in §16 (in progress since 19 Nov).
-- [ ] Optionally, a council round on the parts taken from Lookout (§18.2).
+- [ ] Optionally, a council round on the parts taken from the Lookout draft (§18.2).
 
 ## Appendix C: Council review (v0.3), summarised
 
@@ -1435,14 +1440,14 @@ Full record: [docs/council/round1-responses.md](docs/council/round1-responses.md
 
 Every disagreement between the Lookout draft and v0.3, with its evidence and verdict, is in [docs/review/prd-crosscheck.md](docs/review/prd-crosscheck.md).
 
-- **24 points checked in Lookout:** 12 corrected outright, 7 merged, 4 where v0.3's approach is kept, and 1 confirmed (Sigg et al.).
+- **24 points checked in the Lookout draft:** 12 corrected outright, 7 merged, 4 where v0.3's approach is kept, and 1 confirmed (Sigg et al.).
   - Factual corrections: HRRR's end date, the Open-Meteo archive, visibility treated as haze, the Oculus hosting cost, frame sizes, and the Moon's illuminated fraction, which already exists.
   - Design corrections: overlay focus, the demo utterance, cloud-cover calibration, hourly seeds, the 16:10 frame.
   - Method corrections: gates shaped as targets, and the STT allocation.
   - Merged: the Sun-in-frame pose check, pair counts reported without effective n, the two primary metrics.
   - Kept from v0.3: idle-state headlines, the stronger persistence baseline, the in-process speech library, DEM shadows.
-- **17 points checked in v0.3:** 12 where Lookout's approach is adopted, 4 merged, and 1 kept (DEM depth).
-  - Adopted from Lookout: the atmosphere model, the decisions table, the design section, time rules, routes and jobs.
+- **17 points checked in v0.3:** 12 where the Lookout draft's approach is adopted, 4 merged, and 1 kept (DEM depth).
+  - Adopted from the Lookout draft: the atmosphere model, the decisions table, the design section, time rules, routes and jobs.
   - Merged: the eight-camera plan.
 - **Kept from v0.3 throughout:** the measurement method, the pre-registration, the view-ray geometry, Tier 2 safe by construction, and the privacy inventory.
 

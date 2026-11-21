@@ -1,0 +1,412 @@
+{
+  "about": "The deliberate keeps of the old names (D-080), read by docs/checks' old-names check: files kept whole, and files with the number of lines that may name an old name (lookout in any case, lk_/LK_). A new old-name line fails until it is renamed or counted here with its reason.",
+  "files": {
+    "DECISIONS.md": "the record: D-001 to D-079 keep their names, and DECISIONS.md is append-only (D-080)",
+    "docs/evidence/*": "records of measured runs keep the names they ran under (D-080)",
+    "docs/research/nps-archive-check.md": "the 19 Nov archive check as it ran, with a note on the rename",
+    "docs/review/prd-crosscheck.md": "'Lookout' there is the owner's draft of 18 Nov, which PRD v0.4 merged",
+    "*tests/fixtures/*": "recorded old-format fixtures, and byte-identical copies of the live loop scripts",
+    "eval/src/snow_globe_eval/heldout_periods.json": "hash-pinned on record (D-038): moved byte for byte, old kind and all",
+    "eval/src/snow_globe_eval/landmark_boxes_v1.json": "hash-pinned on record: moved byte for byte",
+    "infra/cost/sim_capture_8246a8b.json": "a committed simulation output of the 8246a8b image, quoted by infra/README.md",
+    "viewpoints/manifests/*": "dated provenance notes of 19 Nov (~/lookout-data/samples/...), valid through the symlink"
+  },
+  "counts": {
+    "CLAUDE.md": {
+      "lines": 17,
+      "why": "the running jobs' names and ~/lookout-data until the switch, and the old variables still read"
+    },
+    "Makefile": {
+      "lines": 9,
+      "why": "the deprecated LOOKOUT_* variables read as fallbacks, and the old default folder in the resolver"
+    },
+    "PLAN.md": {
+      "lines": 12,
+      "why": "records of what ran and the names the running jobs keep until the switch; 'the Lookout draft'"
+    },
+    "PRD.md": {
+      "lines": 14,
+      "why": "'the Lookout draft' of 18 Nov, and row 9's default as accepted (D-080)"
+    },
+    "PRD_PROGRESS.md": {
+      "lines": 51,
+      "why": "measured rows keep the names their runs used, and the running jobs' names until the switch"
+    },
+    "README.md": {
+      "lines": 3,
+      "why": "the running jobs' names until the switch, and the fallbacks still read"
+    },
+    "THIRD_PARTY_NOTICES": {
+      "lines": 7,
+      "why": "revision notes of 20 Nov and the 8246a8b image note keep the names they were written under"
+    },
+    "app/core/src/datadir.rs": {
+      "lines": 21,
+      "why": "the deprecated variables and the old default folder, read as fallbacks, and their tests"
+    },
+    "app/core/src/normalize.rs": {
+      "lines": 4,
+      "why": "the parser still takes the old app name 'lookout' as a filler (people may say it)"
+    },
+    "app/core/src/parser.rs": {
+      "lines": 1,
+      "why": "the parser still takes the old app name 'lookout' as a filler"
+    },
+    "app/core/tests/properties.rs": {
+      "lines": 1,
+      "why": "the property prefix 'hey lookout show me ' (the old name still parses)"
+    },
+    "app/speech-macos/Package.swift": {
+      "lines": 3,
+      "why": "the rename note, and ~/lookout-data in the build commands (valid before and after the switch)"
+    },
+    "app/speech-macos/README.md": {
+      "lines": 9,
+      "why": "the rename note, measured 0.2.0 sizes and symbols, and ~/lookout-data in commands"
+    },
+    "app/speech-macos/Sources/SnowGlobeSpeechC/version.c": {
+      "lines": 1,
+      "why": "the rename note on the C prefix (was lk_/LK_)"
+    },
+    "app/speech-macos/scripts/build.sh": {
+      "lines": 4,
+      "why": "the shared data-dir rule: the deprecated variable and the old default folder"
+    },
+    "app/speech-macos/scripts/check-symbols-selftest.sh": {
+      "lines": 4,
+      "why": "the shared data-dir rule: the deprecated variable and the old default folder"
+    },
+    "app/speech-macos/scripts/check-symbols.sh": {
+      "lines": 4,
+      "why": "the shared data-dir rule: the deprecated variable and the old default folder"
+    },
+    "app/speech-macos/scripts/link-check.sh": {
+      "lines": 4,
+      "why": "the shared data-dir rule: the deprecated variable and the old default folder"
+    },
+    "bench/README.md": {
+      "lines": 3,
+      "why": "~/lookout-data in a command (valid before and after the switch) and the data-dir rule"
+    },
+    "bench/utterances/check.py": {
+      "lines": 8,
+      "why": "the deprecated variables and the old default folder, read as fallbacks"
+    },
+    "bench/utterances/test_utterances.py": {
+      "lines": 6,
+      "why": "tests of the old names still read, and a record of lookout-parse's outputs"
+    },
+    "docs/checks/README.md": {
+      "lines": 3,
+      "why": "a record of the 19 Nov checks, which read ~/lookout-data, and the rename checks' own description"
+    },
+    "docs/checks/doccheck.py": {
+      "lines": 12,
+      "why": "this check's own pattern and messages"
+    },
+    "docs/checks/test_selftest.py": {
+      "lines": 23,
+      "why": "the old-names and data-dir checks' self-tests"
+    },
+    "docs/m1/owner-runbook.md": {
+      "lines": 10,
+      "why": "the 20 Nov builds' old names, and ~/lookout-data in commands (valid before and after the switch)"
+    },
+    "docs/outreach/nps-confirmation.md": {
+      "lines": 2,
+      "why": "the User-Agent NPS has seen since 19 Nov, Lookout/0.1"
+    },
+    "docs/research/archive-backfill-plan.md": {
+      "lines": 10,
+      "why": "the first tranche as queued, the 20 Nov validation records, and the live queue path"
+    },
+    "eval/README.md": {
+      "lines": 2,
+      "why": "the rename note, and the old kinds still read"
+    },
+    "eval/src/snow_globe_eval/__init__.py": {
+      "lines": 1,
+      "why": "readers of the old kinds, keys and version prefixes (D-080)"
+    },
+    "eval/src/snow_globe_eval/backtest_pair.py": {
+      "lines": 3,
+      "why": "the old record and pair-forecast kinds, still read"
+    },
+    "eval/src/snow_globe_eval/cli.py": {
+      "lines": 2,
+      "why": "readers of the old kinds, keys and version prefixes (D-080)"
+    },
+    "eval/src/snow_globe_eval/data_report/__init__.py": {
+      "lines": 1,
+      "why": "readers of the old kinds, keys and version prefixes (D-080)"
+    },
+    "eval/src/snow_globe_eval/data_report/common.py": {
+      "lines": 4,
+      "why": "readers of the old kinds, keys and version prefixes (D-080)"
+    },
+    "eval/src/snow_globe_eval/ephemeris.py": {
+      "lines": 1,
+      "why": "readers of the old kinds, keys and version prefixes (D-080)"
+    },
+    "eval/src/snow_globe_eval/forecast_io.py": {
+      "lines": 3,
+      "why": "readers of the old kinds, keys and version prefixes (D-080)"
+    },
+    "eval/src/snow_globe_eval/frames.py": {
+      "lines": 1,
+      "why": "readers of the old kinds, keys and version prefixes (D-080)"
+    },
+    "eval/src/snow_globe_eval/heldout.py": {
+      "lines": 8,
+      "why": "the quarantine guard covers the old variable and folder (D-022), and the hashed split's own kind"
+    },
+    "eval/src/snow_globe_eval/landmark_boxes.py": {
+      "lines": 2,
+      "why": "readers of the old kinds, keys and version prefixes (D-080)"
+    },
+    "eval/src/snow_globe_eval/pair_forecast.py": {
+      "lines": 5,
+      "why": "records of the forecast worker's versions before the rename"
+    },
+    "eval/src/snow_globe_eval/scene.py": {
+      "lines": 4,
+      "why": "readers of the old kinds, keys and version prefixes (D-080)"
+    },
+    "eval/tests/conftest.py": {
+      "lines": 1,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "eval/tests/test_backtest_pair.py": {
+      "lines": 11,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "eval/tests/test_cli.py": {
+      "lines": 3,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "eval/tests/test_data_report.py": {
+      "lines": 2,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "eval/tests/test_heldout.py": {
+      "lines": 1,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "eval/tests/test_pair_forecast.py": {
+      "lines": 3,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "eval/tests/test_rename.py": {
+      "lines": 19,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "eval/tools/backfill_plan/README.md": {
+      "lines": 3,
+      "why": "the deprecated variable and the old default folder, and the live queue path under ~/lookout-data"
+    },
+    "eval/tools/backfill_plan/measure_inputs.py": {
+      "lines": 4,
+      "why": "the deprecated variable and the old default folder, and the live queue path under ~/lookout-data"
+    },
+    "eval/tools/backfill_plan/plan.py": {
+      "lines": 3,
+      "why": "the deprecated variable and the old default folder, and the live queue path under ~/lookout-data"
+    },
+    "infra/README.md": {
+      "lines": 10,
+      "why": "measured names of the 8246a8b image, the rename note, and ~/lookout-data in commands"
+    },
+    "infra/cost/estimate.py": {
+      "lines": 1,
+      "why": "the 8246a8b image's measured name and its simulation's version stamp"
+    },
+    "infra/cost/sim_capture_s3.py": {
+      "lines": 2,
+      "why": "the 8246a8b image's measured name and its simulation's version stamp"
+    },
+    "infra/deploy.sh": {
+      "lines": 2,
+      "why": "the deprecated variables, read as fallbacks"
+    },
+    "infra/ops/migrate-to-snow-globe.sh": {
+      "lines": 54,
+      "why": "the switch reads and rewrites the old names"
+    },
+    "infra/terraform/main.tf": {
+      "lines": 1,
+      "why": "records of pre-rename runs (D-080)"
+    },
+    "infra/terraform/tests/lambda.tftest.hcl": {
+      "lines": 1,
+      "why": "records of pre-rename runs (D-080)"
+    },
+    "infra/test.sh": {
+      "lines": 2,
+      "why": "the deprecated variable, read as a fallback"
+    },
+    "infra/tests/test_cost.sh": {
+      "lines": 1,
+      "why": "it reads the committed simulation's lookout-capture/0.2.0 stamp"
+    },
+    "infra/tests/test_migrate.sh": {
+      "lines": 12,
+      "why": "the switch's tests start the old loops under their old names"
+    },
+    "infra/tests/test_scripts.sh": {
+      "lines": 1,
+      "why": "a test that the old variables are still read"
+    },
+    "infra/tests/test_tf_providers.sh": {
+      "lines": 19,
+      "why": "tests of the deprecated variables and the old default folder"
+    },
+    "infra/tf_providers.sh": {
+      "lines": 7,
+      "why": "the deprecated variables and the old default folder, read as fallbacks"
+    },
+    "renderer/README.md": {
+      "lines": 4,
+      "why": "the rename note, the data-dir rule, and the seed domain"
+    },
+    "renderer/scene.schema.json": {
+      "lines": 1,
+      "why": "the seed domain 'lookout-seed-v1': changing it changes every render and the goldens"
+    },
+    "renderer/src/node/paths.test.ts": {
+      "lines": 16,
+      "why": "the deprecated variables and the old default folder, read as fallbacks, and their tests"
+    },
+    "renderer/src/node/paths.ts": {
+      "lines": 6,
+      "why": "the deprecated variables and the old default folder, read as fallbacks, and their tests"
+    },
+    "renderer/src/scene.ts": {
+      "lines": 1,
+      "why": "the seed domain 'lookout-seed-v1': changing it changes every render and the goldens"
+    },
+    "spikes/m1-platform/Cargo.toml": {
+      "lines": 1,
+      "why": "CLAUDE.md's CARGO_TARGET_DIR under ~/lookout-data (valid before and after the switch)"
+    },
+    "spikes/m1-platform/README.md": {
+      "lines": 3,
+      "why": "the rename note, the 20 Nov measurement of LookoutSpeech, and the data-dir rule"
+    },
+    "spikes/m1-platform/common/src/paths.rs": {
+      "lines": 6,
+      "why": "the shared data-dir rule: the deprecated variables and the old default folder"
+    },
+    "spikes/m1-platform/scripts/bundle-sck-helper.sh": {
+      "lines": 6,
+      "why": "the shared data-dir rule: the deprecated variables and the old default folder"
+    },
+    "spikes/m1-platform/tauri-app/build.rs": {
+      "lines": 10,
+      "why": "the shared data-dir rule: the deprecated variables and the old default folder"
+    },
+    "workers/capture/README.md": {
+      "lines": 2,
+      "why": "the rename note, and measurements under the old names"
+    },
+    "workers/capture/src/snow_globe_capture/__init__.py": {
+      "lines": 4,
+      "why": "the old capture name in version prefixes, and records of pre-rename runs"
+    },
+    "workers/capture/src/snow_globe_capture/fetcher_guard.py": {
+      "lines": 9,
+      "why": "the host-wide lock respects the running lookout-capture loop's lock in ~/lookout-data"
+    },
+    "workers/capture/src/snow_globe_capture/frames.py": {
+      "lines": 1,
+      "why": "the old capture name in version prefixes, and records of pre-rename runs"
+    },
+    "workers/capture/tests/conftest.py": {
+      "lines": 3,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "workers/capture/tests/test_fetcher_guard.py": {
+      "lines": 25,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "workers/capture/tests/test_rename.py": {
+      "lines": 9,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "workers/capture/tests/test_storage_report.py": {
+      "lines": 1,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "workers/capture/tests/test_upgrade.py": {
+      "lines": 1,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "workers/common/README.md": {
+      "lines": 1,
+      "why": "the rename note, and measurements under the old names"
+    },
+    "workers/common/src/snow_globe_common/__init__.py": {
+      "lines": 2,
+      "why": "the deprecated LOOKOUT_* variables and the old default folder, read as fallbacks (D-080)"
+    },
+    "workers/common/src/snow_globe_common/env.py": {
+      "lines": 10,
+      "why": "the deprecated LOOKOUT_* variables and the old default folder, read as fallbacks (D-080)"
+    },
+    "workers/common/src/snow_globe_common/http.py": {
+      "lines": 2,
+      "why": "the deprecated LOOKOUT_* variables and the old default folder, read as fallbacks (D-080)"
+    },
+    "workers/common/src/snow_globe_common/manifest.py": {
+      "lines": 1,
+      "why": "the deprecated LOOKOUT_* variables and the old default folder, read as fallbacks (D-080)"
+    },
+    "workers/common/src/snow_globe_common/paths.py": {
+      "lines": 10,
+      "why": "the deprecated LOOKOUT_* variables and the old default folder, read as fallbacks (D-080)"
+    },
+    "workers/common/src/snow_globe_common/storage.py": {
+      "lines": 1,
+      "why": "the deprecated LOOKOUT_* variables and the old default folder, read as fallbacks (D-080)"
+    },
+    "workers/common/tests/conftest.py": {
+      "lines": 4,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "workers/common/tests/test_env.py": {
+      "lines": 41,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "workers/forecast/README.md": {
+      "lines": 1,
+      "why": "the rename note, and measurements under the old names"
+    },
+    "workers/forecast/src/snow_globe_forecast/__init__.py": {
+      "lines": 1,
+      "why": "the old kind and worker name, still read and accepted (D-080)"
+    },
+    "workers/forecast/src/snow_globe_forecast/cli.py": {
+      "lines": 2,
+      "why": "the old kind and worker name, still read and accepted (D-080)"
+    },
+    "workers/forecast/src/snow_globe_forecast/lambda_handler.py": {
+      "lines": 2,
+      "why": "the old kind and worker name, still read and accepted (D-080)"
+    },
+    "workers/forecast/src/snow_globe_forecast/output.py": {
+      "lines": 2,
+      "why": "the old kind and worker name, still read and accepted (D-080)"
+    },
+    "workers/forecast/src/snow_globe_forecast/schema/forecast_run.schema.json": {
+      "lines": 4,
+      "why": "the old kind and worker name, still read and accepted (D-080)"
+    },
+    "workers/forecast/tests/conftest.py": {
+      "lines": 2,
+      "why": "tests that the old names are still read (D-080)"
+    },
+    "workers/forecast/tests/test_rename.py": {
+      "lines": 8,
+      "why": "tests that the old names are still read (D-080)"
+    }
+  }
+}

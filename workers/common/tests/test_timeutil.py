@@ -4,8 +4,8 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from lookout_common import timeutil as tu
-from lookout_common.timeutil import (
+from snow_globe_common import timeutil as tu
+from snow_globe_common.timeutil import (
     FLAG_AMBIGUOUS,
     FLAG_NONEXISTENT,
     FLAG_OFFSET_FROM_EXIF,
@@ -215,7 +215,7 @@ def test_archive_unknown_convention():
 
 # --- EXIF -------------------------------------------------------------------------------
 def test_exif_rainier_sample():
-    # ~/lookout-data/samples/mountain.jpg: DateTime 2026:11:18 20:21:03, Last-Modified 04:21:14Z.
+    # ~/snow-globe-data/samples/mountain.jpg: DateTime 2026:11:18 20:21:03, Last-Modified 04:21:14Z.
     got, flags = tu.exif_local_to_utc("2026:11:18 20:21:03", "America/Los_Angeles")
     assert got == utc(2026, 11, 19, 4, 21, 3) and flags == frozenset()
 

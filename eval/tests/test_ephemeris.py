@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import pytest
 from conftest import HAS_OCULUS, needs_oculus
 
-from lookout_eval import ephemeris, noaa_solar
-from lookout_eval.ephemeris import (
+from snow_globe_eval import ephemeris, noaa_solar
+from snow_globe_eval.ephemeris import (
     EphemerisUnavailableError,
     NoaaBackend,
     apparent_altitude_deg,

@@ -29,7 +29,7 @@ ok() {
 
 echo "infra/tests/test_cost.sh"
 command -v python3 >/dev/null 2>&1 || { echo "  SKIP python3 not installed"; exit 0; }
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/lookout-cost-test.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/snow-globe-cost-test.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 CURRENT="estimate_runs_on_the_committed_simulation"
@@ -102,7 +102,7 @@ def n(value):
 
 
 want = [
-    f"for the code at commit `8246a8b` ({est['capture_version'].replace('lookout-capture/', 'capture ')})",
+    f"for the code at commit `8246a8b` ({est['capture_version'].replace('snow-globe-capture/', 'capture ').replace('lookout-capture/', 'capture ')})",
     f"Capture 0.5 GB × {lam['capture_pass_s'][0]}–{lam['capture_pass_s'][1]} s × 8,640",
     f"({lam['capture_sleep_s_simulated']} s of simulated waiting plus 5–20 s assumed)",
     f"{n(lam['capture_gbs'][0])}–{n(lam['capture_gbs'][1])} GB-s",

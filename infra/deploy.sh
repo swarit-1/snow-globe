@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy Lookout's serverless stack to AWS (PRD §11.3). For the owner only: it creates resources that cost money.
+# Deploy Snow Globe's serverless stack to AWS (PRD §11.3). For the owner only: it creates resources that cost money.
 #
 # Usage:
 #   infra/deploy.sh                  check, print the plan, ask, then deploy
@@ -25,7 +25,8 @@
 # outside us-east-1 on purpose, export TF_VAR_region and keep it exported for every later terraform command.
 #
 # Environment: TF_VAR_alarm_email (required); AWS credentials from `aws configure sso` / AWS_PROFILE, or keys in
-# the environment; TF_VAR_region (optional, see above); LOOKOUT_TF_STATE_BUCKET to override the state bucket.
+# the environment; TF_VAR_region (optional, see above); SNOW_GLOBE_TF_STATE_BUCKET (or, as before the rename, D-080,
+# LOOKOUT_TF_STATE_BUCKET) to override the state bucket.
 #
 # Exit codes: 0 ok or declined, 1 a step failed, 2 a precondition failed (nothing was changed).
 set -euo pipefail
@@ -34,7 +35,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TF_DIR="$ROOT/infra/terraform"
 BOOT_DIR="$TF_DIR/bootstrap"
 BUILD="$ROOT/infra/lambda/build.sh"
-PROJECT="${TF_VAR_project:-lookout}"
+PROJECT="${TF_VAR_project:-snow-globe}"
 STATE_KEY="$PROJECT/terraform.tfstate"
 DEFAULT_REGION="us-east-1"
 MIN_LAMBDA_CONCURRENCY=102 # two functions reserve 1 each, and Lambda keeps 100 unreserved
@@ -130,7 +131,7 @@ else
     cli_region="$(aws configure get region 2>/dev/null || true)" cli_source="the AWS CLI profile"
   fi
   if [ -n "$cli_region" ] && [ "$cli_region" != "$region" ]; then
-    refuse "$cli_source says $cli_region, but the stack deploys to $region (TF_VAR_region is unset). Lookout runs in $DEFAULT_REGION, next to NOAA's HRRR bucket: export AWS_REGION=$DEFAULT_REGION. To deploy to $cli_region on purpose, export TF_VAR_region=$cli_region and keep it exported for every later terraform command."
+    refuse "$cli_source says $cli_region, but the stack deploys to $region (TF_VAR_region is unset). Snow Globe runs in $DEFAULT_REGION, next to NOAA's HRRR bucket: export AWS_REGION=$DEFAULT_REGION. To deploy to $cli_region on purpose, export TF_VAR_region=$cli_region and keep it exported for every later terraform command."
   fi
 fi
 case "$region" in
@@ -162,13 +163,13 @@ if [ "$lambda_limit" -lt "$MIN_LAMBDA_CONCURRENCY" ]; then
   refuse "this account's Lambda concurrency limit in $region is $lambda_limit; reserving 1 per function needs at least $MIN_LAMBDA_CONCURRENCY (Lambda keeps 100 unreserved). New accounts start low: request 'Concurrent executions' = 1000 in Service Quotas > AWS Lambda, then re-run."
 fi
 
-state_bucket="${LOOKOUT_TF_STATE_BUCKET:-$PROJECT-tfstate-$account_id}"
+state_bucket="${SNOW_GLOBE_TF_STATE_BUCKET:-${LOOKOUT_TF_STATE_BUCKET:-$PROJECT-tfstate-$account_id}}"
 if head_err="$(aws s3api head-bucket --bucket "$state_bucket" 2>&1 >/dev/null)"; then
   bucket_state="exists"
 else
   case "$head_err" in
     *404* | *"Not Found"* | *NoSuchBucket*) bucket_state="missing" ;;
-    *403* | *Forbidden*) refuse "state bucket $state_bucket exists but this account cannot access it (owned by another account?). Set LOOKOUT_TF_STATE_BUCKET." ;;
+    *403* | *Forbidden*) refuse "state bucket $state_bucket exists but this account cannot access it (owned by another account?). Set SNOW_GLOBE_TF_STATE_BUCKET." ;;
     *) refuse "could not check state bucket $state_bucket: $head_err" ;;
   esac
 fi
@@ -210,7 +211,7 @@ phase1_targets="-target=aws_budgets_budget.monthly -target=aws_sns_topic_subscri
 
 # ---- 0c. the plan, printed before anything changes --------------------------------------------------------------
 say ""
-say "Lookout deploy plan (nothing has changed yet)"
+say "Snow Globe deploy plan (nothing has changed yet)"
 say ""
 say "  AWS account   $account_id  ($caller_arn)"
 say "  Region        $region"

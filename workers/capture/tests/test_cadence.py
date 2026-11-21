@@ -8,11 +8,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from lookout_common.manifest import load_manifests
-from lookout_common.storage import LocalStorage
+from snow_globe_common.manifest import load_manifests
+from snow_globe_common.storage import LocalStorage
 
-from lookout_capture.cadence import camera_cadence, quantile, summarise
-from lookout_capture.cli import main
+from snow_globe_capture.cadence import camera_cadence, quantile, summarise
+from snow_globe_capture.cli import main
 
 VPS = load_manifests()
 RAINIER = VPS["rainier.paradise-mountain"]
@@ -205,9 +205,9 @@ def test_frames_without_log_records_still_count_once(data_root):
 
 
 def test_cadence_command_needs_no_network_and_no_fetcher_lock(data_root, capsys, monkeypatch):
-    import lookout_common.http as http
+    import snow_globe_common.http as http
 
-    from lookout_capture.fetcher_guard import nps_fetcher_lock
+    from snow_globe_capture.fetcher_guard import nps_fetcher_lock
 
     monkeypatch.setattr(
         http, "polite_client", lambda *a, **k: (_ for _ in ()).throw(AssertionError)

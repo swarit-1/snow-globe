@@ -10,7 +10,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/lookout-infra-tests.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/snow-globe-infra-tests.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 PASSED=0
@@ -51,7 +51,7 @@ case "$*" in
   "s3api head-bucket"*)
     if [ "${STUB_BUCKET_EXISTS:-0}" = 1 ]; then exit 0; fi
     echo "An error occurred (404) when calling the HeadBucket operation: Not Found" >&2; exit 254 ;;
-  "ecr describe-repositories"*) echo "123456789012.dkr.ecr.us-east-1.amazonaws.com/lookout/lambda" ;;
+  "ecr describe-repositories"*) echo "123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-globe/lambda" ;;
   "ecr get-login-password"*) echo "stub-password" ;;
   "ecr describe-images"*)
     if [ "${STUB_IMAGE_EXISTS:-0}" = 1 ]; then echo "2026-11-19T00:00:00+00:00"; exit 0; fi
@@ -64,7 +64,7 @@ EOF
 #!/usr/bin/env bash
 echo "terraform $*" >>"$STUB_LOG"
 case "$*" in
-  *"output -raw data_bucket"*) echo "lookout-data-123456789012" ;;
+  *"output -raw data_bucket"*) echo "snow-globe-data-123456789012" ;;
   *) ;;
 esac
 EOF
@@ -92,15 +92,15 @@ make_repo() { # make_repo DIR [with-workers|no-handlers]
   if [ -n "$variant" ]; then
     local w
     for w in common capture forecast; do
-      mkdir -p "$dir/workers/$w/src/lookout_$w"
-      printf '[project]\nname = "lookout-%s"\n' "$w" >"$dir/workers/$w/pyproject.toml"
-      : >"$dir/workers/$w/src/lookout_$w/__init__.py"
+      mkdir -p "$dir/workers/$w/src/snow_globe_$w"
+      printf '[project]\nname = "snow-globe-%s"\n' "$w" >"$dir/workers/$w/pyproject.toml"
+      : >"$dir/workers/$w/src/snow_globe_$w/__init__.py"
     done
     echo "version = 1" >"$dir/workers/capture/uv.lock"
     echo "version = 1" >"$dir/workers/forecast/uv.lock"
     if [ "$variant" = "with-workers" ]; then
       for w in capture forecast; do
-        printf 'def handler(event, context):\n    return {}\n' >"$dir/workers/$w/src/lookout_$w/lambda_handler.py"
+        printf 'def handler(event, context):\n    return {}\n' >"$dir/workers/$w/src/snow_globe_$w/lambda_handler.py"
       done
     fi
     mkdir -p "$dir/viewpoints/manifests" "$dir/viewpoints/schema"
@@ -109,7 +109,7 @@ make_repo() { # make_repo DIR [with-workers|no-handlers]
   fi
   git -C "$dir" init -q
   git -C "$dir" add -A
-  git -C "$dir" -c user.name=lookout-test -c user.email=test@example.invalid -c commit.gpgsign=false commit -q -m fixture
+  git -C "$dir" -c user.name=snow-globe-test -c user.email=test@example.invalid -c commit.gpgsign=false commit -q -m fixture
 }
 
 # new_case NAME [with-workers|no-handlers]: fresh repo, stubs and log; sets CASE_DIR, STUB_LOG, PATH_WITH_STUBS
@@ -131,7 +131,7 @@ deploy() {
   set +e
   # shellcheck disable=SC2086 # DEPLOY_ENV is a list of NAME=value words
   OUT="$(cd "$CASE_DIR/repo" && env -u AWS_REGION -u AWS_DEFAULT_REGION -u TF_VAR_region -u AWS_PROFILE \
-    -u LOOKOUT_TF_STATE_BUCKET PATH="$PATH_WITH_STUBS" ${DEPLOY_ENV:-} infra/deploy.sh "$@" 2>&1)"
+    -u SNOW_GLOBE_TF_STATE_BUCKET -u LOOKOUT_TF_STATE_BUCKET PATH="$PATH_WITH_STUBS" ${DEPLOY_ENV:-} infra/deploy.sh "$@" 2>&1)"
   CODE=$?
   set -e
 }
@@ -192,8 +192,8 @@ ok
 new_case refuses_until_both_lambda_handlers_exist no-handlers
 TF_VAR_alarm_email=alerts@example.com deploy --dry-run </dev/null
 [ "$CODE" -eq 2 ] || fail "exit code $CODE, want 2"
-contains "$OUT" "workers/capture/src/lookout_capture/lambda_handler.py" "names the missing capture handler"
-contains "$OUT" "workers/forecast/src/lookout_forecast/lambda_handler.py" "names the missing forecast handler"
+contains "$OUT" "workers/capture/src/snow_globe_capture/lambda_handler.py" "names the missing capture handler"
+contains "$OUT" "workers/forecast/src/snow_globe_forecast/lambda_handler.py" "names the missing forecast handler"
 lacks "$(calls)" "aws " "no AWS call before the build inputs are checked"
 ok
 
@@ -209,7 +209,7 @@ ok
 new_case refuses_an_image_tag_that_is_not_in_ecr
 TF_VAR_alarm_email=alerts@example.com deploy --image-tag abc123def456 <<<$'y\ny'
 [ "$CODE" -eq 2 ] || fail "exit code $CODE, want 2; output: $OUT"
-contains "$OUT" "image abc123def456 is not in the ECR repository lookout/lambda in us-east-1" "message"
+contains "$OUT" "image abc123def456 is not in the ECR repository snow-globe/lambda in us-east-1" "message"
 contains "$OUT" "nothing was changed" "message"
 lacks "$(calls)" "terraform" "no terraform"
 ok
@@ -264,12 +264,12 @@ ok
 new_case dry_run_prints_the_plan_and_changes_nothing with-workers
 TF_VAR_alarm_email=alerts@example.com deploy --dry-run </dev/null
 [ "$CODE" -eq 0 ] || fail "exit code $CODE, want 0; output: $OUT"
-contains "$OUT" "Lookout deploy plan (nothing has changed yet)" "header"
+contains "$OUT" "Snow Globe deploy plan (nothing has changed yet)" "header"
 contains "$OUT" "AWS account   123456789012" "account"
 contains "$OUT" "Region        us-east-1" "default region"
 contains "$OUT" "a***@example.com" "masked email"
 lacks "$OUT" "alerts@example.com" "the full alarm address is never printed"
-contains "$OUT" "lookout-tfstate-123456789012  (missing: step 1 creates it)" "state bucket"
+contains "$OUT" "snow-globe-tfstate-123456789012  (missing: step 1 creates it)" "state bucket"
 contains "$OUT" "Image tag     $(sha12)  (step 4 builds and pushes it)" "image tag from git"
 contains "$OUT" "-target=aws_budgets_budget.monthly" "phase 1 creates the budget"
 contains "$OUT" "Dry run: stopping here." "dry run"
@@ -305,22 +305,23 @@ for v in boot_init boot_apply root_init phase1 login buildx phase2; do
   eval "val=\${$v}"
   [ -n "$val" ] || fail "step $v did not run; calls: $(calls)"
 done
-[ "$boot_init" -lt "$boot_apply" ] && [ "$boot_apply" -lt "$root_init" ] && [ "$root_init" -lt "$phase1" ] &&
-  [ "$phase1" -lt "$login" ] && [ "$login" -lt "$buildx" ] && [ "$buildx" -lt "$phase2" ] ||
+if ! { [ "$boot_init" -lt "$boot_apply" ] && [ "$boot_apply" -lt "$root_init" ] && [ "$root_init" -lt "$phase1" ] &&
+  [ "$phase1" -lt "$login" ] && [ "$login" -lt "$buildx" ] && [ "$buildx" -lt "$phase2" ]; }; then
   fail "steps out of order (lines $order)"
+fi
 log="$(calls)"
 contains "$log" "-target=aws_sns_topic_subscription.alarm_email" "phase 1 subscribes the alarm email"
 contains "$log" "-target=aws_ecr_lifecycle_policy.lambda" "phase 1 creates ECR"
-contains "$log" "--platform linux/arm64 --provenance=false --sbom=false --file infra/lambda/Dockerfile --tag 123456789012.dkr.ecr.us-east-1.amazonaws.com/lookout/lambda:$tag --push ." "buildx arguments"
+contains "$log" "--platform linux/arm64 --provenance=false --sbom=false --file infra/lambda/Dockerfile --tag 123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-globe/lambda:$tag --push ." "buildx arguments"
 lacks "$log" "auto-approve" "terraform must always ask"
 lacks "$log" "capture_schedule_enabled=false" "capture stays enabled when the pollers are stopped"
 backend="$(cat "$CASE_DIR/repo/infra/terraform/backend.hcl")"
-contains "$backend" 'bucket       = "lookout-tfstate-123456789012"' "backend bucket"
-contains "$backend" 'key          = "lookout/terraform.tfstate"' "backend key"
+contains "$backend" 'bucket       = "snow-globe-tfstate-123456789012"' "backend bucket"
+contains "$backend" 'key          = "snow-globe/terraform.tfstate"' "backend key"
 contains "$backend" "use_lockfile = true" "S3-native locking"
 lacks "$OUT" "alerts@example.com" "the full alarm address is never printed"
-contains "$OUT" "aws scheduler get-schedule --region us-east-1 --group-name lookout --name lookout-capture" "verification commands"
-contains "$log" "ecr describe-images --region us-east-1 --repository-name lookout/lambda --image-ids imageTag=$tag" "checks ECR for the tag before building"
+contains "$OUT" "aws scheduler get-schedule --region us-east-1 --group-name snow-globe --name snow-globe-capture" "verification commands"
+contains "$log" "ecr describe-images --region us-east-1 --repository-name snow-globe/lambda --image-ids imageTag=$tag" "checks ECR for the tag before building"
 ok
 
 new_case rerun_on_the_same_commit_reuses_the_pushed_image with-workers
@@ -352,7 +353,7 @@ DEPLOY_ENV="STUB_IMAGE_EXISTS=1" TF_VAR_alarm_email=alerts@example.com deploy --
 [ "$CODE" -eq 0 ] || fail "exit code $CODE; output: $OUT"
 log="$(calls)"
 lacks "$log" "docker" "no Docker with --image-tag"
-contains "$log" "ecr describe-images --region us-east-1 --repository-name lookout/lambda --image-ids imageTag=abc123def456" "checks the tag exists"
+contains "$log" "ecr describe-images --region us-east-1 --repository-name snow-globe/lambda --image-ids imageTag=abc123def456" "checks the tag exists"
 contains "$log" "-var image_tag=abc123def456" "deploys the given tag"
 ok
 
@@ -370,14 +371,14 @@ ok
 new_case build_refuses_without_the_lambda_handlers no-handlers
 build --check
 [ "$CODE" -eq 3 ] || fail "exit code $CODE, want 3; output: $OUT"
-contains "$OUT" "workers/capture/src/lookout_capture/lambda_handler.py" "names the capture handler"
-contains "$OUT" "workers/forecast/src/lookout_forecast/lambda_handler.py" "names the forecast handler"
+contains "$OUT" "workers/capture/src/snow_globe_capture/lambda_handler.py" "names the capture handler"
+contains "$OUT" "workers/forecast/src/snow_globe_forecast/lambda_handler.py" "names the forecast handler"
 lacks "$OUT" "build inputs and Docker are ready" "must not report ready"
 [ ! -s "$STUB_LOG" ] || fail "no docker call when a handler is missing"
-printf 'def handler(event, context):\n    return {}\n' >"$CASE_DIR/repo/workers/capture/src/lookout_capture/lambda_handler.py"
+printf 'def handler(event, context):\n    return {}\n' >"$CASE_DIR/repo/workers/capture/src/snow_globe_capture/lambda_handler.py"
 build --check
 [ "$CODE" -eq 3 ] || fail "with only the capture handler: exit code $CODE, want 3"
-contains "$OUT" "workers/forecast/src/lookout_forecast/lambda_handler.py" "still names the forecast handler"
+contains "$OUT" "workers/forecast/src/snow_globe_forecast/lambda_handler.py" "still names the forecast handler"
 ok
 
 new_case build_tag_is_the_commit_unless_image_inputs_changed with-workers
@@ -398,15 +399,15 @@ ok
 new_case build_runs_buildx_for_arm64_without_provenance with-workers
 build
 [ "$CODE" -eq 0 ] || fail "exit code $CODE; output: $OUT"
-contains "$(calls)" "docker buildx build --platform linux/arm64 --provenance=false --sbom=false --file infra/lambda/Dockerfile --tag lookout-lambda:$(sha12) --load ." "local build"
+contains "$(calls)" "docker buildx build --platform linux/arm64 --provenance=false --sbom=false --file infra/lambda/Dockerfile --tag snow-globe-lambda:$(sha12) --load ." "local build"
 last="$(printf '%s\n' "$OUT" | tail -n 1)"
 [ "$last" = "image_tag=$(sha12)" ] || fail "last line must be image_tag=<tag>, got '$last'"
 ok
 
 new_case build_push_uses_the_repository_url with-workers
-build --push 123456789012.dkr.ecr.us-east-1.amazonaws.com/lookout/lambda --tag v1
+build --push 123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-globe/lambda --tag v1
 [ "$CODE" -eq 0 ] || fail "exit code $CODE"
-contains "$(calls)" "--tag 123456789012.dkr.ecr.us-east-1.amazonaws.com/lookout/lambda:v1 --push ." "push target"
+contains "$(calls)" "--tag 123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-globe/lambda:v1 --push ." "push target"
 ok
 
 new_case build_rejects_an_unsafe_tag with-workers

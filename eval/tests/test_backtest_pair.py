@@ -21,19 +21,19 @@ from pathlib import Path
 import numpy as np
 import pytest
 from conftest import NODE_REASON, REPO_RENDERER, NoaaSunFixedMoon
-from lookout_common.manifest import load_manifest
-from lookout_common.timeutil import isoformat_z
 from PIL import Image
+from snow_globe_common.manifest import load_manifest
+from snow_globe_common.timeutil import isoformat_z
 from synth_forecast import low_deck, make_doc
 from synth_images import PEAK_BOX, blurred, landscape, to_rgb
 
-import lookout_eval.backtest_pair as backtest_pair
-import lookout_eval.scene as scene_module
-from lookout_eval.backtest_pair import PairError, PairInputs, run_pair
-from lookout_eval.extractor import Region
-from lookout_eval.forecast_io import ForecastRun
-from lookout_eval.heldout import committed_split
-from lookout_eval.leakage import HeldOut, LeakageError, SealedScoring
+import snow_globe_eval.backtest_pair as backtest_pair
+import snow_globe_eval.scene as scene_module
+from snow_globe_eval.backtest_pair import PairError, PairInputs, run_pair
+from snow_globe_eval.extractor import Region
+from snow_globe_eval.forecast_io import ForecastRun
+from snow_globe_eval.heldout import committed_split
+from snow_globe_eval.leakage import HeldOut, LeakageError, SealedScoring
 
 VP_ID = "rainier.paradise-mountain"
 RUN = datetime(2026, 11, 18, 12, tzinfo=UTC)
@@ -69,7 +69,7 @@ def _forecast(root: Path, vp: str, run: datetime, hours: list[int]) -> Path:
 
 
 def _make_world(tmp_path: Path, vp: str = VP_ID) -> dict:
-    root = tmp_path / "lookout-data"
+    root = tmp_path / "snow-globe-data"
     root.mkdir()
     refs = [
         _frame(root, "frames", VALID - timedelta(days=d), f"{d:012x}", to_rgb(landscape(d)), vp=vp)
@@ -181,7 +181,9 @@ def test_full_pair_with_a_stand_in_renderer(world) -> None:
     checks = record["leakage_checks"]
     assert checks["result"] == "passed" and len(checks["references"]) == 3
     assert all(c["passed"] for c in checks["references"]) and checks["plate"]["passed"]
-    assert checks["held_out_source"].startswith("committed split lookout_eval/heldout_periods.json")
+    assert checks["held_out_source"].startswith(
+        "committed split snow_globe_eval/heldout_periods.json"
+    )
     assert checks["split"] == committed_split().to_record()
     assert checks["held_out"] == [["2026-12-15T00:00:00-08:00", "2027-01-15T00:00:00-08:00"]]
     assert checks["fit_bound_utc"] == "2026-12-15T08:00:00Z" and checks["design"] is None
@@ -397,15 +399,15 @@ def test_forecast_for_another_viewpoint_is_refused(world, tmp_path) -> None:
         _run(world, forecast=str(other))
 
 
-def test_auto_needs_lookout_forecast(world) -> None:
+def test_auto_needs_snow_globe_forecast(world) -> None:
     pytest.importorskip("PIL")
     try:
-        import lookout_forecast  # noqa: F401
+        import snow_globe_forecast  # noqa: F401
     except ImportError:
         with pytest.raises(PairError, match="uv sync --group forecast"):
             _run(world, forecast="auto")
     else:
-        pytest.skip("lookout-forecast is installed; 'auto' would reach the network")
+        pytest.skip("snow-globe-forecast is installed; 'auto' would reach the network")
 
 
 # --- the committed held-out split (D-019, D-022, D-024) ---------------------------------------
@@ -496,7 +498,7 @@ def test_the_summer_standard_time_edge_decides_an_archived_reference(world) -> N
 def test_quarantined_inputs_are_refused_before_anything_is_read(
     world, monkeypatch, tmp_path
 ) -> None:
-    """D-022: anything under $LOOKOUT_DATA_DIR/quarantine/ is refused on every path, the
+    """D-022: anything under $SNOW_GLOBE_DATA_DIR/quarantine/ is refused on every path, the
     forecast summary and the landmark boxes file included (review finding)."""
     breach = world["root"] / "quarantine" / "held-out-breach-2026-11-19"
     quarantined = _frame(
@@ -572,7 +574,7 @@ def test_an_auto_forecast_file_under_quarantine_is_refused(world, monkeypatch) -
 def test_a_boxes_file_under_quarantine_is_refused(world, tmp_path) -> None:
     """Review finding (scratch test 2): a boxes file under quarantine/ was loaded and used.
     load_boxes refuses it before reading, and the pair refuses boxes that name it."""
-    from lookout_eval.landmark_boxes import load_boxes
+    from snow_globe_eval.landmark_boxes import load_boxes
 
     boxes = _boxes(tmp_path)
     breach = world["root"] / "quarantine" / "held-out-breach-2026-11-19"
@@ -850,14 +852,14 @@ def test_a_reference_outside_the_layout_that_cannot_be_dated_is_refused(world) -
 
 def _boxes(tmp_path: Path, vp: str = VP_ID):
     """Rainier boxes for the synthetic world: the peak (primary) and a foreground strip."""
-    from lookout_eval.landmark_boxes import load_boxes
+    from snow_globe_eval.landmark_boxes import load_boxes
 
     x0, y0, x1, y1 = PEAK_BOX
     path = tmp_path / "boxes.json"
     path.write_text(
         json.dumps(
             {
-                "kind": "lookout.landmark-boxes",
+                "kind": "snow-globe.landmark-boxes",
                 "version": "v-1",
                 "viewpoints": {
                     vp: {
@@ -991,8 +993,8 @@ def test_the_moved_box_lands_on_the_same_content(tmp_path) -> None:
     its content moved 36 px right and 24 px up: the registration says +36/-24, the box moved
     by it covers the same content (ratio 1.00), and moving it the other way does worse than
     not moving it at all."""
-    from lookout_eval.extractor import ClearDayReference, ExtractorParams, ReferenceFrame
-    from lookout_eval.registration import estimate_shift
+    from snow_globe_eval.extractor import ClearDayReference, ExtractorParams, ReferenceFrame
+    from snow_globe_eval.registration import estimate_shift
 
     plate_luma = _patch_scene()
     truth_luma = np.roll(np.roll(plate_luma, -24, axis=0), 36, axis=1)  # up 24, right 36
@@ -1099,7 +1101,7 @@ def _summary_for(world, lead_hours: float = 24.0) -> dict:
     available, _ = forecast.availability(VALID)
     issue = isoformat_z(VALID - timedelta(hours=lead_hours))
     return {
-        "kind": "lookout.pair-forecast",
+        "kind": "snow-globe.pair-forecast",
         "viewpoint_id": world["vp"],
         "valid_time_utc": isoformat_z(VALID),
         "issue_time_utc": issue,
@@ -1117,7 +1119,7 @@ def _summary_for(world, lead_hours: float = 24.0) -> dict:
         "file": {"sha256": forecast.sha256},
         "plan": {"total_bytes": 123},
         "result": {"transfer": {"bytes": {"grib": 123}}, "seconds_total": 1.5},
-        "code": {"lookout_forecast_file": "/snapshot/lookout_forecast/__init__.py"},
+        "code": {"snow_globe_forecast_file": "/snapshot/snow_globe_forecast/__init__.py"},
         "timings_s": {"choose": 0.01},
     }
 
@@ -1136,10 +1138,32 @@ def test_the_forecast_summary_must_name_this_forecast_file(world, tmp_path) -> N
         _run(world, forecast_summary=summary)
 
 
+def test_a_summary_written_before_the_rename_is_read(world, tmp_path) -> None:
+    """The rename (D-080): pair_forecast wrote ``kind: lookout.pair-forecast`` and ``lookout_*``
+    code keys until it was renamed (the 19 Nov summary on disk has both); it reads as before."""
+    summary = tmp_path / "summary.json"
+    old = {
+        **_summary_for(world),
+        "kind": "lookout.pair-forecast",
+        "code": {
+            "lookout_forecast_file": "/snapshot/lookout_forecast/__init__.py",
+            "lookout_forecast_version": "0.1.0",
+            "lookout_common_file": "/snapshot/lookout_common/__init__.py",
+        },
+    }
+    summary.write_text(json.dumps(old))
+    record, _ = _run(world, forecast_summary=summary, scene_only=True)
+    assert record["status"] == "scene-only"
+    assert record["inputs"]["forecast"]["summary"]["code"] == old["code"]
+    summary.write_text(json.dumps({**old, "kind": "lookout.pair-forecast-v2"}))
+    with pytest.raises(PairError, match=r"is not a snow-globe\.pair-forecast summary"):
+        _run(world, forecast_summary=summary, scene_only=True)
+
+
 def test_a_summary_for_another_issue_time_is_refused(world, tmp_path) -> None:
     """Review finding (scratch test 3): only the file hash and run were compared, so this
     pair's summary was accepted for a 12 h lead from the same file, and the record claimed
-    lookout-forecast chose that run for an issue time it never considered."""
+    snow-globe-forecast chose that run for an issue time it never considered."""
     summary = tmp_path / "summary.json"
     good = _summary_for(world)
     summary.write_text(json.dumps(good))
@@ -1171,3 +1195,25 @@ def test_a_summary_for_another_issue_time_is_refused(world, tmp_path) -> None:
     summary.write_text(json.dumps({**good, "valid_time_utc": "2026-11-19T12:00:00-08:00"}))
     record, _ = _run(world, forecast_summary=summary, scene_only=True)
     assert record["status"] == "scene-only"
+
+
+def test_records_written_before_the_rename_are_pair_records(world) -> None:
+    """The rename (D-080): the M0.5 pair's records of 19 Nov say ``kind: lookout.backtest-pair``.
+    The fixture is the header of the recorded run1 record (scores/pairs/grand-canyon.yavapai/
+    20240115T194500Z_L24h_7838502574.run1.json), trimmed to the fields without local paths."""
+    from snow_globe_eval.backtest_pair import RECORD_KIND, RECORD_KINDS, is_pair_record
+
+    fixture = Path(__file__).parent / "fixtures" / "backtest_pair_lookout_run1_header.json"
+    recorded = json.loads(fixture.read_text())
+    assert recorded["kind"] == "lookout.backtest-pair" and recorded["versions"]["lookout_eval"]
+    assert is_pair_record(recorded)
+    record, _ = _run(world, scene_only=True)
+    assert record["kind"] == RECORD_KIND and is_pair_record(record)
+    assert RECORD_KINDS == ("snow-globe.backtest-pair", "lookout.backtest-pair")
+    for broken in (
+        {**recorded, "kind": "lookout.pair-forecast"},
+        {**recorded, "schema_version": 2},
+        [recorded],
+        None,
+    ):
+        assert not is_pair_record(broken)

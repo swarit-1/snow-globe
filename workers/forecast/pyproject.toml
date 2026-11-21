@@ -1,12 +1,12 @@
 [project]
-name = "lookout-forecast"
-version = "0.2.0"
-description = "Lookout forecast worker: HRRR byte-range extraction at each viewpoint's sample points, availability-lag log (PRD 8.3, 11.2)."
+name = "snow-globe-forecast"
+version = "0.3.0"
+description = "Snow Globe forecast worker: HRRR byte-range extraction at each viewpoint's sample points, availability-lag log (PRD 8.3, 11.2)."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "lookout-common[s3]",
+    "snow-globe-common[s3]",
     "httpx>=0.28",
     "jsonschema>=4.23",
     "numpy>=2.2",
@@ -16,10 +16,10 @@ dependencies = [
 ]
 
 [project.scripts]
-lookout-forecast = "lookout_forecast.cli:main"
+snow-globe-forecast = "snow_globe_forecast.cli:main"
 
 [tool.uv.sources]
-lookout-common = { path = "../common", editable = true }
+snow-globe-common = { path = "../common", editable = true }
 
 [dependency-groups]
 dev = [

@@ -1,6 +1,6 @@
-"""Synthetic lookout-forecast run files (schema version 1) for eval tests.
+"""Synthetic snow-globe-forecast run files (schema version 1) for eval tests.
 
-The layout follows workers/forecast/src/lookout_forecast/schema/forecast_run.schema.json:
+The layout follows workers/forecast/src/snow_globe_forecast/schema/forecast_run.schema.json:
 values are [field][hour][point]. Values come from a callback so each test sets the weather.
 """
 
@@ -12,7 +12,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from lookout_common.manifest import Viewpoint, great_circle_km, initial_bearing_deg
+from snow_globe_common.manifest import Viewpoint, great_circle_km, initial_bearing_deg
 
 FIELDS: dict[str, str] = {
     "VIS:surface": "n/a",
@@ -192,7 +192,7 @@ def make_doc(
     }
     return {
         "schema_version": 1,
-        "kind": "lookout.forecast-run",
+        "kind": "snow-globe.forecast-run",
         "source": "noaa-hrrr-bdp-pds",
         "model": "hrrr-conus",
         "model_version": "v4",
@@ -207,7 +207,7 @@ def make_doc(
         "listed_utc": _z(run_start + timedelta(days=3)),
         "fetch_started_utc": _z(run_start + timedelta(days=3)),
         "fetch_finished_utc": _z(run_start + timedelta(days=3, seconds=20)),
-        "software": {"lookout_forecast": "test", "eccodes": "test"},
+        "software": {"snow_globe_forecast": "test", "eccodes": "test"},
         "grid": _GRID,
         "forecast_hours": list(hours),
         "missing_hours": [],

@@ -341,7 +341,7 @@ mod tests {
     fn target() -> Target {
         Target {
             window_id: 7,
-            title: "Lookout M1 spike panel".into(),
+            title: "Snow Globe M1 spike panel".into(),
             owner_pid: Some(42),
             filter_style: "Ok(Window)".into(),
             width_px: 960,
@@ -503,8 +503,8 @@ mod tests {
     /// into the run file. Only the certificate kind and booleans are kept.
     #[test]
     fn codesign_summary_keeps_no_name_or_team_id() {
-        let text = "Executable=/Users/someone/lookout-data/cache/spike-m1/M1SckProbe.app/Contents/MacOS/m1-sck\n\
-            Identifier=dev.lookout.spike-m1.sck\n\
+        let text = "Executable=/Users/someone/snow-globe-data/cache/spike-m1/M1SckProbe.app/Contents/MacOS/m1-sck\n\
+            Identifier=dev.snowglobe.spike-m1.sck\n\
             Format=app bundle with Mach-O thin (arm64)\n\
             CodeDirectory v=20500 size=4797 flags=0x10000(runtime) hashes=139+7 location=embedded\n\
             CDHash=0123456789abcdef0123456789abcdef01234567\n\
@@ -522,7 +522,7 @@ mod tests {
         assert_eq!(v["certificate_kind"], "Apple Development");
         assert_eq!(v["developer_signed"], true);
         assert_eq!(v["team_id_present"], true);
-        assert_eq!(v["identifier"][0], "dev.lookout.spike-m1.sck");
+        assert_eq!(v["identifier"][0], "dev.snowglobe.spike-m1.sck");
         assert_eq!(v["signature"][0], "size=4797");
         // The fields of the release m1-sck built on 19 Nov 2026 (linker-signed, ad hoc).
         let adhoc = codesign_summary(

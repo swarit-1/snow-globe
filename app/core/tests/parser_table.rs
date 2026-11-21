@@ -14,9 +14,9 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use common::noaa;
-use lookout_core::parser::RangeReason;
-use lookout_core::places::PlaceTable;
-use lookout_core::{LastPlace, ParseContext, ParseError, Parser, Query};
+use snow_globe_core::parser::RangeReason;
+use snow_globe_core::places::PlaceTable;
+use snow_globe_core::{LastPlace, ParseContext, ParseError, Parser, Query};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Cat {
@@ -2174,7 +2174,7 @@ fn cases() -> Vec<Case> {
             T10,
             fail(Fail::UnknownViewpoint),
         ),
-        // Generic place words alone, or with a word of a place Lookout does not have, are a miss
+        // Generic place words alone, or with a word of a place Snow Globe does not have, are a miss
         // with suggestions; each of these once matched a known place at full confidence.
         c(
             NoMatchTop3,
@@ -2454,7 +2454,7 @@ fn common_checks(
 }
 
 fn check_at(e: &At, q: &Query, table: &PlaceTable) -> Result<(), String> {
-    let vt = lookout_core::query::fmt_local(&q.valid_time);
+    let vt = snow_globe_core::query::fmt_local(&q.valid_time);
     if q.place_id != e.place || vt != e.vt || name(&q.time_source.rule) != e.rule {
         return Err(format!(
             "got {} {} {}, expected {} {} {}",

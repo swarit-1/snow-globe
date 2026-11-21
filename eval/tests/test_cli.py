@@ -1,4 +1,4 @@
-"""The ``lookout-eval`` console script."""
+"""The ``snow-globe-eval`` console script."""
 
 from __future__ import annotations
 
@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 from conftest import FIXTURES, needs_oculus
-from lookout_common.manifest import load_manifest
 from PIL import Image
+from snow_globe_common.manifest import load_manifest
 from synth_forecast import low_deck, make_doc
 from synth_images import PEAK_BOX, landscape, to_rgb
 
-from lookout_eval.cli import main
+from snow_globe_eval.cli import main
 
 VP_ID = "rainier.paradise-mountain"
 REPO_RENDERER = Path(__file__).resolve().parents[2] / "renderer"
@@ -101,8 +101,8 @@ def test_backtest_pair_scene_only(
 def test_errors_exit_with_code_2(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from lookout_eval import ephem_check
-    from lookout_eval.ephemeris import EphemerisUnavailableError
+    from snow_globe_eval import ephem_check
+    from snow_globe_eval.ephemeris import EphemerisUnavailableError
 
     def unavailable(name=None):
         raise EphemerisUnavailableError("oculus-core is not importable (test)")
@@ -120,7 +120,7 @@ def test_backtest_pair_held_out_adds_days_and_guards_the_truth_before_opening_it
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """`--held-out` adds days to the committed split; a held-out truth is refused unopened."""
-    monkeypatch.setenv("LOOKOUT_EPHEMERIS", "noaa")  # the refusal comes before any Moon
+    monkeypatch.setenv("SNOW_GLOBE_EPHEMERIS", "noaa")  # the refusal comes before any Moon
     valid = datetime(2026, 11, 19, 20, tzinfo=UTC)
     truth = _frame(data_dir, "frames", valid, "8a1c9d2b", to_rgb(landscape(9)))
     ref = _frame(data_dir, "frames", valid - timedelta(days=2), "0" * 12, to_rgb(landscape(2)))
@@ -160,6 +160,7 @@ def test_backtest_pair_held_out_adds_days_and_guards_the_truth_before_opening_it
 def test_heldout_prints_the_committed_split(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["heldout"]) == 0
     summary = json.loads(capsys.readouterr().out)
+    # the committed split's own kind, kept with its pre-registered hash (D-038, D-080)
     assert summary["kind"] == "lookout.heldout-periods" and summary["version"] >= 1
     rainier = summary["viewpoints"][VP_ID]
     assert rainier["held_out_utc"] == [["2026-12-15T08:00:00Z", "2027-01-15T08:00:00Z"]]
@@ -264,7 +265,7 @@ def test_backtest_pair_with_named_boxes_and_a_tag(
     boxes.write_text(
         json.dumps(
             {
-                "kind": "lookout.landmark-boxes",
+                "kind": "snow-globe.landmark-boxes",
                 "version": "v-1",
                 "viewpoints": {
                     VP_ID: {
@@ -356,7 +357,7 @@ def test_cli_refuses_quarantined_listing_and_boxes_files_unread(
     boxes.write_text(
         json.dumps(
             {
-                "kind": "lookout.landmark-boxes",
+                "kind": "snow-globe.landmark-boxes",
                 "version": "v-1",
                 "viewpoints": {
                     VP_ID: {
@@ -379,3 +380,28 @@ def test_cli_refuses_quarantined_listing_and_boxes_files_unread(
     assert code == 2 and "LeakageError: references file" in err and "quarantine" in err
     for path in (listing, boxes):
         path.chmod(0o600)
+
+
+def test_ephem_check_default_search_follows_the_data_dir_variables(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The default --search is resolved when the command runs, under the variables' data dir
+    (the review of D-080 found it fixed at import time under the default folder)."""
+    from snow_globe_eval import cli, ephem_check
+
+    seen: list[Path] = []
+
+    def fake_run_check(search: Path, viewpoint):
+        seen.append(search)
+        raise FileNotFoundError(search)
+
+    monkeypatch.setattr(ephem_check, "run_check", fake_run_check)
+    for name in ("SNOW_GLOBE_DATA_DIR", "LOOKOUT_DATA_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    assert cli._parser().parse_args(["ephem-check"]).search is None
+    for name in ("LOOKOUT_DATA_DIR", "SNOW_GLOBE_DATA_DIR"):
+        root = tmp_path / name
+        root.mkdir()
+        monkeypatch.setenv(name, str(root))
+        assert main(["ephem-check"]) == 2
+        assert seen[-1] == root.resolve() / cli.DEFAULT_SEARCH

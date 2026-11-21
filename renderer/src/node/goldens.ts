@@ -6,7 +6,7 @@
  *
  * These are the only renders written inside the repo, and only because the plate is procedural (no
  * camera pixels). updateGoldens() refuses any scene that is not the synthetic viewpoint on the synthetic
- * plate: goldens of real NPS plates (M2) belong under $LOOKOUT_DATA_DIR, never in this public repo
+ * plate: goldens of real NPS plates (M2) belong under $SNOW_GLOBE_DATA_DIR, never in this public repo
  * (CLAUDE.md, PRD §15.1). The synthetic-only exception still needs recording in CLAUDE.md or DECISIONS.md.
  */
 import { createHash } from 'node:crypto';
@@ -75,7 +75,7 @@ export function assertSyntheticGolden(scene: SceneSpec, name: string): void {
   if (scene.viewpoint_id !== SYNTHETIC_VIEWPOINT_ID || scene.plate.id !== SYNTHETIC_PLATE_ID) {
     throw new Error(
       `golden ${name}: only the synthetic viewpoint (${SYNTHETIC_VIEWPOINT_ID}) on ${SYNTHETIC_PLATE_ID} may be rendered into the repo; ` +
-        `goldens of real plates belong under $LOOKOUT_DATA_DIR`,
+        `goldens of real plates belong under $SNOW_GLOBE_DATA_DIR`,
     );
   }
 }

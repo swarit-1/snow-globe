@@ -576,8 +576,8 @@ def _queue_file(tmp_path: Path) -> Path:
     return path
 
 
-ADD = "run --no-sync lookout-capture archive queue add"
-LIST = "run --no-sync lookout-capture archive queue list"
+ADD = "run --no-sync snow-globe-capture archive queue add"
+LIST = "run --no-sync snow-globe-capture archive queue list"
 
 
 def test_measure_inputs_bins_end_to_start_gaps_exactly():
@@ -610,7 +610,7 @@ def test_days_mode_counts_a_failed_entry_as_unfinished_and_resumes_it_daily(
     # Finding 2, on the real QueueRunner: the first entry's search fails three times (the
     # replayed triple of read timeouts), so it is failed, not finished; T2 holds no entry of
     # this queue and is never reported. With the lead's daily resume it finishes a day later.
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(tmp_path / "unused"))  # _setup sets its own
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(tmp_path / "unused"))  # _setup sets its own
     monkeypatch.setattr(
         loop_sim.SimNPS, "_outcome", lambda self: "read_timeout" if len(self.log) < 3 else "ok"
     )
@@ -879,7 +879,7 @@ def test_the_data_dir_guards_hold_under_python_dash_o(tmp_path, monkeypatch):
         "m.main([sys.argv[2], '--queue', sys.argv[3]])\n"
     )
     plan_py = str(Path(__file__).with_name("plan.py"))
-    env = {**os.environ, "LOOKOUT_DATA_DIR": str(data)}
+    env = {**os.environ, "SNOW_GLOBE_DATA_DIR": str(data)}
     args = [sys.executable, "-O", "-c", code, plan_py, str(out), str(tmp_path / "q.json")]
     proc = subprocess.run(args, env=env, capture_output=True, text=True)
     assert proc.returncode == 1 and "refused: output folder" in proc.stderr, proc.stderr[-400:]

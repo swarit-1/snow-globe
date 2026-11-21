@@ -6,11 +6,11 @@ import json
 from datetime import timedelta
 
 import pytest
-from lookout_common.jsonl import read_jsonl
+from snow_globe_common.jsonl import read_jsonl
 
-from lookout_forecast.decode import DecodeError
-from lookout_forecast.discovery import list_run
-from lookout_forecast.extract import (
+from snow_globe_forecast.decode import DecodeError
+from snow_globe_forecast.discovery import list_run
+from snow_globe_forecast.extract import (
     SKIP_ALREADY_WRITTEN,
     SKIP_WOULD_NARROW,
     BandwidthCapError,
@@ -24,11 +24,11 @@ from lookout_forecast.extract import (
     run_covered,
     write_decisions,
 )
-from lookout_forecast.fields import resolve_fields
-from lookout_forecast.grid import HRRR_CONUS
-from lookout_forecast.hrrr import object_key
-from lookout_forecast.idx import IdxError
-from lookout_forecast.output import validate_document
+from snow_globe_forecast.fields import resolve_fields
+from snow_globe_forecast.grid import HRRR_CONUS
+from snow_globe_forecast.hrrr import object_key
+from snow_globe_forecast.idx import IdxError
+from snow_globe_forecast.output import validate_document
 
 from .conftest import RAINIER, RUN
 from .fakebucket import FakeBucket, expected_value, missing_cell
@@ -263,7 +263,7 @@ def test_a_mislabelled_message_writes_nothing(
 def test_all_eight_viewpoints_on_the_real_grid(bucket, storage, manifests, data_root) -> None:
     fake = FakeBucket(grid=HRRR_CONUS)
     fake.add_run(RUN, fields=["VIS:surface", "HGT:surface"], hours=[0], fillers=False)
-    from lookout_forecast.bucket import HrrrBucket
+    from snow_globe_forecast.bucket import HrrrBucket
 
     with HrrrBucket(transport=fake.transport()) as real_grid_bucket:
         extractor = Extractor(
@@ -393,7 +393,7 @@ def test_the_module_run_hours_still_decides_without_explicit_hours(
 ) -> None:
     """eval's pair_forecast.only_hours replaces extract.run_hours for one call (until it moves
     to ExtractOptions.hours); planner and extractor must keep going through that global."""
-    from lookout_forecast import extract
+    from snow_globe_forecast import extract
 
     monkeypatch.setattr(extract, "run_hours", lambda run_start, limit=None: [31, 32])
     assert plan_run(bucket, RUN, fields=_options().fields)["hours"] == [31, 32]

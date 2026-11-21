@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from lookout_common.storage import LocalStorage
+from snow_globe_common.storage import LocalStorage
 
-from lookout_forecast.availability import (
+from snow_globe_forecast.availability import (
     FALLBACK_LAG_MIN,
     ArchivedStamps,
     LagModel,
@@ -22,10 +22,10 @@ from lookout_forecast.availability import (
     stored_run_exists,
     typical_lag_s,
 )
-from lookout_forecast.bucket import S3Object
-from lookout_forecast.discovery import group_runs
-from lookout_forecast.extract import ExtractOptions, Extractor
-from lookout_forecast.fields import resolve_fields
+from snow_globe_forecast.bucket import S3Object
+from snow_globe_forecast.discovery import group_runs
+from snow_globe_forecast.extract import ExtractOptions, Extractor
+from snow_globe_forecast.fields import resolve_fields
 
 from .conftest import RAINIER
 
@@ -292,7 +292,7 @@ def test_stored_runs_only_and_live_hours_wait_for_the_fetch(stored, storage) -> 
     assert choice.availability_source == "live-fetch-finished"
     assert ("2026111908", "f02 not stored") in choice.skipped
     assert choice.lead_h == pytest.approx((issue + timedelta(hours=1) - fetched).seconds / 3600)
-    # Before the fetch finished, Lookout did not have the run, whatever S3 said.
+    # Before the fetch finished, Snow Globe did not have the run, whatever S3 said.
     early = select_stored_run(storage, RAINIER, fetched - timedelta(minutes=1), issue)
     assert early is None
     # A valid time past the stored hours: 07Z cannot serve it and nothing older is stored.

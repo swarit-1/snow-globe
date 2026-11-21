@@ -6,8 +6,8 @@ import math
 
 import pytest
 
-from lookout_eval.extractor import EdgeStats, ExtractorParams, LandmarkResult
-from lookout_eval.pair_score import score_pair
+from snow_globe_eval.extractor import EdgeStats, ExtractorParams, LandmarkResult
+from snow_globe_eval.pair_score import score_pair
 
 _STATS = EdgeStats(1.0, 1.0, 1.0, 1.0, 0.5, 100, (960, 540), (1920, 1080))
 

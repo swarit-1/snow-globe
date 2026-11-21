@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from lookout_forecast.bucket import S3Object, parse_list_page
-from lookout_forecast.discovery import find_latest_complete, group_runs, list_run
+from snow_globe_forecast.bucket import S3Object, parse_list_page
+from snow_globe_forecast.discovery import find_latest_complete, group_runs, list_run
 
 from .conftest import FIXTURES, RUN
 

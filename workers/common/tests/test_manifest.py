@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
-from lookout_common import manifest as mf
-from lookout_common.manifest import ManifestError
+from snow_globe_common import manifest as mf
+from snow_globe_common.manifest import ManifestError
 
 from .conftest import REPO_ROOT
 
@@ -129,10 +129,10 @@ def test_load_manifest_and_env_discovery(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert mf.load_manifest("point-reyes.beach", MANIFESTS).truth_camera.archive_code == "pore"
     with pytest.raises(KeyError):
         mf.load_manifest("golden-gate.bridge", MANIFESTS)
-    monkeypatch.setenv("LOOKOUT_MANIFEST_DIR", str(MANIFESTS))
+    monkeypatch.setenv("SNOW_GLOBE_MANIFEST_DIR", str(MANIFESTS))
     assert mf.manifest_dir() == MANIFESTS.resolve()
     assert mf.schema_path() == SCHEMA.resolve()
-    monkeypatch.setenv("LOOKOUT_MANIFEST_DIR", str(tmp_path / "missing"))
+    monkeypatch.setenv("SNOW_GLOBE_MANIFEST_DIR", str(tmp_path / "missing"))
     with pytest.raises(FileNotFoundError):
         mf.manifest_dir()
 

@@ -1,4 +1,6 @@
-# Lookout infrastructure
+# Snow Globe infrastructure
+
+Renamed from Lookout on 21 Nov 2026 (D-080): every resource name, tag and bucket prefix is now `snow-globe` (`project = "snow-globe"`), the Lambda environment uses `SNOW_GLOBE_*` names (the workers still read the old `LOOKOUT_*` ones as a fallback), and the default User-Agent is `SnowGlobe/0.1 (webcam research capture; fetch-on-change)`. Nothing was ever applied, so no AWS resource carries the old name. Measured runs below (the cost simulation, the image sizes, the smoke runs) were made before the rename, so they name the image `lookout-lambda:8246a8bd570b`, which is what that image is called in the local Docker.
 
 AWS, serverless only (PRD §11.3, §17). Two scheduled Lambda jobs run from one arm64 container image. They write to one private S3 bucket. Alarms and a budget email you.
 
@@ -17,27 +19,28 @@ Carried over from Oculus's Terraform: the state bootstrap, the S3 and ECR patter
 | `test.sh` | Every check that needs no AWS credentials. Offline once the AWS provider is in the plugin cache ([Checks](#checks)). |
 | `tf_providers.sh` | How `test.sh` installs the provider: from the plugin cache with no network when it matches the lock file, else from the registry. `status` and `fetch` commands. |
 | `cost/` | The hosting estimate: a simulation of the capture job's S3 requests and billed waiting, its output for the costed commit, and the arithmetic ([Monthly cost estimate](#monthly-cost-estimate)) |
+| `ops/migrate-to-snow-globe.sh` | The rename's live switch on the lead's Mac (D-080), run once right after the M0.5 gate closes: it refuses unless the data report shows the 72 h covered, rehearses the build before stopping anything, then moves `~/lookout-data` to `~/snow-globe-data` (with a symlink back) and restarts both local jobs on the new names. Tested by `tests/test_migrate.sh` against stub loops; not an AWS step. |
 
 ## What gets created
 
 | Resource | Name | Settings |
 |---|---|---|
-| State bucket (bootstrap) | `lookout-tfstate-<account>` | Versioned, SSE-S3, all public access blocked, ACLs off, TLS only; old versions expire after 90 days |
-| Data bucket | `lookout-data-<account>` | Private, SSE-S3, all public access blocked, ACLs off, TLS only. **Versioned**: an overwritten or deleted object's previous version is kept 30 days (the daily logs' for 1 day, `cache/`'s for 1 day). `cache/` expires after 35 days; nothing else current expires |
-| ECR repository | `lookout/lambda` | Scan on push, immutable tags, keeps the last 5 images; only `lookout-*` functions may pull |
-| Lambda `lookout-capture` | handler `lookout_capture.lambda_handler.handler` | arm64, 512 MB, 120 s, reserved concurrency 1 |
-| Lambda `lookout-forecast` | handler `lookout_forecast.lambda_handler.handler` | arm64, 2048 MB, 600 s, 2 GB `/tmp`, reserved concurrency 1 |
-| Function environment | both | `LOOKOUT_STORAGE=s3`, `LOOKOUT_S3_BUCKET`, `LOOKOUT_MANIFEST_DIR=/var/task/viewpoints/manifests`, `LOOKOUT_USER_AGENT`, `LOOKOUT_DATA_DIR=/tmp/lookout-data` |
-| IAM role per function | `lookout-<job>-lambda` | Writes to its own log group only. Reads and writes only its own bucket keys (below). |
-| Log groups | `/aws/lambda/lookout-<job>` | 30-day retention (PRD §15.2) |
-| Schedules | group `lookout` | capture and forecast both `rate(5 minutes)` (PRD §11.2); no flexible window, no retries |
-| Scheduler role | `lookout-scheduler` | `lambda:InvokeFunction` on the two functions only |
-| Alarms | `lookout-<job>-errors`, `lookout-<job>-not-running` | Errors in 2 of 3 windows; no invocation in 2 windows in a row |
-| SNS topic | `lookout-alarms` | Email subscription to `alarm_email` |
-| Budget | `lookout-monthly` | 3 USD a month, PRD §17's hosting hard cap. Emails at 33, 67 and 100 % of actual spend (about $1, $2, $3) and when the month is forecast to pass $3; credits excluded |
-| Hard stop | budget action, policy `lookout-budget-hard-stop`, role `lookout-budget-action` | At 100 % of actual spend, AWS Budgets attaches a deny-invoke policy to `lookout-scheduler`: no job runs until next month (see [Hard stop](#hard-stop-at-the-cap)) |
+| State bucket (bootstrap) | `snow-globe-tfstate-<account>` | Versioned, SSE-S3, all public access blocked, ACLs off, TLS only; old versions expire after 90 days |
+| Data bucket | `snow-globe-data-<account>` | Private, SSE-S3, all public access blocked, ACLs off, TLS only. **Versioned**: an overwritten or deleted object's previous version is kept 30 days (the daily logs' for 1 day, `cache/`'s for 1 day). `cache/` expires after 35 days; nothing else current expires |
+| ECR repository | `snow-globe/lambda` | Scan on push, immutable tags, keeps the last 5 images; only `snow-globe-*` functions may pull |
+| Lambda `snow-globe-capture` | handler `snow_globe_capture.lambda_handler.handler` | arm64, 512 MB, 120 s, reserved concurrency 1 |
+| Lambda `snow-globe-forecast` | handler `snow_globe_forecast.lambda_handler.handler` | arm64, 2048 MB, 600 s, 2 GB `/tmp`, reserved concurrency 1 |
+| Function environment | both | `SNOW_GLOBE_STORAGE=s3`, `SNOW_GLOBE_S3_BUCKET`, `SNOW_GLOBE_MANIFEST_DIR=/var/task/viewpoints/manifests`, `SNOW_GLOBE_USER_AGENT`, `SNOW_GLOBE_DATA_DIR=/tmp/snow-globe-data` |
+| IAM role per function | `snow-globe-<job>-lambda` | Writes to its own log group only. Reads and writes only its own bucket keys (below). |
+| Log groups | `/aws/lambda/snow-globe-<job>` | 30-day retention (PRD §15.2) |
+| Schedules | group `snow-globe` | capture and forecast both `rate(5 minutes)` (PRD §11.2); no flexible window, no retries |
+| Scheduler role | `snow-globe-scheduler` | `lambda:InvokeFunction` on the two functions only |
+| Alarms | `snow-globe-<job>-errors`, `snow-globe-<job>-not-running` | Errors in 2 of 3 windows; no invocation in 2 windows in a row |
+| SNS topic | `snow-globe-alarms` | Email subscription to `alarm_email` |
+| Budget | `snow-globe-monthly` | 3 USD a month, PRD §17's hosting hard cap. Emails at 33, 67 and 100 % of actual spend (about $1, $2, $3) and when the month is forecast to pass $3; credits excluded |
+| Hard stop | budget action, policy `snow-globe-budget-hard-stop`, role `snow-globe-budget-action` | At 100 % of actual spend, AWS Budgets attaches a deny-invoke policy to `snow-globe-scheduler`: no job runs until next month (see [Hard stop](#hard-stop-at-the-cap)) |
 
-Every resource is tagged `project=lookout`.
+Every resource is tagged `project=snow-globe`.
 
 **Bucket access by job.** Each job owns its outputs, its state documents and its locks, so neither can overwrite or delete the other's state (the capture job's NPS rate-limit history is out of the forecast job's reach). The only deletes a worker makes are releasing a lock and, for capture, removing its own staged copies under `cache/staging/`. No worker may delete a frame, thumbnail, forecast or log, and none may delete an object version. Overwrites are recoverable from the previous version (versioning, above).
 
@@ -46,9 +49,9 @@ Every resource is tagged `project=lookout`.
 | capture | `frames/`, `thumbs/`, `cache/staging/`, `capture_log/`, `state/capture/`, `state/locks/capture…` | `cache/staging/`, `state/locks/capture…` |
 | forecast | `forecast/`, `forecast_log/`, `state/forecast/`, `state/locks/forecast…` | `state/locks/forecast…` |
 
-- **Capture (lookout-capture 0.2.0, D-028).** Every download also gets a 640 px thumbnail in `thumbs/`. The six hourly cameras stage each download under `cache/staging/frames/` until its hour is decided; the nearest frame is then copied to `frames/` and every staged copy deleted (workers/capture/README.md, "IAM"). The bucket's 35-day `cache/` expiry is only a backstop for copies capture never deleted. It outlasts the longest hard stop (one budget month), because a stopped capture job decides its last hours only when it runs again.
-- **Forecast** keeps its GRIB subsets on the function's own disk (`/tmp/lookout-data/cache/hrrr/`) and never writes `cache/` in the bucket, so it has no `cache/` grant.
-- A worker's state keys must start with `state/<job>/` and its lock names with `<job>` (`lookout_common` stores lock `<name>` at `state/locks/<name>.lock`). Today the capture worker uses `state/capture/…` (the www.nps.gov hold is `state/capture/hosts/www.nps.gov.json`) and locks `capture/<viewpoint_id>` and `capture/hosts`. The forecast worker uses `state/forecast/hrrr/…` and locks `forecast-hrrr` and `forecast-lag-survey`. Anything else gets AccessDenied on Lambda.
+- **Capture (0.2.0 and later, D-028).** Every download also gets a 640 px thumbnail in `thumbs/`. The six hourly cameras stage each download under `cache/staging/frames/` until its hour is decided; the nearest frame is then copied to `frames/` and every staged copy deleted (workers/capture/README.md, "IAM"). The bucket's 35-day `cache/` expiry is only a backstop for copies capture never deleted. It outlasts the longest hard stop (one budget month), because a stopped capture job decides its last hours only when it runs again.
+- **Forecast** keeps its GRIB subsets on the function's own disk (`/tmp/snow-globe-data/cache/hrrr/`) and never writes `cache/` in the bucket, so it has no `cache/` grant.
+- A worker's state keys must start with `state/<job>/` and its lock names with `<job>` (`snow_globe_common` stores lock `<name>` at `state/locks/<name>.lock`). Today the capture worker uses `state/capture/…` (the www.nps.gov hold is `state/capture/hosts/www.nps.gov.json`) and locks `capture/<viewpoint_id>` and `capture/hosts`. The forecast worker uses `state/forecast/hrrr/…` and locks `forecast-hrrr` and `forecast-lag-survey`. Anything else gets AccessDenied on Lambda.
 - `terraform/tests/lambda.tftest.hcl` checks these grants against the keys the worker code builds (frames, thumbnails, staged copies, logs, state, locks, forecast files, markers). It also pins each role's whole policy: exactly four statements, and for every action the resources of every statement that holds it, so an added statement cannot widen a grant either.
 
 Neither job is granted `archive/`. The NPS archive backfill runs on demand (PRD §11.2) and is not a scheduled Lambda job. If it ever moves to Lambda, give that job `archive/*`, `state/archive/*` and `state/locks/archive*` in `local.jobs` in `terraform/main.tf`.
@@ -112,9 +115,11 @@ It has no default, and the code holds no address. Never commit it.
 The AWS provider is about 760 MB unpacked (764,426,784 bytes for 6.73.0 on darwin_arm64), and `~/Documents` syncs to iCloud.
 
 ```bash
-export TF_PLUGIN_CACHE_DIR="$HOME/lookout-data/cache/terraform-plugins"
+export TF_PLUGIN_CACHE_DIR="$(bash -c '. infra/tf_providers.sh && tfp_cache_dir')"   # <data dir>/cache/terraform-plugins
 mkdir -p "$TF_PLUGIN_CACHE_DIR"
 ```
+
+`tfp_cache_dir` resolves the data dir as the workers do: `~/lookout-data` until the rename's live switch, `~/snow-globe-data` after it (D-080). Don't type `~/snow-globe-data` here before the switch: that would create a second data folder beside the running jobs' one.
 
 ### 6a. One command
 
@@ -138,7 +143,7 @@ terraform -chdir=infra/terraform/bootstrap output -raw backend_hcl > infra/terra
 ```
 
 Keep `infra/terraform/bootstrap/terraform.tfstate`. It is gitignored. If it is ever lost, run
-`terraform -chdir=infra/terraform/bootstrap import aws_s3_bucket.tfstate lookout-tfstate-<account>`.
+`terraform -chdir=infra/terraform/bootstrap import aws_s3_bucket.tfstate snow-globe-tfstate-<account>`.
 
 **6b.2 Initialise the main module with the S3 backend.**
 
@@ -161,7 +166,7 @@ Click the link in the "AWS Notification - Subscription Confirmation" email. Alar
 **6b.4 Build and push the image.**
 
 ```bash
-REPO=$(aws ecr describe-repositories --repository-names lookout/lambda --query 'repositories[0].repositoryUri' --output text)
+REPO=$(aws ecr describe-repositories --repository-names snow-globe/lambda --query 'repositories[0].repositoryUri' --output text)
 aws ecr get-login-password | docker login --username AWS --password-stdin "${REPO%%/*}"
 TAG=$(infra/lambda/build.sh --push "$REPO" | sed -n 's/^image_tag=//p')
 echo "$TAG"
@@ -169,7 +174,7 @@ echo "$TAG"
 
 The tag is the git commit, plus `-dirty-<time>` when `workers/`, `viewpoints/` or `infra/lambda/` has uncommitted changes.
 
-To test the image before pushing it, build it locally with `infra/lambda/build.sh` and run `infra/lambda/smoke.sh lookout-lambda:<tag>` ([The Lambda image](#the-lambda-image)).
+To test the image before pushing it, build it locally with `infra/lambda/build.sh` and run `infra/lambda/smoke.sh snow-globe-lambda:<tag>` ([The Lambda image](#the-lambda-image)).
 
 **6b.5 Stop every local NPS fetcher** (see step 0).
 
@@ -183,18 +188,18 @@ terraform -chdir=infra/terraform apply -var image_tag="$TAG"
 ### 7. Verify the schedules
 
 ```bash
-aws scheduler list-schedules --group-name lookout --query 'Schedules[].[Name,State]' --output table
-aws scheduler get-schedule --group-name lookout --name lookout-capture --query '{state:State,expr:ScheduleExpression}'
-aws logs tail /aws/lambda/lookout-capture --since 15m          # a run every 5 minutes
-aws logs tail /aws/lambda/lookout-forecast --since 15m         # a run every 5 minutes
-aws cloudwatch describe-alarms --alarm-name-prefix lookout- --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
+aws scheduler list-schedules --group-name snow-globe --query 'Schedules[].[Name,State]' --output table
+aws scheduler get-schedule --group-name snow-globe --name snow-globe-capture --query '{state:State,expr:ScheduleExpression}'
+aws logs tail /aws/lambda/snow-globe-capture --since 15m          # a run every 5 minutes
+aws logs tail /aws/lambda/snow-globe-forecast --since 15m         # a run every 5 minutes
+aws cloudwatch describe-alarms --alarm-name-prefix snow-globe- --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
 aws s3 ls "s3://$(terraform -chdir=infra/terraform output -raw data_bucket)/" --recursive --summarize | tail -n 3
 ```
 
 Expect one ALARM email from each `not-running` alarm right after the first deploy, because the windows before the first run are empty. Each turns OK once a whole window contains a run: within about 15–30 min. After a day, measure what the cost estimate assumed (run durations, and the bucket's request counts and old-version bytes):
 
 ```bash
-for f in lookout-capture lookout-forecast; do
+for f in snow-globe-capture snow-globe-forecast; do
   aws cloudwatch get-metric-statistics --namespace AWS/Lambda --metric-name Duration \
     --dimensions Name=FunctionName,Value=$f --statistics Average Maximum --period 86400 \
     --start-time "$(date -u -v-1d +%Y-%m-%dT%H:%M:%SZ)" --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -205,7 +210,7 @@ done
 
 Build and push a new tag (6b.4), then `terraform -chdir=infra/terraform apply -var image_tag="$TAG"`.
 
-Every later apply needs the current tag. Reuse it with `-var image_tag="$(terraform -chdir=infra/terraform output -raw image_tag)"`. Or keep it in `infra/terraform/lookout.auto.tfvars` (gitignored) as `image_tag = "..."`. `infra/test.sh` is unaffected by that file and by any `TF_VAR_*` in your shell: the tests pin every variable.
+Every later apply needs the current tag. Reuse it with `-var image_tag="$(terraform -chdir=infra/terraform output -raw image_tag)"`. Or keep it in `infra/terraform/snow-globe.auto.tfvars` (gitignored) as `image_tag = "..."`. `infra/test.sh` is unaffected by that file and by any `TF_VAR_*` in your shell: the tests pin every variable.
 
 The commands in steps 8–10 assume us-east-1. If you deployed elsewhere, keep `TF_VAR_region` exported (step 3) and add `--region` to the `aws` commands.
 
@@ -218,7 +223,7 @@ T="$(terraform -chdir=infra/terraform output -raw image_tag)"
 terraform -chdir=infra/terraform apply -var image_tag="$T" -var capture_schedule_enabled=false -var forecast_schedule_enabled=false
 ```
 
-Repeat the two `-var ...=false` flags on later applies, or put them in `lookout.auto.tfvars`. Otherwise the next apply re-enables the schedules.
+Repeat the two `-var ...=false` flags on later applies, or put them in `snow-globe.auto.tfvars`. Otherwise the next apply re-enables the schedules.
 
 **Resume:** apply again without the two flags.
 
@@ -227,14 +232,14 @@ Repeat the two `-var ...=false` flags on later applies, or put them in `lookout.
 **Emergency stop, without Terraform.** Zero concurrency throttles every run at once:
 
 ```bash
-aws lambda put-function-concurrency --function-name lookout-capture --reserved-concurrent-executions 0
+aws lambda put-function-concurrency --function-name snow-globe-capture --reserved-concurrent-executions 0
 ```
 
 The next `terraform apply` puts it back to 1. While the function is stopped, its `not-running` alarm will email you.
 
 ### Hard stop at the cap
 
-PRD §17 caps hosting at $3 a month and says hard caps are enforced in code. When actual spend passes 100 % of `monthly_budget_usd`, AWS Budgets attaches `lookout-budget-hard-stop`, a Deny on `lambda:InvokeFunction` for both functions, to the `lookout-scheduler` role. From then on:
+PRD §17 caps hosting at $3 a month and says hard caps are enforced in code. When actual spend passes 100 % of `monthly_budget_usd`, AWS Budgets attaches `snow-globe-budget-hard-stop`, a Deny on `lambda:InvokeFunction` for both functions, to the `snow-globe-scheduler` role. From then on:
 
 - no scheduled job runs, so capture and forecast data stop;
 - you get the budget's 100 % email, the action's own email, then the `not-running` alarms;
@@ -249,7 +254,7 @@ AWS Budgets sees spend a few times a day, so the month can pass $3 by a little b
 
 ```bash
 aws budgets execute-budget-action --account-id "$(aws sts get-caller-identity --query Account --output text)" \
-  --budget-name lookout-monthly --execution-type REVERSE_BUDGET_ACTION \
+  --budget-name snow-globe-monthly --execution-type REVERSE_BUDGET_ACTION \
   --action-id "$(terraform -chdir=infra/terraform output -raw budget_hard_stop_action_id)"
 ```
 
@@ -261,7 +266,7 @@ aws budgets execute-budget-action --account-id "$(aws sts get-caller-identity --
 
 1. Copy the data out. The first 100 GB a month of egress is free ([S3 pricing](https://aws.amazon.com/s3/pricing/)):
    ```bash
-   aws s3 sync "s3://$(terraform -chdir=infra/terraform output -raw data_bucket)" ~/lookout-data/s3-export/
+   aws s3 sync "s3://$(terraform -chdir=infra/terraform output -raw data_bucket)" ~/lookout-data/s3-export/   # the data dir (D-080)
    ```
 2. Allow deleting the non-empty bucket, then destroy:
    ```bash
@@ -315,7 +320,7 @@ aws budgets execute-budget-action --account-id "$(aws sts get-caller-identity --
 
 **Which capture code this costs.** The figures are for capture 0.2.0 at `8246a8b`, the code in `lookout-lambda:8246a8bd570b`. The working tree's capture 0.2.1, uncommitted when it was simulated at 08:18 UTC on 20 Nov, gives a camera a 2 ms margin instead of 1 s. In the same simulation its passes wait 14.6 s on average (12.2 s for slots, 2.5 s spacing requests), so capture's compute is 84,758–149,558 GB-s and the whole Lambda bill at most 44,758 GB-s over the free tier ($0.60). Its total with the free tiers is $2.07–2.81 in month 1 and $2.31–3.07 in month 2; with none, $4.41–8.61 in month 1. Re-run the simulation and `cost/estimate.py` on the commit you deploy.
 
-**Forecast files at the deployed profile.** Terraform sets no `LOOKOUT_FORECAST_*` variable, so the deployed forecast job extracts all 22 fields and every hour. That is 453 MB of GRIB for an 18 h run and 1,202 MB for a 48 h run (workers/forecast/README.md, measured), which is free in-region. No file of that profile has been written yet. The estimate is extrapolated from the layout of a measured light file: 31.3 KB on average over 249 local files for 8 fields × 3 hours × 57 points. That file is about 5.7 B per value, 0.7 KB plus 0.1 KB per field for each hour, 0.65 KB per field and 13.8 KB fixed. At 5.7–8 B per value, a viewpoint's file would be 219–274 KB per 18 h run and 520–662 KB per 48 h run, 52–65 MB a day for 8 viewpoints. The local stand-in's light profile writes 6 MB a day.
+**Forecast files at the deployed profile.** Terraform sets no `SNOW_GLOBE_FORECAST_*` variable, so the deployed forecast job extracts all 22 fields and every hour. That is 453 MB of GRIB for an 18 h run and 1,202 MB for a 48 h run (workers/forecast/README.md, measured), which is free in-region. No file of that profile has been written yet. The estimate is extrapolated from the layout of a measured light file: 31.3 KB on average over 249 local files for 8 fields × 3 hours × 57 points. That file is about 5.7 B per value, 0.7 KB plus 0.1 KB per field for each hour, 0.65 KB per field and 13.8 KB fixed. At 5.7–8 B per value, a viewpoint's file would be 219–274 KB per 18 h run and 520–662 KB per 48 h run, 52–65 MB a day for 8 viewpoints. The local stand-in's light profile writes 6 MB a day.
 
 **D-028's storage check.** 23.6 GB × $0.023 = $0.54 a month is right as the rate on day 90 for frames and thumbnails alone. Those cost less in the months before: $0.09, $0.27 and $0.45 on average. With forecast files, logs and previous versions, the storage rate on day 90 is $0.71–0.75.
 
@@ -329,7 +334,7 @@ How this compares with the PRD:
   - Old state versions are kept 30 days (1.6 GB, about $0.04 a month). A shorter rule for `state/` would make them negligible.
 - **Without the Lambda free tier**, the whole range passes the $3 cap, so the hard stop would halt the schedules mid-month. The drivers are capture's billed waiting and forecast compute (2 GB × run time).
 - **Measure before trusting either number.** Run durations come from step 7, and S3 request counts from S3 Storage Lens or the bill, after the first day.
-- **The budget** is $3 a month with the hard stop on. It covers the whole account, so keep the account for Lookout only, or set `budget_scope_to_project_tag`.
+- **The budget** is $3 a month with the hard stop on. It covers the whole account, so keep the account for Snow Globe only, or set `budget_scope_to_project_tag`.
 
 ## Variables
 
@@ -341,12 +346,12 @@ How this compares with the PRD:
 | `monthly_budget_usd` | 3 | PRD §17's hosting hard cap |
 | `budget_alert_thresholds_percent` | `[33, 67, 100]` | Actual spend; 1 to 4 values. A forecast alert at 100 % is always added. |
 | `budget_hard_stop` | true | At 100 % of actual spend the schedules stop ([Hard stop](#hard-stop-at-the-cap)). false: emails only |
-| `budget_scope_to_project_tag` | false | true counts only `project=lookout` costs. Activate that cost-allocation tag first. |
+| `budget_scope_to_project_tag` | false | true counts only `project=snow-globe` costs. Activate that cost-allocation tag first. |
 | `capture_schedule_expression` | `rate(5 minutes)` | Only `rate(N minutes)` with 5 ≤ N ≤ 60, or `rate(1 hour)` (PRD §15.3) |
 | `forecast_schedule_expression` | `rate(5 minutes)` | PRD §11.2. `rate(1 minute)` to `rate(1 hour)` |
 | `capture_schedule_enabled`, `forecast_schedule_enabled` | true | false pauses a job and silences its `not-running` alarm |
-| `user_agent` | `Lookout/0.1 (webcam research capture; fetch-on-change)` | Must not contain an email address |
-| `data_bucket_name` | `lookout-data-<account>` | |
+| `user_agent` | `SnowGlobe/0.1 (webcam research capture; fetch-on-change)` | Must not contain an email address |
+| `data_bucket_name` | `snow-globe-data-<account>` | |
 | `data_bucket_force_destroy` | false | true only for the final teardown |
 | `data_noncurrent_version_days` | 30 | How long an overwritten or deleted object's previous version is kept |
 | `log_noncurrent_version_days` | 1 | The same for `capture_log/` and `forecast_log/`, whose every record rewrites the day's log |
@@ -367,7 +372,7 @@ How this compares with the PRD:
 
 One arm64 image runs both jobs (PRD §11.3). Terraform picks each function's handler with `image_config.command`. The image's default command is the forecast handler, so a local `docker run` that forgets the command reads NOAA's public bucket and never becomes a second NPS fetcher.
 
-**Build** with `infra/lambda/build.sh`. It loads `lookout-lambda:<tag>` into the local Docker; `--push REPO` pushes instead (step 6b.4). The build imports both handlers and fails if a module or a native library cannot load. It also fails if boto3 or botocore would come from the base image's own copy (1.43.127) instead of the locked one (1.44.6).
+**Build** with `infra/lambda/build.sh`. It loads `snow-globe-lambda:<tag>` into the local Docker; `--push REPO` pushes instead (step 6b.4). The build imports both handlers and fails if a module or a native library cannot load. It also fails if boto3 or botocore would come from the base image's own copy (1.43.127) instead of the locked one (1.44.6).
 
 **Both base images are pinned by digest** in the Dockerfile, so one commit always builds the same image. AWS republishes `public.ecr.aws/lambda/python:3.13` often: two builds 12 minutes apart on 20 Nov got different digests. To take AWS's patches, bump the pin on purpose before a deploy:
 
@@ -390,10 +395,10 @@ docker buildx imagetools inspect public.ecr.aws/lambda/python:3.13 | sed -n 's/^
 | `/var/task`, exactly the two lock files | anyio 4.16.0, attrs 26.1.0, boto3 1.44.6, botocore 1.44.6, certifi 2026.10.23, cffi 2.1.1, eccodes 2.50.1 (ecCodes library 2.50.0), eccodeslib 2.50.0.34, eckitlib 2.5.0.34, findlibs 0.1.5, h11 0.16.0, httpcore 1.0.9, httpx 0.28.1, idna 3.20, jmespath 1.1.0, jsonschema 4.26.0, jsonschema-specifications 2025.9.1, numpy 2.5.5, pillow 13.0.0, pycparser 3.12, python-dateutil 2.9.0.post0, referencing 0.37.0, rpds-py 2026.9.1, s3transfer 0.19.3, six 1.17.0, typing_extensions 4.16.0, tzdata 2026.6, urllib3 2.8.0; lookout-common 0.1.0, lookout-capture 0.2.0, lookout-forecast 0.1.0 |
 | Base image's own packages, behind `/var/task` on the runtime's `sys.path` | awslambdaric 4.2.2, boto3 1.43.127, botocore 1.43.127, jmespath 1.1.0, pip 26.2.2, python-dateutil 2.9.0.post0, s3transfer 0.19.3, simplejson 4.3.0, six 1.17.0, snapshot-restore-py 1.0.0, urllib3 2.8.0 |
 
-**Smoke test:** `infra/lambda/smoke.sh lookout-lambda:<tag>`; `--offline` runs step 1 only. It builds, pushes and deploys nothing. It prints `key=value` results and the full package list, and exits 1 if a check fails.
+**Smoke test:** `infra/lambda/smoke.sh snow-globe-lambda:<tag>`; `--offline` runs step 1 only. It builds, pushes and deploys nothing. It prints `key=value` results and the full package list, and exits 1 if a check fails.
 
 1. **Offline probe.** First, the image's default command must not be the capture handler. The probe then runs with no network, a read-only root file system and a non-root user. `smoke_probe.py` puts `sys.path` in the runtime's order and resolves both handler strings with the runtime's own loader, as Lambda does at init. It checks that the pinned packages and `libeccodes.so` load from `/var/task`. It also builds what the capture handler builds before its first request: the 8 manifests, S3 storage for a made-up bucket, and the HTTP client with the project User-Agent. It uses none of them.
-2. **Forecast invoke.** The forecast handler runs under the Runtime Interface Emulator that ships in the AWS base image, and is invoked twice. Storage is `LOOKOUT_STORAGE=local`, in a new temporary directory that the script deletes. The profile is tiny: `VIS:surface`, forecast hour 0, 10 MB a run, 1 h lookback. The container gets 2048 MB with no swap, 1.16 vCPU (Lambda gives one vCPU per 1,769 MB), a 2 GB `/tmp`, a read-only root and a non-root user. Checks:
+2. **Forecast invoke.** The forecast handler runs under the Runtime Interface Emulator that ships in the AWS base image, and is invoked twice. Storage is `SNOW_GLOBE_STORAGE=local`, in a new temporary directory that the script deletes. The profile is tiny: `VIS:surface`, forecast hour 0, 10 MB a run, 1 h lookback. The container gets 2048 MB with no swap, 1.16 vCPU (Lambda gives one vCPU per 1,769 MB), a 2 GB `/tmp`, a read-only root and a non-root user. Checks:
    - the first call extracts a run;
    - the second call finds it already written;
    - no GRIB file is left behind;
@@ -454,9 +459,10 @@ It needs no credentials, and no plan or apply touches AWS. It runs:
 - the `deploy.sh` and `build.sh` tests, against stub `aws`, `terraform` and `docker`;
 - a BuildKit check of exactly which files reach the image build. It skips without a running Docker.
 - the cost estimate (`tests/test_cost.sh`): `cost/estimate.py` on the committed simulation output, checks on its arithmetic, and a check that [Monthly cost estimate](#monthly-cost-estimate) quotes its figures; then ruff on `cost/` (`cost/ruff.toml`, no cache written), which skips when ruff is not installed (as in CI's infra job);
-- tflint, when installed.
+- tflint, when installed;
+- the rename's live switch (`tests/test_migrate.sh`): `ops/migrate-to-snow-globe.sh` on a scratch HOME against stub loops, the gate refusal, the dry run, the full switch and its rollbacks. It skips off macOS.
 
-**Network.** The only network step is installing the AWS provider (`hashicorp/aws` 6.73.0, about 760 MB unpacked) into `TF_PLUGIN_CACHE_DIR`, by default `$LOOKOUT_DATA_DIR/cache/terraform-plugins`, outside iCloud.
+**Network.** The only network step is installing the AWS provider (`hashicorp/aws` 6.73.0, about 760 MB unpacked) into `TF_PLUGIN_CACHE_DIR`, by default `<data dir>/cache/terraform-plugins` (`tfp_cache_dir`; `~/lookout-data` until the rename's live switch, D-080), outside iCloud.
 
 - **The first time,** with no cached copy for this machine's platform, a registry init fetches it: `infra/test.sh`, or just `infra/tf_providers.sh fetch`. That contacts:
   - registry.terraform.io, for service discovery, the version list and the download location;

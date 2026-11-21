@@ -1,11 +1,11 @@
-"""The pair's forecast run: lookout-forecast's choice, only the needed fields and hours.
+"""The pair's forecast run: snow-globe-forecast's choice, only the needed fields and hours.
 
-Most tests use small stand-ins for lookout-forecast's modules, so they need neither ecCodes
-nor lookout-forecast. The last test runs the real extractor offline against lookout-forecast's
+Most tests use small stand-ins for snow-globe-forecast's modules, so they need neither ecCodes
+nor snow-globe-forecast. The last test runs the real extractor offline against snow-globe-forecast's
 fake bucket (synthetic GRIB2). eval's dev group installs ecCodes for it, and it puts
 ``workers/forecast/src`` on ``sys.path`` for itself only (the ``real_forecast`` fixture), so it
 runs in ``make test``. It skips only where ecCodes is missing, or where the checkout has no
-``workers/forecast``; with both present, a lookout-forecast or fake bucket that does not import
+``workers/forecast``; with both present, a snow-globe-forecast or fake bucket that does not import
 fails it, so the test cannot drop out of ``make test`` unseen.
 """
 
@@ -21,10 +21,10 @@ from pathlib import Path
 from typing import NoReturn
 
 import pytest
-from lookout_common.storage import LocalStorage
+from snow_globe_common.storage import LocalStorage
 
-from lookout_eval import forecast_io
-from lookout_eval.pair_forecast import (
+from snow_globe_eval import forecast_io
+from snow_globe_eval.pair_forecast import (
     DEFAULT_MAX_MB,
     SCENE_FIELDS,
     PairForecastError,
@@ -67,7 +67,7 @@ def test_scene_fields_cover_every_field_the_scene_and_s_rule_read() -> None:
     assert len(set(SCENE_FIELDS)) == len(SCENE_FIELDS) and DEFAULT_MAX_MB == 60.0
 
 
-# --- stand-ins for lookout-forecast -------------------------------------------------------
+# --- stand-ins for snow-globe-forecast -------------------------------------------------------
 
 
 class _Choice:
@@ -93,14 +93,14 @@ class _Result:
 
 
 def _fake_forecast(monkeypatch: pytest.MonkeyPatch, *, bytes_per_hour: int = 1_000_000) -> dict:
-    """Install a fake lookout_forecast package; returns what its pieces saw."""
+    """Install a fake snow_globe_forecast package; returns what its pieces saw."""
     seen: dict = {"extract_calls": [], "plans": []}
 
     def run_hours(run_start: datetime, limit: int | None = None) -> list[int]:
         last = 48 if run_start.hour % 6 == 0 else 18
         return list(range((last if limit is None else min(last, limit)) + 1))
 
-    extract = types.ModuleType("lookout_forecast.extract")
+    extract = types.ModuleType("snow_globe_forecast.extract")
     extract.run_hours = run_hours  # type: ignore[attr-defined]
 
     def plan_run(bucket, run_start, *, fields=(), max_fh=None, workers=4):
@@ -139,7 +139,7 @@ def _fake_forecast(monkeypatch: pytest.MonkeyPatch, *, bytes_per_hour: int = 1_0
     extract.Extractor = Extractor  # type: ignore[attr-defined]
     extract.run_covered = run_covered  # type: ignore[attr-defined]
 
-    availability = types.ModuleType("lookout_forecast.availability")
+    availability = types.ModuleType("snow_globe_forecast.availability")
 
     class LagModel:
         @classmethod
@@ -163,11 +163,11 @@ def _fake_forecast(monkeypatch: pytest.MonkeyPatch, *, bytes_per_hour: int = 1_0
     availability.listed_availability = listed_availability  # type: ignore[attr-defined]
     availability.select_run_for_issue = select_run_for_issue  # type: ignore[attr-defined]
 
-    fields = types.ModuleType("lookout_forecast.fields")
+    fields = types.ModuleType("snow_globe_forecast.fields")
     fields.resolve_fields = lambda names: list(names)  # type: ignore[attr-defined]
-    hrrr = types.ModuleType("lookout_forecast.hrrr")
+    hrrr = types.ModuleType("snow_globe_forecast.hrrr")
     hrrr.STORAGE_SOURCE = "hrrr"  # type: ignore[attr-defined]
-    bucket = types.ModuleType("lookout_forecast.bucket")
+    bucket = types.ModuleType("snow_globe_forecast.bucket")
 
     class HrrrBucket:
         def __enter__(self):
@@ -177,9 +177,9 @@ def _fake_forecast(monkeypatch: pytest.MonkeyPatch, *, bytes_per_hour: int = 1_0
             seen["bucket_closed"] = True
 
     bucket.HrrrBucket = HrrrBucket  # type: ignore[attr-defined]
-    package = types.ModuleType("lookout_forecast")
+    package = types.ModuleType("snow_globe_forecast")
     package.__version__ = "0.0.0-fake"  # type: ignore[attr-defined]
-    package.__file__ = "/fake/lookout_forecast/__init__.py"
+    package.__file__ = "/fake/snow_globe_forecast/__init__.py"
     for name, module in {
         "availability": availability,
         "extract": extract,
@@ -188,8 +188,8 @@ def _fake_forecast(monkeypatch: pytest.MonkeyPatch, *, bytes_per_hour: int = 1_0
         "bucket": bucket,
     }.items():
         setattr(package, name, module)
-        monkeypatch.setitem(sys.modules, f"lookout_forecast.{name}", module)
-    monkeypatch.setitem(sys.modules, "lookout_forecast", package)
+        monkeypatch.setitem(sys.modules, f"snow_globe_forecast.{name}", module)
+    monkeypatch.setitem(sys.modules, "snow_globe_forecast", package)
     seen["extract_module"] = extract
     seen["original_run_hours"] = run_hours
     return seen
@@ -313,7 +313,7 @@ def test_fetch_chooses_extracts_and_hashes(monkeypatch: pytest.MonkeyPatch, tmp_
     assert summary["file"]["key"] == KEY
     assert len(summary["file"]["sha256"]) == 64 and seen["bucket_closed"]
     assert summary["file"]["availability_utc"] == summary["choice"]["availability_utc"]
-    assert summary["code"]["lookout_forecast_version"] == "0.0.0-fake"
+    assert summary["code"]["snow_globe_forecast_version"] == "0.0.0-fake"
 
 
 def test_fetch_reuses_a_file_that_already_covers_the_pair(
@@ -399,12 +399,12 @@ def test_the_choice_lists_candidate_runs_on_the_pair_s_bucket(
     assert summary["choice_transfer"] is None  # the fake bucket keeps no ledger
 
 
-def test_a_lookout_forecast_without_the_stamp_floor_is_refused(
+def test_a_snow_globe_forecast_without_the_stamp_floor_is_refused(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """lookout-forecast 0.1.0 (the 034c46b snapshot) has no listed_availability."""
+    """A worker without listed_availability (lookout-forecast 0.1.0, the 034c46b snapshot)."""
     seen = _fake_forecast(monkeypatch)
-    monkeypatch.delattr(sys.modules["lookout_forecast.availability"], "listed_availability")
+    monkeypatch.delattr(sys.modules["snow_globe_forecast.availability"], "listed_availability")
     with pytest.raises(PairForecastError, match=r"0\.0\.0-fake has no listed_availability"):
         fetch_pair_forecast(
             "grand-canyon.yavapai", VALID, 24.0, storage=LocalStorage(tmp_path), manifests={}
@@ -413,7 +413,7 @@ def test_a_lookout_forecast_without_the_stamp_floor_is_refused(
 
 
 def _hour(fh: int, available: datetime, source: str, lag_s: float, floor: str | None) -> dict:
-    """One hour as an archived forecast file records it (lookout-forecast 0.2.0)."""
+    """One hour as an archived forecast file records it (from lookout-forecast 0.2.0 on)."""
     return {
         "fh": fh,
         "availability_utc": available.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -451,7 +451,7 @@ def test_a_mismatch_says_why_and_suggests_re_extracting_only_when_that_helps(
         seen["covered"] = True
         storage.put_bytes(KEY, json.dumps(doc).encode())
     else:  # the extractor of this call writes the document
-        extractor = sys.modules["lookout_forecast.extract"].Extractor
+        extractor = sys.modules["snow_globe_forecast.extract"].Extractor
         monkeypatch.setattr(extractor, "extract", _writing(doc, seen))
     with pytest.raises(PairForecastError) as caught:
         fetch_pair_forecast("grand-canyon.yavapai", VALID, 24.0, storage=storage, manifests={})
@@ -508,21 +508,21 @@ def _writing(doc: dict, seen: dict):
 
 
 FORECAST_SRC = FORECAST_TESTS.parent / "src"
-FAKEBUCKET = "lookout_forecast_fakebucket"
+FAKEBUCKET = "snow_globe_forecast_fakebucket"
 
 
 def _is_forecast_module(name: str) -> bool:
-    return name == FAKEBUCKET or name.split(".", 1)[0] == "lookout_forecast"
+    return name == FAKEBUCKET or name.split(".", 1)[0] == "snow_globe_forecast"
 
 
 @pytest.fixture
 def real_forecast(monkeypatch: pytest.MonkeyPatch) -> Iterator[types.ModuleType]:
-    """lookout-forecast's fake bucket module, with the real lookout-forecast importable.
+    """snow-globe-forecast's fake bucket module, with the real snow-globe-forecast importable.
 
-    eval's dev group installs ecCodes at the forecast worker's versions. Where lookout-forecast
+    eval's dev group installs ecCodes at the forecast worker's versions. Where snow-globe-forecast
     is not installed (the default), its source goes on ``sys.path`` for this test only, and
-    every ``lookout_forecast`` module it imported is dropped afterwards, so tests that check
-    eval without lookout-forecast (``backtest-pair --forecast auto``) still see it missing.
+    every ``snow_globe_forecast`` module it imported is dropped afterwards, so tests that check
+    eval without snow-globe-forecast (``backtest-pair --forecast auto``) still see it missing.
     With ecCodes and the checkout's ``workers/forecast`` both present, an import failure is a
     test failure, not a skip (module docstring).
     """
@@ -536,13 +536,13 @@ def real_forecast(monkeypatch: pytest.MonkeyPatch) -> Iterator[types.ModuleType]
         pytest.skip(reason)
 
     before = {name for name in sys.modules if _is_forecast_module(name)}
-    if importlib.util.find_spec("lookout_forecast") is None and in_checkout:
+    if importlib.util.find_spec("snow_globe_forecast") is None and in_checkout:
         monkeypatch.syspath_prepend(str(FORECAST_SRC))
     try:
         try:
-            from lookout_forecast.extract import Extractor  # noqa: F401
+            from snow_globe_forecast.extract import Extractor  # noqa: F401
         except ImportError as exc:
-            missing(f"lookout-forecast does not import here: {exc}")
+            missing(f"snow-globe-forecast does not import here: {exc}")
         source = FORECAST_TESTS / "fakebucket.py"
         spec = importlib.util.spec_from_file_location(FAKEBUCKET, source)
         if not source.is_file() or spec is None or spec.loader is None:
@@ -560,10 +560,10 @@ def test_the_real_extractor_fetches_only_the_two_hours(
     tmp_path: Path, real_forecast: types.ModuleType
 ) -> None:
     fakebucket = real_forecast
-    from lookout_common.manifest import load_manifests
-    from lookout_forecast.bucket import HrrrBucket
-    from lookout_forecast.grid import HRRR_CONUS
-    from lookout_forecast.hrrr import object_key
+    from snow_globe_common.manifest import load_manifests
+    from snow_globe_forecast.bucket import HrrrBucket
+    from snow_globe_forecast.grid import HRRR_CONUS
+    from snow_globe_forecast.hrrr import object_key
 
     manifests = load_manifests(Path(__file__).resolve().parents[2] / "viewpoints" / "manifests")
     cam = manifests["grand-canyon.yavapai"].camera
@@ -595,7 +595,7 @@ def test_the_real_extractor_fetches_only_the_two_hours(
     assert all(h["availability_source"] == "modeled" for h in doc["hours"])
 
 
-# --- the stamp floor on recorded S3 listings (D-054; needs lookout-forecast 0.2.0) -------------
+# --- the stamp floor on recorded S3 listings (D-054; from lookout-forecast 0.2.0) -----------------
 
 
 FIXTURES = FORECAST_TESTS / "fixtures"
@@ -613,10 +613,10 @@ def z(moment: datetime) -> str:
 
 
 def _replay(asked: list[str], *runs: datetime) -> object:
-    """Serve the recorded S3 listing of each run in lookout-forecast's tests/fixtures, and fail
+    """Serve the recorded S3 listing of each run in snow-globe-forecast's tests/fixtures, and fail
     any other request: nothing here is fetched or invented."""
     import httpx
-    from lookout_forecast.hrrr import run_prefix
+    from snow_globe_forecast.hrrr import run_prefix
 
     answers = {
         run_prefix(run): (FIXTURES / f"list_{run:%Y%m%d}_t{run:%H}z_full.xml").read_bytes()
@@ -636,7 +636,7 @@ def _replay(asked: list[str], *runs: datetime) -> object:
 def _low_model(*cycles: int) -> object:
     """20 lags of 40 min for every hour of these cycles (rule 1): earlier than any recorded
     stamp, as the November-fitted model was for some older runs (D-054)."""
-    from lookout_forecast.availability import LagModel
+    from snow_globe_forecast.availability import LagModel
 
     return LagModel.from_events(
         {"event": "lag", "run": f"202611{day + 1:02d}{cycle:02d}", "fh": fh, "lag_s": 2400.0}
@@ -653,9 +653,9 @@ def test_the_m05_pair_s_choice_is_unchanged_by_the_stamp_floor(
     (the conservative 120 min for these hours), 2024011418 is skipped at 20:00Z and 2024011412
     f31/f32 is chosen at 14:00Z. Its stamps (13:28:11Z, 13:29:37Z) are earlier than the model,
     so the floor changes nothing."""
-    from lookout_forecast.availability import LagModel
-    from lookout_forecast.bucket import HrrrBucket
-    from lookout_forecast.hrrr import run_prefix
+    from snow_globe_forecast.availability import LagModel
+    from snow_globe_forecast.bucket import HrrrBucket
+    from snow_globe_forecast.hrrr import run_prefix
 
     asked: list[str] = []
     with HrrrBucket(transport=_replay(asked, RUN, RUN18), sleep=lambda s: None) as bucket:
@@ -684,8 +684,8 @@ def test_a_run_whose_stamps_are_later_than_the_model_is_chosen_by_its_stamps(
     """D-054's finding on recorded listings: a model earlier than the stamps would choose
     2024011418 at 18:50Z, half an hour before f26 was on S3. With the floor it is skipped
     until 19:24:33Z, its f26 stamp, and 2024011412 is chosen by its own stamps."""
-    from lookout_forecast.availability import select_run_for_issue
-    from lookout_forecast.bucket import HrrrBucket
+    from snow_globe_forecast.availability import select_run_for_issue
+    from snow_globe_forecast.bucket import HrrrBucket
 
     model = _low_model(12, 18)
     early = datetime(2024, 1, 14, 18, 50, tzinfo=UTC)
@@ -711,7 +711,7 @@ def test_rewritten_idx_stamps_never_hold_a_run_back(
 ) -> None:
     """2020120312's recorded listing has every .idx stamped 17 Feb 2021 (a rewrite): the
     choice ignores it and floors f30 at its GRIB2 stamp (13:26:24Z) + 300 s."""
-    from lookout_forecast.bucket import HrrrBucket
+    from snow_globe_forecast.bucket import HrrrBucket
 
     run = datetime(2020, 12, 3, 12, tzinfo=UTC)
     asked: list[str] = []
@@ -732,14 +732,14 @@ def test_rewritten_idx_stamps_never_hold_a_run_back(
 def test_the_pair_s_fresh_file_records_its_choice_when_the_stamps_win(
     tmp_path: Path, real_forecast: types.ModuleType
 ) -> None:
-    """The whole pair path on lookout-forecast's own code, offline (its fake bucket): with a
+    """The whole pair path on snow-globe-forecast's own code, offline (its fake bucket): with a
     lag log that models the 12Z hours at 40 min, earlier than their stamps, the choice and the
     file it writes agree on the stamps. Before the fix the choice used the model alone and
     the pair was refused with a misleading "re-extract" hint."""
     fakebucket = real_forecast
-    from lookout_common.manifest import load_manifests
-    from lookout_forecast.bucket import HrrrBucket
-    from lookout_forecast.grid import HRRR_CONUS
+    from snow_globe_common.manifest import load_manifests
+    from snow_globe_forecast.bucket import HrrrBucket
+    from snow_globe_forecast.grid import HRRR_CONUS
 
     manifests = load_manifests(Path(__file__).resolve().parents[2] / "viewpoints" / "manifests")
     vp = manifests["grand-canyon.yavapai"]
@@ -799,9 +799,9 @@ def _pair_with_stamps(
     """The whole pair path, as in the test above, with some of run 2024011412's S3 stamps
     rewritten 30 days after the run (D-054: a stamp over 24 h after the run start is a rewrite
     and is ignored). Returns the summary and the forecast file."""
-    from lookout_common.manifest import load_manifests
-    from lookout_forecast.bucket import HrrrBucket
-    from lookout_forecast.grid import HRRR_CONUS
+    from snow_globe_common.manifest import load_manifests
+    from snow_globe_forecast.bucket import HrrrBucket
+    from snow_globe_forecast.grid import HRRR_CONUS
 
     manifests = load_manifests(Path(__file__).resolve().parents[2] / "viewpoints" / "manifests")
     vp = manifests["grand-canyon.yavapai"]
@@ -853,7 +853,7 @@ def test_the_pair_s_file_agrees_with_its_choice_when_the_idx_stamps_were_rewritt
     """Review finding (the whole path was tested only with trusted stamps): with every .idx
     stamp rewritten, the choice and the file it writes both floor f32 at its GRIB2 stamp
     (13:22:00Z) + 300 s, and both name the ignored stamp."""
-    from lookout_forecast.discovery import IDX_AFTER_GRIB_MARGIN_S
+    from snow_globe_forecast.discovery import IDX_AFTER_GRIB_MARGIN_S
 
     summary, doc = _pair_with_stamps(tmp_path, real_forecast, ("idx",))
     choice = summary["choice"]

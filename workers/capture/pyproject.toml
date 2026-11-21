@@ -1,22 +1,22 @@
 [project]
-name = "lookout-capture"
-version = "0.2.1"
-description = "NPS webcam capture for Lookout: polite live capture, archive backfill and the archive check (PRD §8.6, §11.2, §13.2, §15.3)."
+name = "snow-globe-capture"
+version = "0.3.0"
+description = "NPS webcam capture for Snow Globe: polite live capture, archive backfill and the archive check (PRD §8.6, §11.2, §13.2, §15.3)."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     # The [s3] extra brings boto3, which S3Storage needs inside the Lambda image.
-    "lookout-common[s3]",
+    "snow-globe-common[s3]",
     "httpx>=0.28",
     "pillow>=11.0",
 ]
 
 [project.scripts]
-lookout-capture = "lookout_capture.cli:main"
+snow-globe-capture = "snow_globe_capture.cli:main"
 
 [tool.uv.sources]
-lookout-common = { path = "../common", editable = true }
+snow-globe-common = { path = "../common", editable = true }
 
 [dependency-groups]
 dev = [

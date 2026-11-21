@@ -8,17 +8,48 @@
 # forbidden names hidden in data, and for an archive missing the C ABI; and a pass for the
 # unmodified archive. Nothing here is run: the objects are only compiled and inspected.
 #
-# usage: scripts/check-symbols-selftest.sh [path/to/liblookout_speech.a]
+# usage: scripts/check-symbols-selftest.sh [path/to/libsnow_globe_speech.a]
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ARCHIVE="${1:-${LOOKOUT_DATA_DIR:-$HOME/lookout-data}/cache/speech-macos/release/liblookout_speech.a}"
+# The data dir, resolved as the workers resolve it (D-080): $SNOW_GLOBE_DATA_DIR, else the deprecated
+# $LOOKOUT_DATA_DIR (blank counts as unset; surrounding whitespace is dropped), else ~/snow-globe-data if it
+# exists, else ~/lookout-data if it exists (the folder's name before the rename), else ~/snow-globe-data.
+# Symlinks are followed and nothing is created. While both folders exist and are different folders (something
+# made ~/snow-globe-data before the rename's live switch), it prints why on stderr and returns 1.
+data_dir() {
+  local v new="$HOME/snow-globe-data" old="$HOME/lookout-data"
+  for v in "${SNOW_GLOBE_DATA_DIR:-}" "${LOOKOUT_DATA_DIR:-}"; do
+    v="${v#"${v%%[![:space:]]*}"}"
+    v="${v%"${v##*[![:space:]]}"}"
+    if [ -n "$v" ]; then
+      printf '%s\n' "$v"
+      return 0
+    fi
+  done
+  if [ -e "$new" ] && [ -e "$old" ] && ! [ "$new" -ef "$old" ]; then
+    printf '%s\n' "both $new and $old exist and are different folders, so the data dir is ambiguous (D-080):" \
+      "until the rename's live switch the data is in $old, and after it $old is a symlink to $new." \
+      "Set SNOW_GLOBE_DATA_DIR to the folder you mean, and tell the lead which one is stray." >&2
+    return 1
+  elif [ -e "$new" ] || [ ! -e "$old" ]; then
+    printf '%s\n' "$new"
+  else
+    printf '%s\n' "$old"
+  fi
+}
+if [ -n "${1:-}" ]; then
+  ARCHIVE="$1"
+else
+  DATA_DIR="$(data_dir)" || exit 1
+  ARCHIVE="$DATA_DIR/cache/speech-macos/release/libsnow_globe_speech.a"
+fi
 if [ ! -f "$ARCHIVE" ]; then
   echo "check-symbols-selftest: no archive at $ARCHIVE (build first: scripts/build.sh)" >&2
   exit 2
 fi
 ARCHIVE="$(cd "$(dirname "$ARCHIVE")" && pwd)/$(basename "$ARCHIVE")"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/lk-symtest.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/sg-symtest.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 cd "$WORK"
 
@@ -48,92 +79,92 @@ MUTANTS=(
 
 cat >DataWrite.swift <<'EOF'
 import Foundation
-public func lkMutantDataWrite(_ d: Data) throws { try d.write(to: URL(fileURLWithPath: "/dev/null")) }
+public func sgMutantDataWrite(_ d: Data) throws { try d.write(to: URL(fileURLWithPath: "/dev/null")) }
 EOF
 cat >StringWrite.swift <<'EOF'
 import Foundation
-public func lkMutantStringWrite(_ s: String) throws { try s.write(toFile: "/dev/null", atomically: false, encoding: .utf8) }
+public func sgMutantStringWrite(_ s: String) throws { try s.write(toFile: "/dev/null", atomically: false, encoding: .utf8) }
 EOF
 cat >NSDataWrite.swift <<'EOF'
 import Foundation
-public func lkMutantNSDataWrite(_ d: Data) -> Bool { (d as NSData).write(toFile: "/dev/null", atomically: false) }
+public func sgMutantNSDataWrite(_ d: Data) -> Bool { (d as NSData).write(toFile: "/dev/null", atomically: false) }
 EOF
 cat >FileManagerCreate.swift <<'EOF'
 import Foundation
-public func lkMutantFileManager() -> Bool { FileManager.default.createFile(atPath: "/dev/null", contents: nil) }
+public func sgMutantFileManager() -> Bool { FileManager.default.createFile(atPath: "/dev/null", contents: nil) }
 EOF
 cat >DarwinOpen.swift <<'EOF'
 import Darwin
-public func lkMutantDarwinOpen() -> Int32 { open("/dev/null", O_WRONLY) }
+public func sgMutantDarwinOpen() -> Int32 { open("/dev/null", O_WRONLY) }
 EOF
 cat >posix_write.c <<'EOF'
 #include <fcntl.h>
 #include <unistd.h>
-int lk_mutant_posix(void) { int fd = open("/dev/null", O_WRONLY); ssize_t n = write(fd, "x", 1); close(fd); return (int)n; }
+int sg_mutant_posix(void) { int fd = open("/dev/null", O_WRONLY); ssize_t n = write(fd, "x", 1); close(fd); return (int)n; }
 EOF
 cat >stdio_write.c <<'EOF'
 #include <stdio.h>
-int lk_mutant_stdio(void) { FILE *f = fopen("/dev/null", "w"); if (!f) return 1; fputs("x", f); return fclose(f); }
+int sg_mutant_stdio(void) { FILE *f = fopen("/dev/null", "w"); if (!f) return 1; fputs("x", f); return fclose(f); }
 EOF
 cat >cf_stream.c <<'EOF'
 #include <CoreFoundation/CoreFoundation.h>
-const void *lk_mutant_cf(CFURLRef u) { return CFWriteStreamCreateWithFile(NULL, u); }
+const void *sg_mutant_cf(CFURLRef u) { return CFWriteStreamCreateWithFile(NULL, u); }
 EOF
 cat >DataContents.swift <<'EOF'
 import Foundation
-public func lkMutantDataContents() throws -> Data { try Data(contentsOf: URL(string: "https://example.invalid/")!) }
+public func sgMutantDataContents() throws -> Data { try Data(contentsOf: URL(string: "https://example.invalid/")!) }
 EOF
 cat >URLSessionTask.swift <<'EOF'
 import Foundation
-public func lkMutantURLSession() { URLSession.shared.dataTask(with: URL(string: "https://example.invalid/")!).resume() }
+public func sgMutantURLSession() { URLSession.shared.dataTask(with: URL(string: "https://example.invalid/")!).resume() }
 EOF
 cat >URLRequestMake.swift <<'EOF'
 import Foundation
-public func lkMutantURLRequest() -> URLRequest { URLRequest(url: URL(string: "https://example.invalid/")!) }
+public func sgMutantURLRequest() -> URLRequest { URLRequest(url: URL(string: "https://example.invalid/")!) }
 EOF
 cat >NetworkConnection.swift <<'EOF'
 import Network
-public func lkMutantNetwork() -> AnyObject { NWConnection(host: "example.invalid", port: 443, using: .tcp) }
+public func sgMutantNetwork() -> AnyObject { NWConnection(host: "example.invalid", port: 443, using: .tcp) }
 EOF
 cat >sockets.c <<'EOF'
 #include <netdb.h>
 #include <sys/socket.h>
-int lk_mutant_socket(void) { struct addrinfo *ai = 0; getaddrinfo("example.invalid", "443", 0, &ai); return socket(AF_INET, SOCK_STREAM, 0); }
+int sg_mutant_socket(void) { struct addrinfo *ai = 0; getaddrinfo("example.invalid", "443", 0, &ai); return socket(AF_INET, SOCK_STREAM, 0); }
 EOF
 cat >RecognitionTask.swift <<'EOF'
 import Speech
-public func lkMutantRecognitionTask(_ r: SFSpeechRecognizer) -> AnyObject {
+public func sgMutantRecognitionTask(_ r: SFSpeechRecognizer) -> AnyObject {
     r.recognitionTask(with: SFSpeechAudioBufferRecognitionRequest()) { _, _ in }
 }
 EOF
 cat >RequestAuthorization.swift <<'EOF'
 import Speech
-public func lkMutantRequestAuthorization() { SFSpeechRecognizer.requestAuthorization { _ in } }
+public func sgMutantRequestAuthorization() { SFSpeechRecognizer.requestAuthorization { _ in } }
 EOF
 cat >AssetDownload.swift <<'EOF'
 import Speech
-public func lkMutantAssetDownload() async throws { _ = try await AssetInventory.assetInstallationRequest(supporting: []) }
+public func sgMutantAssetDownload() async throws { _ = try await AssetInventory.assetInstallationRequest(supporting: []) }
 EOF
 cat >AudioEngine.swift <<'EOF'
 import AVFoundation
-public func lkMutantAudioEngine() -> AnyObject { AVAudioEngine() }
+public func sgMutantAudioEngine() -> AnyObject { AVAudioEngine() }
 EOF
 # An Objective-C call on a class the library already uses adds no symbol, only a selector name.
 cat >selector_only.m <<'EOF'
 #import <AVFAudio/AVFAudio.h>
-BOOL lk_mutant_selector(AVAudioPCMBuffer *b) { return [(id)b writeToFile:@"/dev/null" atomically:NO]; }
+BOOL sg_mutant_selector(AVAudioPCMBuffer *b) { return [(id)b writeToFile:@"/dev/null" atomically:NO]; }
 EOF
 cat >hidden_name.c <<'EOF'
-const char lk_mutant_hidden[] = "recognitionTask";
+const char sg_mutant_hidden[] = "recognitionTask";
 EOF
 cat >harmless.c <<'EOF'
 #include <unistd.h>
-int lk_mutant_harmless(void) { return (int)getppid(); }
+int sg_mutant_harmless(void) { return (int)getppid(); }
 EOF
 
 TARGET="arm64-apple-macosx26.0"
 SWIFT_SOURCES=(*.swift)
-xcrun swiftc -c -O -parse-as-library -module-name LKCheckMutants -target "$TARGET" "${SWIFT_SOURCES[@]}" 2>"$WORK/swiftc.log" || {
+xcrun swiftc -c -O -parse-as-library -module-name SGCheckMutants -target "$TARGET" "${SWIFT_SOURCES[@]}" 2>"$WORK/swiftc.log" || {
   cat "$WORK/swiftc.log" >&2
   exit 2
 }

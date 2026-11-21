@@ -127,6 +127,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
 - **No paid call has been made.** Deepgram and fal have no accounts or keys yet.
   - Even with a key, the owner is asked before the first paid call to each vendor (PRD §17).
   - fal spend beyond the kill test needs its own approval.
+- **Amended 21 Nov (D-080):** the owner renamed the product **Snow Globe** on 21 Nov, so row 9's call is now Snow Globe. The other 14 rows stand.
 
 ## D-013 — Tier 1 atmosphere: Hillaire 2020 · decided (owner go-ahead on PRD v0.4) · 2026-11-19 · supersedes D-010
 - **Decision:** the Tier 1 atmosphere pass uses the Hillaire 2020 lookup tables: transmittance, multiple scattering, sky view and aerial perspective (PRD §9.2).
@@ -165,6 +166,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - Deployment waits for the owner: the account, credentials and the alarm email (PRD Appendix B).
   - Until then, capture runs only on this laptop (D-021).
   - The clone's `origin` is `github.com/swarit-1/snow-globe`. It has no remote refs, and nothing has been pushed. Pushing needs the owner's word.
+- **Amended 21 Nov (D-080):** with the owner's word, `m0-prd` was pushed to `origin` `main` at 00:48:32 UTC on 21 Nov (`23c0543`), the repo's first push. The product is now Snow Globe, so the repo's name already matches it.
 
 ## D-015 — Speech: on device by default, cloud only in the bake-off · decided (owner default, §1 row 6) · 2026-11-19 · amends D-004
 - **Product default:** A1, SpeechAnalyzer `DictationTranscriber`. It runs on device, in process, through the Swift static library (C ABI).
@@ -198,6 +200,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
 - **Open point:** PRD §15.3 wants the User-Agent to name the repo URL.
   - That URL contains the owner's GitHub handle, which CLAUDE.md keeps out of every request to an outside service. So for now the User-Agent carries no URL.
   - A project-specific contact address (PRD §15.5) would fit there instead. That is the owner's call.
+- **Amended 21 Nov (D-080):** the owner renamed the product **Snow Globe**, which supersedes the name, the package names and the User-Agent above. Packages are now `snow-globe-*` (imports `snow_globe_*`) and `@snow-globe/*`. The User-Agent is `SnowGlobe/0.1 (webcam research capture; fetch-on-change)`, overridden with `SNOW_GLOBE_USER_AGENT`; `LOOKOUT_USER_AGENT` is still read. The running loop sends the old User-Agent until the lead's switch after the M0.5 gate. The repo point stands. So does the open point: the User-Agent still carries no URL.
 
 ## D-017 — Data lives outside iCloud and outside the repo · decided · 2026-11-19
 - **Evidence** (checked 19 Nov):
@@ -211,6 +214,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - The owner's voice fixtures must stay "outside iCloud and git" (PRD §15.2).
   - An iCloud-synced folder would copy both to Apple's servers.
 - **Later data:** replay fixtures, plates, renders and traces follow the same rule when they arrive (M1–M2).
+- **Amended 21 Nov (D-080):** the code takes the data dir from `$SNOW_GLOBE_DATA_DIR`, then the deprecated `$LOOKOUT_DATA_DIR`, then `~/snow-globe-data` if it exists, then `~/lookout-data` if it exists, and otherwise uses `~/snow-globe-data`. `~/lookout-data` stays the data dir until the lead's switch after the M0.5 gate, which moves it to `~/snow-globe-data` and leaves `~/lookout-data` as a symlink. The rule itself is unchanged: data lives outside iCloud and outside the repo.
 
 ## D-018 — NPS image archive: API and depth · decided · 2026-11-19
 - **Found** on 19 Nov in the page script of `https://www.nps.gov/AirWebCams/pore`. It is not a documented public API.
@@ -617,6 +621,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
 - **Needed from the owner, before or with the permission to push** (PRD_PROGRESS.md, owner action 4): sign it off or decline.
   - If declined, the goldens move under `$LOOKOUT_DATA_DIR` and CI makes its own.
   - The lead must then also remove them from git history before the first push. A later commit that only deletes them would still publish them, inside `b5bc726`.
+- **Amended 21 Nov (D-080):** the first push (`23c0543`, 00:48:32 UTC on 21 Nov) published `b5bc726`, so the goldens are public and the history step above has lapsed. The sign-off is still the owner's. If the owner declines, a later commit moves them under `$SNOW_GLOBE_DATA_DIR`, and they stay in the public history.
 
 ## D-042 — Grand Canyon's 3:2 epoch holds two aims · decided (evidence) · 2026-11-19 · amends D-024
 - **Correction:** D-024 lets Grand Canyon's 3:2 epoch (Dec 2020 – Jan 2024, "one framing") serve development and backtests. A full-frame registration of the 15 Jan 2021 and 15 Jan 2024 hires (both 999×666) shows the camera re-aimed between them: the content moved 51 px right and 30 px up, 5.1 % of the width and 4.5 % of the height, at the same scale.
@@ -841,6 +846,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - whether a session runs with Speech Recognition "not determined" and no prompt. Apple's documentation says SpeechAnalyzer's transcribers don't need that permission (TODO(M1)).
 - **Not in it:** the Foundation Models parser fallback (TODO(M2)).
 - **Amended 20 Nov (D-074):** the lead rebuilt the spike against this library at 12:36 UTC, so checks 6 and 7 run on 0.2.0. The silence pad's default is decided in D-067: 0 ms, set and logged by the shell and the harness.
+- **Amended 21 Nov (D-080):** the rename changes the ABI's names, not its shape or its numbers. The header is `include/snow_globe_speech.h`, the functions are `sg_speech_*`, the codes and event kinds `SG_*` (`SG_EV_STABLE = 4`), the modules `SnowGlobeSpeech`, `SnowGlobeSpeechC` and `SnowGlobeTranscribeCore`, and the archive `libsnow_globe_speech.a`. The tool is `snow-globe-transcribe`, signed as `dev.snowglobe.transcribe`; the spike is `dev.snowglobe.spike-m1`. The figures above are 0.2.0's, under the old names. The spike, the only consumer, now links the new names; its speech build is redone after the post-gate switch. Permissions and asset reservations would key on the new identifiers. As far as the record shows, none was granted to the old ones: the library has never run against the recognizer.
 
 ## D-056 — The silence pad defaults to 0 ms until the bake-off measures it · proposed (for the lead) · 2026-11-20
 - **Why it needs a decision:** PRD §7.1's finalization lever 1 (a burst silence pad at key-up) is to be "measured, not assumed". The library's default is 0 ms, so a caller that never sets it runs with lever 1 off. The spike never calls `lk_speech_set_silence_pad_ms`, so its check-6 trials run without a pad.
@@ -1285,6 +1291,60 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - a restart holds its own sleep assertion (`caffeinate -s`, on AC) across the stop and the start, and stops and starts in one command;
   - the supervisor (still not started) now holds `caffeinate -s` while it runs, the same AC-only assertion the loop holds, so its own restarts cannot sleep through (tested in the scratchpad).
 - **Still session-attached:** the new loop is a child of the lead's session, like the old one. The supervisor finds it through the fetcher lock (D-078), so owner action 1's command is unchanged.
+- **Amended 21 Nov (D-080):** this entry's commit, `23c0543`, was pushed to `origin` `main` at 00:48:32 UTC on 21 Nov, the repo's first push. The next restart is the rename's live switch after the M0.5 gate, which uses this entry's lessons. Until then the running loop keeps the old names: `lookout-capture/0.2.1`, `Lookout/0.1 (…)` and `~/lookout-data`.
+
+## D-080 — The product is renamed Snow Globe; old names stay readable; the live switch waits for the gate; the first push · decided (owner; the rename is uncommitted, and the switch is the lead's, after the gate) · 2026-11-21 · supersedes D-016's names; amends D-012, D-014, D-017, D-041, D-055, D-079
+- **The owner's decision** (21 Nov 2026, UTC): every name changes to Snow Globe. The owner likes the name better, and it suits the product as a brand, including as a physical product one day. It supersedes "Lookout" (D-016, and row 9 of D-012). The repo was already `snow-globe`, so nothing on GitHub needs renaming.
+- **The naming map,** applied everywhere the code and the living docs name the product:
+
+| What | Before | After |
+|---|---|---|
+| Prose and UI | Lookout | Snow Globe |
+| Kebab case: the Python distributions and their CLIs, the Rust crates and binaries, the Swift CLI, the spike's names | `lookout-` (`lookout-capture`, `lookout-core`, `lookout-parse`, `lookout-transcribe`) | `snow-globe-` |
+| Snake case: the Python import packages, the Rust crate's import name | `lookout_` (`lookout_common`, `lookout_core`) | `snow_globe_` |
+| PascalCase: the Swift modules, type names | `Lookout` (`LookoutSpeech`, `LookoutSpeechC`, `LookoutTranscribeCore`) | `SnowGlobe` |
+| npm | `@lookout/renderer` | `@snow-globe/renderer` |
+| C ABI | `lk_speech_*`, other `lk_` and `LK_` symbols, `lookout_speech.h` | `sg_speech_*`, `sg_` and `SG_`, `snow_globe_speech.h` |
+| Signing identifiers | `dev.lookout.*` | `dev.snowglobe.*` |
+| Environment variables | `LOOKOUT_*` | `SNOW_GLOBE_*` |
+| User-Agent | `Lookout/0.1 (webcam research capture; fetch-on-change)`, overridden with `LOOKOUT_USER_AGENT` | `SnowGlobe/0.1 (webcam research capture; fetch-on-change)`, overridden with `SNOW_GLOBE_USER_AGENT` |
+| Default data dir | `~/lookout-data` | `~/snow-globe-data`, found as below |
+| Terraform names, tags and bucket prefixes | `lookout` | `snow-globe`; never applied, so nothing deployed changes |
+
+- **Compatibility,** which is why this is not a search-and-replace:
+  - **Environment:** one helper in `workers/common` (`snow_globe_common.env`) reads `SNOW_GLOBE_<X>` first, then the deprecated `LOOKOUT_<X>`, and every Python reader uses it. The Rust core's data-dir lookup (`app/core/src/datadir.rs`) follows the same order. The running loops' scripts set `LOOKOUT_MANIFEST_DIR` and `LOOKOUT_FORECAST_*`, and older shells may set `LOOKOUT_DATA_DIR`.
+  - **The data dir:** `SNOW_GLOBE_DATA_DIR`; else `LOOKOUT_DATA_DIR`; else `~/snow-globe-data` if it exists; else `~/lookout-data` if it exists; else `~/snow-globe-data`. The `UnsafeDataDirError` guard is unchanged. While no variable names it and both folders exist as different folders (by device and inode, so the switch's symlink is one folder), every resolver refuses instead of picking one: Python (`AmbiguousDataDirError`), the Rust core and the spike, the renderer, the shell scripts and the Makefile.
+  - **One NPS fetcher, whichever data dir:** a renamed fetcher takes `state/locks/nps-fetcher.lock` in its data dir and in each of `~/lookout-data` and `~/snow-globe-data` that exists (one file once, by device and inode), so it always respects the running 0.2.1 loop's lock at `~/lookout-data` and old code always respects its; it also refuses while another `snow-globe-capture` or `lookout-capture` process runs a fetching command (`fetcher_guard`, tested with the 0.2.1 lock protocol in another process).
+  - **Old data stays readable for good.** Readers accept both the old and the new value of every `kind`, schema id, version prefix (`lookout-capture/0.2.1` and `snow-globe-capture/<version>`), worker or runner name and state field that carries the old name. Writers write the new names. Recorded old-format fixtures test this.
+  - **The gate's figures don't move.** Eval's data report must give the same figures on the real logs before and after the rename. A change of version prefix counts as a restart only where a real restart happened.
+  - **Versions:** every renamed package goes up one minor version (capture 0.2.1 → 0.3.0), so the logs tell the renamed code from the running 0.2.1. The working tree at 01:25 UTC on 21 Nov had snow-globe-common 0.2.0, snow-globe-capture 0.3.0, snow-globe-forecast 0.3.0, snow-globe-eval 0.2.0, snow-globe-core 0.2.0, `@snow-globe/renderer` 0.2.0 and the speech library 0.3.0. The renderer's `RENDERER_VERSION` (0.2.0) is its pixel version, not a package version, and stays: renders and goldens record it (PRD §9.2).
+- **What keeps the old names, and why:**
+  - **The record:** D-001 to D-079 (DECISIONS.md is append-only, and docs/checks enforces it), and git history, which is never rewritten.
+  - **Evidence and measured records:** `docs/evidence/`, the archive check's report, PRD_PROGRESS.md's measured rows and THIRD_PARTY_NOTICES' revision notes keep the names their runs used, with a one-line note on the rename. A `lookout-*` command, `LOOKOUT_*` variable, `lk_speech_*` symbol or `lookout-speech` version string there is what actually ran.
+  - **Files whose hash is on record:** eval's held-out split (`heldout_periods.json`, SHA-256 `c437544e…`, D-038) and the backtest pair's landmark boxes (`landmark_boxes_v1.json`, `697bb3c2…`) move to `eval/src/snow_globe_eval/` byte for byte, old `kind` and all. Both hashes still held in the working tree at 01:10 UTC on 21 Nov. Editing either file would change a hash on record.
+  - **"The Lookout draft":** PRD.md and the cross-check keep that name for the owner's draft of 18 Nov, which v0.4 merged with "Snow Globe PRD v0.3".
+  - **The data and the running jobs, until the switch:** `~/lookout-data` and everything in it; capture 0.2.1 from `3cd2ca7`, which logs `lookout-capture/0.2.1` and sends `Lookout/0.1 (…)`; the forecast stand-in, forecast 0.1.0 from `034c46b`; and the `LOOKOUT_*` variables in their scripts. Nothing under `cache/runtime/` changes before the switch.
+- **The live switch, after the M0.5 gate closes** (the lead's; at the close the data report gives, which was 23:12:07 UTC on Sun 22 Nov at the earliest at 06:06 UTC on 21 Nov, after a 368.5 s capture outage at 01:23–01:34 UTC; 23:05:58 per D-079 before it):
+  - Nothing live changes before then, so no restart can cost the 72 h clock.
+  - **Until the switch the loops stay where they are:** the capture loop on `3cd2ca7`, the forecast stand-in on `034c46b`. The switch is the only re-snapshot path until then. The documented re-snapshot (flip `current`, SIGTERM the loops) cannot run a renamed commit: the live scripts start `lookout-capture` and import `lookout_forecast`, which the renamed code no longer has, so both jobs would fail to start. A fix needed before then waits for the switch.
+  - Then the lead runs `infra/ops/migrate-to-snow-globe.sh`, committed with the rename and tested against stub loops by `infra/tests/test_migrate.sh` (`--dry-run` first):
+    - its gate is the data report, not a time: before stopping anything it runs `snow-globe-eval data-report` read-only and refuses unless the gate rule shows 72 h covered (`clock.met`); `--force` is the owner's override;
+    - it rehearses before stopping anything: the rename commit's workers built with their own venvs offline in a temporary folder, the new code's read-only `status` on the live data, and the rewrite of the three live scripts, which it checks by SHA-256;
+    - capture first: stopped just after a pass ends; `~/lookout-data` moves to `~/snow-globe-data`, and a symlink to it stays behind at `~/lookout-data`; the snapshot, the rewritten scripts (`SNOW_GLOBE_*` names, old ones kept as `*.lookout.bak`) and `current`; then the new capture loop, about 240 s after the old loop's last pass. The live User-Agent becomes `SnowGlobe/0.1 (webcam research capture; fetch-on-change)`;
+    - the stand-in last, once the new capture loop holds the lock and has logged a pass: stopped, its handler waited for, the new one started and checked through its first tick. It jumps from forecast 0.1.0 to 0.3.0;
+    - its rollback restarts only what it stopped, and only while no instance of it is alive: a failure before the new capture loop runs puts the data, the scripts and `current` back and restarts the old capture loop; a capture loop that ignores its SIGTERM is left alone and nothing starts beside it; a failed first stand-in tick brings the old stand-in's script back from the pre-switch `current`.
+  - It follows D-079's lessons: one command that stops and starts, under its own `caffeinate -is`. If the owner has started the supervisor by then, it is stopped first, because it would otherwise restart the old loops from `current`; it is not restarted by the script (D-076).
+- **Found while writing this entry** (the docs builder; for the lead and the code builder):
+  - The NPS fetcher lock (`state/locks/nps-fetcher.lock`) and the persisted rate-limit state live in the data dir. If `~/snow-globe-data` existed before the switch, renamed code run without `SNOW_GLOBE_DATA_DIR` would read it instead of `~/lookout-data`. It would then take a second lock and keep a second rate-limit state beside the running loop's, and the gate's data report would read empty logs. The switch's move would also land inside the existing folder.
+  - `~/snow-globe-data` did not exist at 01:08 UTC on 21 Nov, nor at 06:10 UTC.
+  - **Done** (the fixer, 21 Nov): nothing creates `~/snow-globe-data` before the switch, build-output defaults included; every copy-paste command in CLAUDE.md, the READMEs, the runbook and infra's docs names `~/lookout-data` (valid through the symlink afterwards) or the resolved data dir; CLAUDE.md says never to create the folder before the switch; and docs/checks fails on a hard-coded `$HOME/snow-globe-data` in a command (`data-dir-commands`) and on an old name outside the list of deliberate keeps (`old-names`). The resolvers' refusal and the host-wide lock above make an early folder fail loudly instead of splitting the lock and the logs.
+- **The first push** (the owner's word, 21 Nov):
+  - The owner authorized pushing `m0-prd` to `origin` `main`. `git reflog` shows `refs/remotes/origin/main` set to `23c0543` "by push" at 00:48:32 UTC on 21 Nov (18:48:32 −0600). The lead reports that it is public at github.com/swarit-1/snow-globe. It is the repo's first push (D-014). The rename came after it, so it is not in that push.
+  - **CI** runs on every push (`on: push`), so this push was its first chance to run on GitHub. The lead reports that its first run failed only in the infra job's shellcheck, on two "info" notes that the laptop's newer shellcheck does not raise: SC2317 in `infra/lambda/smoke.sh`'s trap-only cleanup and SC2015 in `infra/tests/test_scripts.sh`. Both are fixed in the code (a narrow disable with a comment, and a real `if`), with no repo-wide change of severity.
+  - **D-041:** the push published `b5bc726`, so the synthetic renderer goldens are public. Keeping them still needs the owner's sign-off.
+  - **The licence:** README.md and THIRD_PARTY_NOTICES said the owner would choose one before the repository was made public. None is chosen yet, so the repository grants none.
+  - CLAUDE.md's rule is unchanged: a push needs the owner's word.
+- **Spend:** $0. No paid call was made.
 
 ---
 

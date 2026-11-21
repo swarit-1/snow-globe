@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from lookout_common import paths
-from lookout_common.paths import UnsafeDataDirError
+from snow_globe_common import paths
+from snow_globe_common.paths import UnsafeDataDirError
 
 from .conftest import REPO_ROOT
 
@@ -15,10 +15,10 @@ PST = timezone(timedelta(hours=-8))
 SHA = "9e88bc13788ff06480a4d50c305477b4621fc31eb1480f34b405f2886021dbca"
 
 
-def test_data_dir_defaults_to_home_lookout_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_data_dir_defaults_to_home_snow_globe_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.delenv("LOOKOUT_DATA_DIR")
-    assert paths.data_dir() == (tmp_path / "lookout-data").resolve()
+    monkeypatch.delenv("SNOW_GLOBE_DATA_DIR")
+    assert paths.data_dir() == (tmp_path / "snow-globe-data").resolve()
 
 
 def test_data_dir_from_env(data_root: Path):
@@ -26,7 +26,7 @@ def test_data_dir_from_env(data_root: Path):
 
 
 def test_data_dir_inside_this_repo_is_refused(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(REPO_ROOT / "data"))
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(REPO_ROOT / "data"))
     with pytest.raises(UnsafeDataDirError, match="git work tree"):
         paths.data_dir()
 
@@ -36,8 +36,8 @@ def test_data_dir_inside_any_git_tree_is_refused_even_with_override(
 ):
     repo = tmp_path / "other-repo"
     (repo / ".git").mkdir(parents=True)
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(repo / "nested" / "data"))
-    monkeypatch.setenv("LOOKOUT_ALLOW_SYNCED_DATA", "1")
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(repo / "nested" / "data"))
+    monkeypatch.setenv("SNOW_GLOBE_ALLOW_SYNCED_DATA", "1")
     with pytest.raises(UnsafeDataDirError):
         paths.data_dir()
 
@@ -47,11 +47,11 @@ def test_synced_folders_are_refused_unless_allowed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, synced: str
 ):
     monkeypatch.setenv("HOME", str(tmp_path))
-    target = tmp_path / synced / "lookout-data"
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(target))
+    target = tmp_path / synced / "snow-globe-data"
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(target))
     with pytest.raises(UnsafeDataDirError, match="cloud-synced"):
         paths.data_dir()
-    monkeypatch.setenv("LOOKOUT_ALLOW_SYNCED_DATA", "1")
+    monkeypatch.setenv("SNOW_GLOBE_ALLOW_SYNCED_DATA", "1")
     assert paths.data_dir() == target.resolve()
 
 
@@ -61,7 +61,7 @@ def test_symlink_into_synced_folder_is_refused(tmp_path: Path, monkeypatch: pyte
     real.mkdir(parents=True)
     link = tmp_path / "innocent-link"
     link.symlink_to(real)
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(link))
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(link))
     with pytest.raises(UnsafeDataDirError):
         paths.data_dir()
 
@@ -73,12 +73,12 @@ def test_case_variant_of_synced_folder_is_refused(tmp_path: Path, monkeypatch: p
     variant = tmp_path / "documents"
     if not variant.exists():
         pytest.skip("case-sensitive filesystem: ~/documents is a different folder here")
-    for spelling in (variant / "lookout-data", tmp_path / "DOCUMENTS" / "deep" / "data"):
-        monkeypatch.setenv("LOOKOUT_DATA_DIR", str(spelling))
+    for spelling in (variant / "snow-globe-data", tmp_path / "DOCUMENTS" / "deep" / "data"):
+        monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(spelling))
         with pytest.raises(UnsafeDataDirError, match="cloud-synced"):
             paths.data_dir()
         assert not spelling.exists()  # the guard creates nothing
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", str(tmp_path / "documents-elsewhere"))
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", str(tmp_path / "documents-elsewhere"))
     assert paths.data_dir() == (tmp_path / "documents-elsewhere").resolve()
 
 
@@ -90,7 +90,7 @@ def test_firmlinked_data_volume_path_to_documents_is_refused():
         pytest.skip("no macOS firmlinked Data volume with a ~/Documents here")
     if not os.path.samefile(documents, firmlinked):
         pytest.skip("the Data-volume path is not the same folder here")
-    probe = firmlinked / "lookout-data-firmlink-probe"
+    probe = firmlinked / "snow-globe-data-firmlink-probe"
     assert not probe.exists()
     with pytest.raises(UnsafeDataDirError, match="cloud-synced"):
         paths.check_data_dir(probe)
@@ -107,7 +107,7 @@ def test_case_variant_of_the_repo_is_still_refused_by_the_git_check():
 
 def test_tilde_in_env_is_expanded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("LOOKOUT_DATA_DIR", "~/elsewhere")
+    monkeypatch.setenv("SNOW_GLOBE_DATA_DIR", "~/elsewhere")
     assert paths.data_dir() == (tmp_path / "elsewhere").resolve()
 
 

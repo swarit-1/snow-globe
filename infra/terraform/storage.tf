@@ -39,7 +39,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
 # showed). The workers may overwrite keys (s3:PutObject), and S3Storage appends to a daily log by rewriting the
 # whole object, so a buggy run could replace or truncate evidence. With versioning the previous version survives
 # for var.data_noncurrent_version_days (lifecycle below), and no worker role may delete a version.
-# S3's conditional writes and deletes, which lookout_common's S3 lock uses, act on the current version.
+# S3's conditional writes and deletes, which snow_globe_common's S3 lock uses, act on the current version.
 resource "aws_s3_bucket_versioning" "data" {
   bucket = aws_s3_bucket.data.id
 

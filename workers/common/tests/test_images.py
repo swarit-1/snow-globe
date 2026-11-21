@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageDraw
 
-from lookout_common import images as im
+from snow_globe_common import images as im
 
 from .conftest import SAMPLES
 

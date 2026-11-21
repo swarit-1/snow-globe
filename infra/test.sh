@@ -11,11 +11,15 @@
 #   8. infra/tests/test_cost.sh: the hosting estimate's arithmetic (infra/cost/estimate.py) on the committed
 #      simulation, against the figures in infra/README.md; ruff on infra/cost when ruff is installed
 #   9. tflint, when installed (config: infra/terraform/.tflint.hcl)
+#  10. infra/tests/test_migrate.sh: infra/ops/migrate-to-snow-globe.sh (the rename's live switch, D-080) against stub
+#      loops on a scratch HOME (macOS only; SKIP elsewhere)
 #
-# Usage: infra/test.sh [--offline | --registry]   (or LOOKOUT_TF_INIT=auto|offline|registry; default auto)
+# Usage: infra/test.sh [--offline | --registry]   (or SNOW_GLOBE_TF_INIT=auto|offline|registry; default auto;
+# the deprecated LOOKOUT_TF_INIT is read when it is unset, D-080)
 #
 # Network: step 3's `terraform init` installs the AWS provider (~760 MB unpacked) into TF_PLUGIN_CACHE_DIR (default
-# $LOOKOUT_DATA_DIR/cache/terraform-plugins, outside the iCloud-synced ~/Documents). infra/tf_providers.sh decides
+# <data dir>/cache/terraform-plugins, outside the iCloud-synced ~/Documents; the data dir is $SNOW_GLOBE_DATA_DIR, else
+# $LOOKOUT_DATA_DIR, else ~/snow-globe-data or, until it is moved, ~/lookout-data). infra/tf_providers.sh decides
 # how: from that cache with -plugin-dir and no network once it holds the locked provider for this platform with a
 # matching h1: hash, else from registry.terraform.io and releases.hashicorp.com. --offline never contacts the
 # registry and fails at once, naming what is missing, if the cache cannot serve; `infra/tf_providers.sh fetch` fills
@@ -28,22 +32,23 @@ TF="$INFRA/terraform"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --offline) export LOOKOUT_TF_INIT=offline; shift ;;
-    --registry) export LOOKOUT_TF_INIT=registry; shift ;;
+    --offline) export SNOW_GLOBE_TF_INIT=offline; shift ;;
+    --registry) export SNOW_GLOBE_TF_INIT=registry; shift ;;
     -h | --help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "infra/test.sh: unknown argument: $1 (use --offline or --registry)" >&2; exit 2 ;;
   esac
 done
 
-export TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR:-${LOOKOUT_DATA_DIR:-$HOME/lookout-data}/cache/terraform-plugins}"
+# shellcheck disable=SC1091 # infra/tf_providers.sh is shellchecked on its own below
+. "$INFRA/tf_providers.sh"
+
+TF_PLUGIN_CACHE_DIR="$(tfp_cache_dir)" || exit 1 # <data dir>/cache/terraform-plugins unless set (tfp_data_dir)
+export TF_PLUGIN_CACHE_DIR
 export TF_IN_AUTOMATION=1
 export CHECKPOINT_DISABLE=1 # no Terraform version-check call
 mkdir -p "$TF_PLUGIN_CACHE_DIR"
-LOG="$(mktemp "${TMPDIR:-/tmp}/lookout-infra-test.XXXXXX")"
+LOG="$(mktemp "${TMPDIR:-/tmp}/snow-globe-infra-test.XXXXXX")"
 trap 'rm -f "$LOG"' EXIT
-
-# shellcheck disable=SC1091 # infra/tf_providers.sh is shellchecked on its own below
-. "$INFRA/tf_providers.sh"
 
 step() { printf '\n== %s\n' "$*"; }
 tf() { tfp_tf "$@"; } # terraform with a short TMPDIR when needed (infra/tf_providers.sh)
@@ -75,7 +80,7 @@ step "offline provider path"
 step "shellcheck"
 if command -v shellcheck >/dev/null 2>&1; then
   shellcheck -x -s bash "$INFRA/deploy.sh" "$INFRA/test.sh" "$INFRA/tf_providers.sh" "$INFRA/lambda/build.sh" \
-    "$INFRA/lambda/smoke.sh" "$INFRA"/tests/*.sh
+    "$INFRA/lambda/smoke.sh" "$INFRA/ops/migrate-to-snow-globe.sh" "$INFRA"/tests/*.sh
   echo "ok"
 else
   echo "SKIP shellcheck not installed"
@@ -92,5 +97,8 @@ step "cost estimate"
 
 step "tflint"
 tfp_tflint "$TF"
+
+step "the rename's live switch (infra/ops/migrate-to-snow-globe.sh)"
+"$INFRA/tests/test_migrate.sh"
 
 printf '\ninfra/test.sh: all checks passed\n'

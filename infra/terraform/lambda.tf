@@ -49,11 +49,11 @@ resource "aws_lambda_function" "job" {
 
   environment {
     variables = {
-      LOOKOUT_STORAGE      = "s3"
-      LOOKOUT_S3_BUCKET    = aws_s3_bucket.data.bucket
-      LOOKOUT_MANIFEST_DIR = local.manifest_dir
-      LOOKOUT_USER_AGENT   = var.user_agent
-      LOOKOUT_DATA_DIR     = local.scratch_dir
+      SNOW_GLOBE_STORAGE      = "s3"
+      SNOW_GLOBE_S3_BUCKET    = aws_s3_bucket.data.bucket
+      SNOW_GLOBE_MANIFEST_DIR = local.manifest_dir
+      SNOW_GLOBE_USER_AGENT   = var.user_agent
+      SNOW_GLOBE_DATA_DIR     = local.scratch_dir
     }
   }
 

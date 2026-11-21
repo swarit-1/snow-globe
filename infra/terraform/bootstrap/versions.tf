@@ -1,4 +1,4 @@
-# One-time bootstrap for Lookout's Terraform state (PRD §11.3, adapted from Oculus infra/terraform/bootstrap).
+# One-time bootstrap for Snow Globe's Terraform state (PRD §11.3, adapted from Oculus infra/terraform/bootstrap).
 #
 # Creates only the S3 bucket that holds the root module's state. The root module locks that state with
 # S3-native locking (`use_lockfile = true`, generally available since Terraform 1.11), so there is no

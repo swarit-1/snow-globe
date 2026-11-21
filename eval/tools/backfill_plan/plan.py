@@ -12,18 +12,18 @@ question (dates T0 opened before D-024's spans).
 
 Reads, read-only and metadata only:
 - the archive queue (``--queue``; pass a copy; default
-  $LOOKOUT_DATA_DIR/state/archive/queue.json);
-- $LOOKOUT_DATA_DIR/cache/nps-archive/days/<code>-20261119.json (GetAvailableDays masks);
-- $LOOKOUT_DATA_DIR/cache/nps-archive/search/<code>/<date>.json, dates before 2026-06-01;
-- $LOOKOUT_DATA_DIR/state/archive/<viewpoint_id>.json (what is stored, bytes so far) and the
+  $SNOW_GLOBE_DATA_DIR/state/archive/queue.json);
+- $SNOW_GLOBE_DATA_DIR/cache/nps-archive/days/<code>-20261119.json (GetAvailableDays masks);
+- $SNOW_GLOBE_DATA_DIR/cache/nps-archive/search/<code>/<date>.json, dates before 2026-06-01;
+- $SNOW_GLOBE_DATA_DIR/state/archive/<viewpoint_id>.json (what is stored, bytes so far) and the
   day's budget file, state/archive/budget-archive-queue-<UTC date>.json;
-- the viewpoint manifests in the repo (found from lookout_common's location).
+- the viewpoint manifests in the repo (found from snow_globe_common's location).
 
 Writes only under OUT: plan.json, analysis.json, hrrr-valid-hours.json, queue-plan.json (a
 scratch queue: the queue read, then every planned entry through T1c, built with the real
 make_entry and ArchiveQueue), queue-plan-t3pr-first.json (the same with T3pr before T1b),
 ids-T1b.txt, and draft-T1b.sh, draft-T3pr.sh, draft-T2.sh, draft-T1c.sh and draft-TQ.sh.
-It refuses (SystemExit, never an assert) to write under $LOOKOUT_DATA_DIR. analysis.json holds
+It refuses (SystemExit, never an assert) to write under $SNOW_GLOBE_DATA_DIR. analysis.json holds
 each tranche's PLAN.md target and measured miss, T3pr's costs in both orders, and the
 schedule with TQ's Point Reyes block ahead of T2.
 
@@ -37,7 +37,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import shlex
 import socket
 import statistics as st
@@ -75,27 +74,31 @@ NETWORK_FUNCTIONS = (
 for _owner, _name in NETWORK_FUNCTIONS:
     setattr(_owner, _name, _no_network)
 
-from lookout_capture.archive import ArchiveAsset, AvailableDays, pick_assets  # noqa: E402
-from lookout_capture.archive_queue import (  # noqa: E402
+from snow_globe_capture.archive import ArchiveAsset, AvailableDays, pick_assets  # noqa: E402
+from snow_globe_capture.archive_queue import (  # noqa: E402
     MAX_SWEEPS,
     ArchiveQueue,
     entry_id,
     make_entry,
 )
-from lookout_capture.heldout import HELD_OUT_FROM  # noqa: E402
-from lookout_capture.sun import solar_elevation_deg  # noqa: E402
-from lookout_common.manifest import load_manifests  # noqa: E402
+from snow_globe_capture.heldout import HELD_OUT_FROM  # noqa: E402
+from snow_globe_capture.sun import solar_elevation_deg  # noqa: E402
+from snow_globe_common.env import env_get  # noqa: E402
+from snow_globe_common.manifest import load_manifests  # noqa: E402
+from snow_globe_common.paths import default_data_dir  # noqa: E402
 
-from lookout_eval.extractor import (  # noqa: E402
+from snow_globe_eval.extractor import (  # noqa: E402
     ClearDayReference,
     EdgeStats,
     ExtractorParams,
     ReferenceEntry,
     Region,
 )
-from lookout_eval.noaa_solar import solar_position  # noqa: E402
+from snow_globe_eval.noaa_solar import solar_position  # noqa: E402
 
-DATA = Path(os.environ.get("LOOKOUT_DATA_DIR") or Path.home() / "lookout-data").expanduser()
+#: The data dir as the workers resolve it, minus the safety check: ``$SNOW_GLOBE_DATA_DIR``, else
+#: ``$LOOKOUT_DATA_DIR``, else ``~/snow-globe-data`` or ``~/lookout-data`` (D-080).
+DATA = Path(env_get("SNOW_GLOBE_DATA_DIR") or default_data_dir()).expanduser()
 DAYS_DIR = DATA / "cache" / "nps-archive" / "days"
 SEARCH_DIR = DATA / "cache" / "nps-archive" / "search"
 STATE_DIR = DATA / "state" / "archive"
@@ -324,7 +327,7 @@ def latest_stamp_utc(tz: ZoneInfo, day: date) -> datetime:
 def asset_instants_utc(tz: ZoneInfo, asset: ArchiveAsset) -> list[datetime]:
     """Every UTC instant an archive asset can be read as (empty if none parses).
 
-    Capture's reading (lookout_common's parse_nps_archive_time, from LocalTimeString) and
+    Capture's reading (snow_globe_common's parse_nps_archive_time, from LocalTimeString) and
     ImageCreateDateTime read as local standard time.
     """
     out = []
@@ -1792,11 +1795,11 @@ def cli_commands(planned: Sequence[Planned]) -> list[tuple[str, list[str]]]:
 #: Lines every generated script starts with after its own comment block.
 SCRIPT_BODY = [
     "set -eu",
-    "# Q must be set: Q=$HOME/lookout-data/state/archive/queue.json for the live queue.",
+    "# Q must be set: Q=$HOME/lookout-data/state/archive/queue.json for the live queue (D-080).",
     ': "${Q:?set Q to the queue file, e.g. Q=$HOME/lookout-data/state/archive/queue.json}"',
     "# Q must name an existing queue file by an absolute path: 'archive queue add' would start",
     "# a new queue at a mistyped path, which the loop never works. Start a new queue with",
-    "# 'lookout-capture archive queue add' itself, never with a draft.",
+    "# 'snow-globe-capture archive queue add' itself, never with a draft.",
     'case "$Q" in /*) ;; *) echo "refused: Q=$Q is not an absolute path" >&2; exit 1 ;; esac',
     'if [ ! -f "$Q" ] || [ ! -s "$Q" ]; then',
     '  echo "refused: Q=$Q is not an existing queue file" >&2',
@@ -1805,7 +1808,7 @@ SCRIPT_BODY = [
     "# Run it from inside the repo, or set REPO to the repo's root.",
     "REPO=${REPO:-$(git rev-parse --show-toplevel)}",
     'cd "$REPO/workers/capture"',
-    'run() { PYTHONPATH=src:../common/src uv run --no-sync lookout-capture "$@" --queue "$Q"; }',
+    'run() { PYTHONPATH=src:../common/src uv run --no-sync snow-globe-capture "$@" --queue "$Q"; }',
 ]
 
 

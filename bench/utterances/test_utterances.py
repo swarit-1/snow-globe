@@ -4,14 +4,16 @@ Run from the repository root (stdlib only, no network, no audio):
 
     python3 -I -B -m unittest discover -s bench/utterances -t bench/utterances -p 'test_*.py'
 
-The parser tests run only when the `lookout-parse` binary exists (see check.py); they are skipped,
-never faked, without it. Parser outputs used by the unit tests below were recorded from that
-binary (lookout-core at 8246a8b) on 20 Nov 2026.
+The parser tests run only when the `snow-globe-parse` binary exists (see check.py); they are
+skipped, never faked, without it. Parser outputs used by the unit tests below were recorded from
+that binary on 20 Nov 2026 (snow-globe-core at 8246a8b, then named lookout-core and lookout-parse;
+D-080).
 """
 
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 import unittest
 from datetime import UTC, date, datetime, timedelta
@@ -385,7 +387,7 @@ class Compare(unittest.TestCase):
 
 
 class ParserColumns(unittest.TestCase):
-    """parser_columns() on outputs recorded from lookout-parse (8246a8b, 20 Nov 2026)."""
+    """parser_columns() on outputs recorded from lookout-parse (8246a8b, 20 Nov 2026; D-080)."""
 
     def test_query(self) -> None:
         out = {
@@ -451,7 +453,7 @@ class BinaryFreshness(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    BINARY.exists() and not STALE, f"lookout-parse not built at {BINARY}, or older than {STALE}"
+    BINARY.exists() and not STALE, f"snow-globe-parse not built at {BINARY}, or older than {STALE}"
 )
 class LiveParser(unittest.TestCase):
     """Against the real binary: the stored parser columns are current, and the Sun agrees."""
@@ -473,6 +475,56 @@ class LiveParser(unittest.TestCase):
                     ).total_seconds()
                 )
                 self.assertLessEqual(d, 2, r["id"])
+
+
+class Names(unittest.TestCase):
+    """The checker reads the renamed variables and data dir, with the old names as a fallback
+    (D-080)."""
+
+    def setUp(self) -> None:
+        self.saved = dict(os.environ)
+        for name in list(os.environ):
+            if name.startswith(("SNOW_GLOBE_", "LOOKOUT_")) or name in ("HOME", "CARGO_TARGET_DIR"):
+                del os.environ[name]
+        self.home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.home, True)
+        os.environ["HOME"] = str(self.home)
+
+    def tearDown(self) -> None:
+        os.environ.clear()
+        os.environ.update(self.saved)
+
+    def test_new_name_first_then_the_old_one(self) -> None:
+        self.assertIsNone(check.env("SNOW_GLOBE_PARSE"))
+        os.environ["LOOKOUT_PARSE"] = "/old/parse"
+        self.assertEqual(check.find_binary(None), Path("/old/parse"))
+        os.environ["SNOW_GLOBE_PARSE"] = " "  # blank counts as unset
+        self.assertEqual(check.find_binary(None), Path("/old/parse"))
+        os.environ["SNOW_GLOBE_PARSE"] = "/new/parse"
+        self.assertEqual(check.find_binary(None), Path("/new/parse"))
+        self.assertEqual(check.find_binary("/arg"), Path("/arg"))
+
+    def test_data_dir_order(self) -> None:
+        new, old = self.home / "snow-globe-data", self.home / "lookout-data"
+        self.assertEqual(check.data_dir(), new)  # neither exists
+        old.mkdir()
+        self.assertEqual(check.data_dir(), old)  # until it is moved
+        new.mkdir()
+        with self.assertRaises(SystemExit) as caught:  # both, apart: ambiguous (D-080)
+            check.data_dir()
+        self.assertIn("different folders", str(caught.exception.code))
+        new.rmdir()
+        old.rename(new)
+        old.symlink_to(new)  # what the switch leaves
+        self.assertEqual(check.data_dir(), new)
+        os.environ["LOOKOUT_DATA_DIR"] = "/legacy"
+        self.assertEqual(check.data_dir(), Path("/legacy"))
+        os.environ["SNOW_GLOBE_DATA_DIR"] = "/current"
+        self.assertEqual(check.data_dir(), Path("/current"))
+        target = Path("/current/cache/cargo-target/release/snow-globe-parse")
+        self.assertEqual(check.find_binary(None), target)
+        os.environ["CARGO_TARGET_DIR"] = "/t"
+        self.assertEqual(check.find_binary(None), Path("/t/release/snow-globe-parse"))
 
 
 if __name__ == "__main__":

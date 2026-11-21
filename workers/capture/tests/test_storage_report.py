@@ -8,11 +8,11 @@ import json
 from datetime import UTC, date, datetime
 
 import pytest
-from lookout_common.manifest import load_manifests
-from lookout_common.storage import LocalStorage
+from snow_globe_common.manifest import load_manifests
+from snow_globe_common.storage import LocalStorage
 
-from lookout_capture.cli import main
-from lookout_capture.storage_report import daylight_share, storage_report
+from snow_globe_capture.cli import main
+from snow_globe_capture.storage_report import daylight_share, storage_report
 
 from .conftest import make_jpeg
 

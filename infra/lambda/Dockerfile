@@ -1,6 +1,6 @@
-# Lookout Lambda image (PRD §11.2, §11.3): one arm64 image for every scheduled job.
-#   capture  -> lookout_capture.lambda_handler.handler
-#   forecast -> lookout_forecast.lambda_handler.handler    (the default CMD below)
+# Snow Globe Lambda image (PRD §11.2, §11.3): one arm64 image for every scheduled job.
+#   capture  -> snow_globe_capture.lambda_handler.handler
+#   forecast -> snow_globe_forecast.lambda_handler.handler    (the default CMD below)
 # Terraform sets each function's handler with image_config.command (infra/terraform/lambda.tf), so the default CMD
 # only matters for a local `docker run`. It is the forecast handler, which reads only NOAA's public bucket: a local
 # run that forgets the command must never become a second NPS fetcher (CLAUDE.md, PRD §15.3).
@@ -35,7 +35,7 @@ COPY workers/common workers/common
 COPY workers/capture workers/capture
 COPY workers/forecast workers/forecast
 
-# 1. Third-party dependencies, exactly as pinned in the capture and forecast lock files. lookout-common reaches
+# 1. Third-party dependencies, exactly as pinned in the capture and forecast lock files. snow-globe-common reaches
 #    them as a path dependency, so it is left out of the export and installed in step 2. If the two lock files
 #    pin different versions of a package, the install fails here instead of picking one silently.
 # 2. The three local packages, built as wheels (not editable), without re-resolving dependencies.
@@ -44,7 +44,7 @@ RUN --mount=from=uv,source=/uv,target=/bin/uv \
     set -eu; \
     for job in capture forecast; do \
       uv export --project "workers/${job}" --frozen --no-dev --no-editable \
-        --no-emit-project --no-emit-package lookout-common \
+        --no-emit-project --no-emit-package snow-globe-common \
         --output-file "/build/requirements-${job}.txt"; \
     done; \
     uv pip install --python python3.13 --target "${LAMBDA_TASK_ROOT}" \
@@ -56,11 +56,11 @@ RUN --mount=from=uv,source=/uv,target=/bin/uv \
 FROM ${PYTHON_BASE}
 
 # Lambda's file system is read-only except /tmp. HOME points there for libraries that write under ~ (config,
-# caches). The two LOOKOUT_ paths match what Terraform sets, so `docker run` with the Lambda runtime interface
+# caches). The two SNOW_GLOBE_ paths match what Terraform sets, so `docker run` with the Lambda runtime interface
 # emulator behaves like the deployed functions.
 ENV HOME=/tmp \
-    LOOKOUT_DATA_DIR=/tmp/lookout-data \
-    LOOKOUT_MANIFEST_DIR=/var/task/viewpoints/manifests
+    SNOW_GLOBE_DATA_DIR=/tmp/snow-globe-data \
+    SNOW_GLOBE_MANIFEST_DIR=/var/task/viewpoints/manifests
 
 COPY --from=builder ${LAMBDA_TASK_ROOT} ${LAMBDA_TASK_ROOT}
 COPY viewpoints/manifests ${LAMBDA_TASK_ROOT}/viewpoints/manifests
@@ -74,6 +74,6 @@ COPY viewpoints/schema ${LAMBDA_TASK_ROOT}/viewpoints/schema
 # 1.44.6). The runtime puts LAMBDA_TASK_ROOT first on sys.path, so the locked copies win. The check fails the build
 # if boto3 or botocore ever drops out of the lock files, which would silently swap in the base image's version.
 RUN PYTHONPATH="${LAMBDA_TASK_ROOT}" PYTHONDONTWRITEBYTECODE=1 python3 -c \
-    "import boto3, botocore, lookout_capture.lambda_handler as c, lookout_forecast.lambda_handler as f; assert callable(c.handler) and callable(f.handler); assert all(m.__file__.startswith('$LAMBDA_TASK_ROOT/') for m in (boto3, botocore)), (boto3.__file__, botocore.__file__)"
+    "import boto3, botocore, snow_globe_capture.lambda_handler as c, snow_globe_forecast.lambda_handler as f; assert callable(c.handler) and callable(f.handler); assert all(m.__file__.startswith('$LAMBDA_TASK_ROOT/') for m in (boto3, botocore)), (boto3.__file__, botocore.__file__)"
 
-CMD ["lookout_forecast.lambda_handler.handler"]
+CMD ["snow_globe_forecast.lambda_handler.handler"]

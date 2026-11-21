@@ -13,7 +13,7 @@
 //! Stages 1–2 look for names anywhere in the place words; stages 3–4 score the place words as a
 //! whole, so words a name cannot explain lower the score (see [`PlaceTable::match_place`]).
 //!
-//! **Never a guess** (PRD §7.5). Lookout knows eight places, and people will name others:
+//! **Never a guess** (PRD §7.5). Snow Globe knows eight places, and people will name others:
 //! - The bare viewpoint suffix of an ID ("beach" in `point-reyes.beach`, "science center" in
 //!   `grand-teton.science-center`) only picks a viewpoint inside its own place ("Point Reyes from
 //!   the beach"). It never finds a place: Long Beach and the Pacific Science Center exist.
@@ -1159,7 +1159,7 @@ mod tests {
     }
 
     #[test]
-    fn places_lookout_does_not_have_miss() {
+    fn places_snow_globe_does_not_have_miss() {
         // Each of these once matched a known place at full confidence (adversarial review,
         // 2026-11-19): a bare viewpoint suffix ("beach", "science center") as an exact name, the
         // alias "the mountain" reduced to "mountain" by a token-set ratio, and the two-letter
@@ -1242,7 +1242,7 @@ mod tests {
     #[test]
     fn a_shared_first_word_alone_misses_with_both_places_first() {
         // "grand", "mount", "point" and "great" begin the names of two places each, and of many
-        // places Lookout does not have ("Grand Mesa", "Mount Hood", "Sunset Point"): a miss
+        // places Snow Globe does not have ("Grand Mesa", "Mount Hood", "Sunset Point"): a miss
         // that suggests both, never a guess.
         let table = PlaceTable::embedded();
         for (s, first, second) in [

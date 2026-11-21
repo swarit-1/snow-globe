@@ -1,4 +1,4 @@
-/*! @lookout/renderer notice: the lowbias32 integer hash is by Chris Wellons (hash-prospector, public domain). */
+/*! @snow-globe/renderer notice: the lowbias32 integer hash is by Chris Wellons (hash-prospector, public domain). */
 /**
  * Deterministic seeded value noise for cloud cover, anchored in world coordinates and advected by the
  * wind (PRD §9.2 pass 3, §9.5 "the seed is a hash of the viewpoint and the forecast run, and cloud noise

@@ -6,7 +6,7 @@
 //!   occurrence (01:30 on 1 Nov 2026 in Los Angeles becomes 01:30 PDT, −07:00), and is flagged
 //!   [`DstAdjust::Fold`].
 //!
-//! This is the same policy as `lookout_common.timeutil.localize` on the Python side.
+//! This is the same policy as `snow_globe_common.timeutil.localize` on the Python side.
 //! [`localize_not_before`] adds one refinement for the query parser: asked *during* the repeated
 //! hour, an ambiguous time whose first occurrence has passed takes its second occurrence.
 

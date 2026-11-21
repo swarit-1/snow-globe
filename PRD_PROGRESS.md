@@ -1,8 +1,10 @@
 # PRD_PROGRESS.md: tickets, owner actions and measured numbers
 
-This file tracks progress per ticket against [PRD.md](PRD.md) v0.4.1 and [PLAN.md](PLAN.md), with every measured number (PRD §16.1). Decisions and the spend ledger are in [DECISIONS.md](DECISIONS.md).
+This file tracks progress per ticket against [PRD.md](PRD.md) v0.4.2 and [PLAN.md](PLAN.md), with every measured number (PRD §16.1). Decisions and the spend ledger are in [DECISIONS.md](DECISIONS.md).
 
-**Updated:** Fri 20 Nov 2026, about 16:00 UTC (G+1), with the docs review's corrections at about 17:30. Snapshot rows say when they were read. M0 is done, and M0.5 is in progress (day 2 of 4).
+**Updated:** Sat 21 Nov 2026, about 01:15 UTC, for the rename and the first push (D-080). The rest is as of Fri 20 Nov, about 16:00 UTC, with the docs review's corrections at about 17:30. Snapshot rows say when they were read. M0 is done, and M0.5 is in progress (day 3 of 4).
+
+**Names:** the product is Snow Globe since 21 Nov (D-080). Commands, packages and variables here carry the new names (`snow-globe-*`, `snow_globe_*`, `SNOW_GLOBE_*`). A measured row keeps the names its run used: its `lookout-*` command, `LOOKOUT_*` variable or `lk_speech_*` symbol is what ran. Paths under `~/lookout-data` stay valid after the post-gate switch, which leaves a symlink there.
 
 **Running overrun before the 14 Dec freeze:** 0 days, of the 4 allowed across M0.5, M1 and M1.5 (PLAN.md, calendar notes).
 
@@ -12,14 +14,11 @@ This file tracks progress per ticket against [PRD.md](PRD.md) v0.4.1 and [PLAN.m
 - **blocked on owner:** waiting on one of the owner actions below.
 - **not started.**
 
-**Committed so far:** `0bb42ab` (common, manifests, Makefile, CI) to `8459e7e`. The second workflow's packages went in one commit each at 02:37–02:42 UTC on 20 Nov (D-046), and the third workflow's at 12:35–12:36 UTC, with its planning docs at 12:45 (`08a996c` to `8459e7e`, D-064).
+**Committed so far:** `0bb42ab` (common, manifests, Makefile, CI) to `23c0543`. The second workflow's packages went in one commit each at 02:37–02:42 UTC on 20 Nov (D-046), and the third workflow's at 12:35–12:36 UTC, with its planning docs at 12:45 (`08a996c` to `8459e7e`, D-064). The fourth workflow's went in at 18:07–18:10 UTC, with its planning docs at 18:13 (`b9520e2` to `72ce09c`, D-078), then the limiter fix at 19:41 (`3cd2ca7`) and D-079's docs at 20:04 (`23c0543`).
 
-**In the working tree, uncommitted, for the lead:**
-- capture 0.2.1: polls and image GETs spaced from the previous answer, and guards for failed, redirected and stalled requests (D-065, D-066);
-- eval: the data report's gate rule and nps.gov bounds (D-069), the held-out guard's UTC reading (D-070), and the pair's stamp floor (D-073);
-- the regenerated backfill plan, `eval/tools/backfill_plan/` and `docs/research/archive-backfill-plan.md` (D-072);
-- the Makefile, CI comments and CLAUDE.md's layout line (D-075);
-- these planning docs, the owner runbook, the spike, bench and forecast READMEs, the archive check, PRD.md's cost pointers and `THIRD_PARTY_NOTICES`.
+**Pushed:** `23c0543` to `origin` `main` at 00:48:32 UTC on 21 Nov, with the owner's word: the repo's first push (D-080).
+
+**In the working tree, uncommitted, for the lead:** the rename to Snow Globe (D-080). It covers every package's names and versions, and readers that still accept the old names (the code builder's report has the details). It also covers the Makefile, CI, these planning docs, the READMEs, `docs/` and `THIRD_PARTY_NOTICES`.
 
 ---
 
@@ -31,6 +30,7 @@ Most urgent first. Other files cite these numbers (the tickets below, `docs/m1/o
    - Capture and the forecast job run on this laptop. The capture loop runs under `caffeinate -s`, which keeps the whole Mac awake only on AC power, and the forecast job relies on it (D-030).
    - On 19 Nov it ran on battery from 06:13 to 22:48 UTC, slept 4 times and lost 8.22 h of all-camera capture.
    - On 20 Nov it was on battery again from 03:29 to 06:27 UTC. The lid closed at 03:52, and 1.99 h of capture was lost (D-051). Under the lead's gate rule (D-069) the 72 h clock now closes at 23:06 UTC on Sun 22 Nov at the earliest, after the re-snapshot's 12.7 min (D-079).
+   - On 21 Nov the Mac was on battery at 01:24 UTC, and 368.5 s of capture was lost (01:23:43–01:34:51 UTC). The clock now closes at 23:12:07 UTC on Sun 22 Nov at the earliest (the data report to 06:06:26 UTC on 21 Nov).
    - The 8 h keep-awake you approved ended at 14:27:54 UTC on 20 Nov. Since then only the capture loop's `caffeinate -s` keeps the Mac awake, and only on AC power with the lid open.
    - Rainier's gaps can never be backfilled.
    - **Start the lead's supervisor** (D-076, D-078). Both jobs are children of the lead's session, so ending that session can stop them and the clock. The supervisor finds the running loops itself (capture's pid from the NPS fetcher lock, the forecast loop by its script path), and when one exits it starts a replacement politely, in the supervisor's own session; the permission system refused the lead's own launch. Paste this into your own Terminal (it names no pid, so it stays right after the lead's restarts):
@@ -45,8 +45,9 @@ Most urgent first. Other files cite these numbers (the tickets below, `docs/m1/o
      - The parentheses matter. Typed bare at a Terminal prompt, `setsid` fails, Perl returns −1 and `or die` misses it, so the supervisor would stay in your Terminal's session (D-076).
      - **What it does not do:** the adopted loops stay children of the lead's session until they exit. The supervisor restarts them after that, capture 330 s after an exit nobody announced.
      - **To stop everything later:** `kill "$(cat ~/lookout-data/cache/runtime/supervisor.pid)"` stops the supervisor and any loop it started, but never a loop it adopted; `tail ~/lookout-data/cache/runtime/logs/supervisor.log` says which. An adopted loop is stopped with `kill <its pid>`; the capture loop then finishes its current camera and saves its state.
+     - **After the gate,** the lead's rename switch stops the supervisor first if it is running (PLAN.md, M0.5; D-080). These paths stay valid after the switch, through the `~/lookout-data` symlink.
 2. **AWS.** Until AWS is live, capture depends on this laptop, and it must be live before the sealed window opens on Tue 15 Dec.
-   - Use an account that runs only Lookout (the budget counts the whole account), on the Paid plan.
+   - Use an account that runs only Snow Globe (the budget counts the whole account), on the Paid plan.
    - Provide credentials through the environment, and set `TF_VAR_alarm_email`.
    - Check the Lambda concurrency quota is at least 102 (`aws lambda get-account-settings`).
    - **Before the first deploy, decide D-035,** now with D-060's estimate: $2.07–4.03 a month with the free tiers in month 1, rising by about $0.22 a month. With capture 0.2.1, which the lead's poll rule needs, it is $2.43–4.40 in month 1, and the bottom of the range passes $3 in month 4 (D-066). The questions are whether PRD §17's $3 is monthly, and whether the hard stop stays on through the sealed window. At the top of the range a $3 hard stop would halt both jobs around day 26 of month 1. The recommendation is to switch it off for 15 Dec – 14 Jan and keep the email alerts.
@@ -55,10 +56,10 @@ Most urgent first. Other files cite these numbers (the tickets below, `docs/m1/o
    - The drafts are in [docs/outreach/nps-confirmation.md](docs/outreach/nps-confirmation.md), for the NPS Air Resources Division and Mount Rainier NP. The Rainier one asks where the "mountain" camera is mounted, how often it updates and whether past frames are kept.
    - The archive backfill now runs (D-052). The draft's "[N] frames" now holds the plan's figures: about 4,300 frames in the first five days (about 0.25 GB), and about 22,700 frames (about 1.3 GB) by mid-December, at most 1,000 requests a day, one at a time, at least 5 seconds apart. The regenerated plan gives about 23,700 frames (about 1.4 GB with the day searches) through mid-December, and about 3,000 more if you approve TQ (D-072; the plan's section 7). Use the newer figure, and check it before you send. The budget stays at 1,000 until NPS answers.
    - Golden Gate, if you want it: [docs/outreach/golden-gate.md](docs/outreach/golden-gate.md), by **Fri 4 Dec**.
-4. **Permission to push.**
-   - **First, or with it, answer D-041.** The synthetic renderer goldens are already committed (`b5bc726`). If you decline them, the lead removes them from git history before the push; deleting them in a later commit would still publish them.
-   - The clone's `origin` is `swarit-1/snow-globe`, and nothing has been pushed.
-   - The CI workflow (`.github/workflows/ci.yml`) runs only after the first push. The oculus-core pin is public now (D-025), so CI can fetch it.
+4. **Permission to push:** given on 21 Nov. `m0-prd` was pushed to `origin` (`swarit-1/snow-globe`) `main` at 00:48:32 UTC: `23c0543`, the first push (D-080).
+   - **D-041 still needs your answer.** The push published the synthetic renderer goldens (`b5bc726`), so they are public now. If you decline them, a later commit removes them from the tree, but they stay in the public history.
+   - The CI workflow (`.github/workflows/ci.yml`) runs on every push, so the push gave it its first run on GitHub; the result isn't recorded yet. The oculus-core pin is public (D-025), so CI can fetch it.
+   - **The licence:** none is chosen yet, so the repository grants none. The README had said you would pick one before the repository was made public (D-080).
    - CI runs every suite except the speech library's, which needs macOS. A macOS runner is your call, because it bills at a higher rate on a private repository (D-063).
 5. **Deepgram and fal: accounts and keys, when you're ready.**
    - Keys go in the server's environment, never in the app. For the bake-off, put the Deepgram key only in a shell opened for that, never one that runs an agent, and unset it afterwards ([docs/m1/owner-runbook.md](docs/m1/owner-runbook.md), step 5).
@@ -69,11 +70,12 @@ Most urgent first. Other files cite these numbers (the tickets below, `docs/m1/o
    - **First, before Mon 23 Nov, read [docs/m1/owner-runbook.md](docs/m1/owner-runbook.md).** It sequences everything M1 needs from you, these checks included.
    - Checks 1–4 need no permission. Check 5 needs Microphone; checks 8 and 10 need Screen Recording for the terminal; check 9 needs Accessibility for the injecting terminal (D-033); check 11 runs over several days.
    - Grant them to a terminal you never use for coding agents. Switch Microphone and Speech Recognition off right after checks 5–7, and the other three after the spike.
-   - **Checks 6 and 7** use the speech library 0.2.0 (D-055). The README's Build block rebuilds `m1-spike` without speech, so the runbook's step 2.1 rebuilds it with `--features speech` right after, as the lead did at 12:36 UTC on 20 Nov (D-074). Then follow the runbook's step 3:
-     - first run `~/lookout-data/cache/speech-macos/release/lookout-transcribe status --locale en-US`;
-     - only if it reports code 1, run `~/lookout-data/cache/speech-macos/release/lookout-transcribe install-assets --locale en-US --yes`;
+   - **Checks 6 and 7** use the speech library (D-055), renamed on 21 Nov (D-080). The README's Build block rebuilds `m1-spike` without speech, so the runbook's step 2.1 rebuilds it with `--features speech` right after, as the lead did at 12:36 UTC on 20 Nov (D-074). Then follow the runbook's step 3:
+     - first run `~/lookout-data/cache/speech-macos/release/snow-globe-transcribe status --locale en-US`;
+     - only if it reports code 1, run `~/lookout-data/cache/speech-macos/release/snow-globe-transcribe install-assets --locale en-US --yes`;
      - keep the "reservations" lines from before and after;
-     - check that `m1-spike` is a 0.2.0 speech build: `strings -a ~/lookout-data/cache/cargo-target/release/m1-spike | grep 'lookout-speech 0.2.0'` prints one line.
+     - check that `m1-spike` is a speech build of the renamed library: `strings -a ~/lookout-data/cache/cargo-target/release/m1-spike | grep 'snow-globe-speech 0.3.0'` prints one line (`~/lookout-data` is a symlink to `~/snow-globe-data` after the switch).
+   - **These names need the lead's rebuild.** The lead rebuilds the library under its new names after the post-gate switch (PLAN.md, M0.5). The 20 Nov build is still `~/lookout-data/cache/speech-macos/release/lookout-transcribe`, signed as `dev.lookout.transcribe`. Wait for the rebuild: permissions and asset reservations may key on the identifier (D-055, D-080).
    - Report every run, failed and inconclusive ones too. On a `FAIL`, stop and send the run file.
 7. **Permissions in M1:** Microphone, when the app first asks; Speech Recognition probably not at all, since the library never asks for it (D-055); Screen Recording and Input Monitoring for the harness only; Accessibility for the injection check (open, D-033); Apple Intelligence on. Also confirm that a speech session with Speech Recognition "not determined" shows no prompt (D-055; runbook step 3).
 8. **Replay recordings in M1,** once the recording tool exists (M1-09):
@@ -91,7 +93,7 @@ Most urgent first. Other files cite these numbers (the tickets below, `docs/m1/o
    - the newer readings (D-058): dawn and dusk at −6°, a passed "tonight at N" going to tomorrow, "tomorrow" as the place's date, horizons from now, and the last place after a miss;
    - three rule questions from the replay script (`bench/README.md`, "Rows waiting on the owner"): a fuzzy-only near-alias, a place name plus a leftover word, and a lone generic word.
 
-   Two calls come earlier: D-035 before the first deploy (owner action 2), and D-041 before the first push (owner action 4).
+   Two calls come earlier: D-035 before the first deploy (owner action 2), and D-041, which was due before the first push and is still open now that the push has happened (owner action 4).
 10. **iCloud.** Consider moving the repo out of `~/Documents`, which would end the venv and build-output workarounds (D-031).
 11. **Disk space.** 27 GiB was free of 460 GiB at 17:26 UTC on 20 Nov (94 % used; 19 GiB at 15:46 and 22 GiB at 10:38). The live policy adds about 262 MB a day (D-028), and the backfill through T1c about 1.3 GB (D-072). Apple Intelligence's on-device models take several GB. The lead can free some: the third workflow's critic listed deletable caches (the session scratchpad, `cache/cargo-target` and an old Docker image).
 
@@ -111,8 +113,8 @@ Most urgent first. Other files cite these numbers (the tickets below, `docs/m1/o
 |---|---|---|---|
 | M0-1 Sourced research notes: speech-to-text, refinement, cameras, forecast | done | [docs/research/](docs/research/) (`da60f0a`) | — |
 | M0-2 Council review: four judges, two rounds | done | [docs/council/](docs/council/) (`96e3627`) | — |
-| M0-3 Cross-check of the Lookout draft against v0.3 | done | [docs/review/prd-crosscheck.md](docs/review/prd-crosscheck.md) (`66a837f`) | 24 points checked in Lookout, 17 in v0.3 |
-| M0-4 PRD v0.4 | done | [PRD.md](PRD.md) (`ab96af0`); factual corrections in v0.4.1 | — |
+| M0-3 Cross-check of the Lookout draft against v0.3 | done | [docs/review/prd-crosscheck.md](docs/review/prd-crosscheck.md) (`66a837f`) | 24 points checked in the Lookout draft, 17 in v0.3 |
+| M0-4 PRD v0.4 | done | [PRD.md](PRD.md) (`ab96af0`); factual corrections in v0.4.1; the rename in v0.4.2 (D-080) | — |
 | M0-5 oculus-core ephemeris against JPL Horizons | done | DECISIONS.md D-002, D-025 | Sun 0.19′, Moon 0.13′, worst case |
 | M0-6 **Gate:** the owner's PRD §1 calls | done | DECISIONS.md D-012 | 15 of 15 defaults accepted |
 
@@ -120,33 +122,34 @@ Most urgent first. Other files cite these numbers (the tickets below, `docs/m1/o
 
 | Ticket | Status | Evidence | Measured |
 |---|---|---|---|
-| M0.5-01 Bring PLAN.md and DECISIONS.md to v0.4 (D-012 to D-021); start this file | done | [PLAN.md](PLAN.md), [DECISIONS.md](DECISIONS.md), this file (`a1fca21`); D-022 to D-045 since (`2e3b12d`, `535084b`, `034c46b`), D-046 to D-063 on 20 Nov (`8459e7e`), and D-064 to D-076 later that day (uncommitted) | — |
+| M0.5-01 Bring PLAN.md and DECISIONS.md to v0.4 (D-012 to D-021); start this file | done | [PLAN.md](PLAN.md), [DECISIONS.md](DECISIONS.md), this file (`a1fca21`); D-022 to D-045 since (`2e3b12d`, `535084b`, `034c46b`), D-046 to D-063 on 20 Nov (`8459e7e`), D-064 to D-079 later that day (`72ce09c`, `23c0543`), and D-080 on 21 Nov (uncommitted) | — |
 | M0.5-02 Data directory outside iCloud | done | DECISIONS.md D-017, D-031 | see "Machine and environment" |
 | M0.5-03 Scout the 8 NPS feeds; fix the viewpoint IDs | done | DECISIONS.md D-020; `~/lookout-data/samples/nps-json/` | 8 of 8 feeds live |
 | M0.5-04 NPS archive API and depth | done | DECISIONS.md D-018 | start dates below |
 | M0.5-05 Email drafts: NPS, Golden Gate | done | [docs/outreach/](docs/outreach/) (`e4722a6`); the Rainier questions added on 20 Nov, and the backfill's frame counts later that day (D-052) | — |
 | M0.5-06 Stopgap Rainier capture | done: ran 06:30–12:13 UTC on 19 Nov, then retired | DECISIONS.md D-021, D-023 | 24 frames; 4 outages (see "Outages") |
 | M0.5-07 Repo scaffold: uv, pnpm and Cargo projects, viewpoint schema and manifests, per CLAUDE.md | done | `0bb42ab`; [docs/checks/](docs/checks/) (`c9ba843`, `951b704`; the later changes of 20 Nov uncommitted); DECISIONS.md D-063, D-075 | `make test`: 10 of 10 suites pass, 224 s (see "Test suites"); `make bench-script` and the new `test-speech` steps pass in scratch folders |
-| M0.5-08 Capture worker, 8 cameras.<br>• Polite: fetch on change, ≤ 4 per hour with persisted state.<br>• Quality gates (PRD §8.6), stored at ≤ 1920 px.<br>• Rainier cadence measured. | in progress: 0.2.0 runs for all 8 cameras since 02:39:39 UTC on 20 Nov, with D-028's storage and the archive queue; 0.1.0 ran from 12:24:23 UTC on 19 Nov. 0.2.1, with polls and GETs spaced from the previous answer (D-065, D-066), is uncommitted and not running. | `workers/capture/` (`4fae4c1`, `df1838a`); DECISIONS.md D-023, D-028, D-029, D-047, D-048, D-049, D-065, D-066; [docs/research/nps-archive-check.md](docs/research/nps-archive-check.md) | Rainier updates about once a minute; 262 MB a day under D-028; since the restart, the shortest poll gap is 301.05 s send to send, and 1 of 1,008 pairs is not provably 300 s apart at nps.gov |
-| M0.5-09 Forecast worker.<br>• HRRR byte ranges at the view-ray sample points.<br>• One JSON per viewpoint per run.<br>• Lag per forecast hour. | in progress: 0.1.0 runs as the local stand-in with 8 fields; 0.2.0 (survey lags, `tick`, the stamp floor) is committed (`08a996c`) and not running yet | `workers/forecast/` (`09e2ec8`, `08a996c`); DECISIONS.md D-026, D-027, D-030, D-050, D-053, D-054 | 39 of 39 hourly runs from 2026111900 to 2026112014 written at all 8 viewpoints; 4,082 survey lags; 576 of 576 model cells off the fallback |
+| M0.5-08 Capture worker, 8 cameras.<br>• Polite: fetch on change, ≤ 4 per hour with persisted state.<br>• Quality gates (PRD §8.6), stored at ≤ 1920 px.<br>• Rainier cadence measured. | in progress: 0.2.1, with polls and GETs spaced from the previous answer (D-065, D-066), runs for all 8 cameras since 19:56 UTC on 20 Nov (`b9520e2`, snapshot `3cd2ca7`, D-079); 0.2.0, with D-028's storage and the archive queue, ran from 02:39:39 UTC, and 0.1.0 from 12:24:23 UTC on 19 Nov. 0.3.0, the package renamed `snow-globe-capture` (D-080), is in the working tree and not running. | `workers/capture/` (`4fae4c1`, `df1838a`, `b9520e2`); DECISIONS.md D-023, D-028, D-029, D-047, D-048, D-049, D-065, D-066; [docs/research/nps-archive-check.md](docs/research/nps-archive-check.md) | Rainier updates about once a minute; 262 MB a day under D-028; since the restart, the shortest poll gap is 301.05 s send to send, and 1 of 1,008 pairs is not provably 300 s apart at nps.gov |
+| M0.5-09 Forecast worker.<br>• HRRR byte ranges at the view-ray sample points.<br>• One JSON per viewpoint per run.<br>• Lag per forecast hour. | in progress: 0.1.0 runs as the local stand-in with 8 fields; 0.2.0 (survey lags, `tick`, the stamp floor) is committed (`08a996c`) and not running yet; 0.3.0, the package renamed `snow-globe-forecast` (D-080), is in the working tree | `workers/forecast/` (`09e2ec8`, `08a996c`); DECISIONS.md D-026, D-027, D-030, D-050, D-053, D-054 | 39 of 39 hourly runs from 2026111900 to 2026112014 written at all 8 viewpoints; 4,082 survey lags; 576 of 576 model cells off the fallback |
 | M0.5-10 Trace skeleton | done | `app/core/src/trace.rs` (`e7b87e8`) | no field can hold transcript text (a test walks the JSON) |
 | M0.5-11 Infra code: Terraform (state backend, storage, CDN, budget alarm, Lambda + EventBridge Scheduler) and the Lambda image | in progress, code only: CloudFront and the API are TODO(M1); capture's S3 grants fixed for D-028; the provider installs offline; three local smoke runs of the forecast handler | `infra/terraform/`, `infra/lambda/`, `infra/cost/` (`0727ac8`, `6c385f5`, `e59247a`); DECISIONS.md D-034, D-059, D-060, D-066 | `infra/test.sh` 113 checks pass; estimate $2.07–4.03 in month 1 for capture 0.2.0 (D-060), $2.43–4.40 for 0.2.1 (D-066) |
 | M0.5-12 AWS deployment | blocked on owner (owner action 2) | DECISIONS.md D-014, D-034, D-035 | — |
-| M0.5-13 CI (GitHub Actions, CI only) | in progress: the workflow runs every `make test` suite but the laptop-only speech suite, and `docs/checks` keeps the two lists equal. Its first GitHub run needs a push (owner action 4). | `.github/workflows/ci.yml` (`0bb42ab`, `c9ba843`, `951b704`; comment changes of D-075 uncommitted); DECISIONS.md D-063, D-075 | actionlint 1.7.12: 0 findings (19 Nov) |
+| M0.5-13 CI (GitHub Actions, CI only) | in progress: the workflow runs every `make test` suite but the laptop-only speech suite, and `docs/checks` keeps the two lists equal. The first push (`23c0543`, 00:48:32 UTC on 21 Nov, D-080) gave it its first GitHub run; the result isn't recorded yet (owner action 4). | `.github/workflows/ci.yml` (`0bb42ab`, `c9ba843`, `951b704`; comment changes of D-075 uncommitted); DECISIONS.md D-063, D-075 | actionlint 1.7.12: 0 findings (19 Nov) |
 | M0.5-14 One backtest pair: an archived frame and an archived HRRR run → renderer v−1 → a crude extractor score, labelled "v−1" | done (committed in `d9aa416`); the run choice now applies the archived stamp floor, uncommitted, with this pair's choice unchanged (D-073) | [docs/evidence/m05-backtest-pair.md](docs/evidence/m05-backtest-pair.md); DECISIONS.md D-042, D-062, D-073 | Grand Canyon, 24 h lead: scored, a correct negative by accident; 2.6 s a pair; counts toward no metric |
 | M0.5-15 NPS archive check: cadence, gaps and camera epochs per camera | done; six of the seven epoch switches dated by the backfill's T0 on 20 Nov (Grand Teton was not queued, and needs no date without design H); the check's to-do closed on that basis | [docs/research/nps-archive-check.md](docs/research/nps-archive-check.md) (`4fae4c1`, `2e3b12d`; Grand Canyon corrected in `6b94942`); DECISIONS.md D-022, D-042, D-052 | 217 requests; every ARD camera went 3:2 → 16:9 in 2023–25; T0 dated six of the switches to within 14 days (26 at Grand Canyon) |
 | M0.5-16 H or P per viewpoint in DECISIONS.md | done | DECISIONS.md D-019, D-022, D-024, D-042 | — |
 | M0.5-17 Emails sent | blocked on owner (owner action 3) | — | — |
-| M0.5-18 **Gate:** ≥ 72 h of worker and capture logs | in progress: the clock runs from 12:24:23 UTC on 19 Nov for all 8 cameras (06:30 UTC for Rainier). Under the lead's rule (D-069), both jobs' outages and each capture restart's excess extend it, and it closes at 23:05:58 UTC on Sun 22 Nov at the earliest. PLAN.md's capture-only figure, kept for comparison: 22:44:12 UTC. | `~/lookout-data/capture_log/`, `forecast_log/`; `lookout-eval data-report` (D-061, D-069) | 10.69 h lost to 20:01:58 UTC on 20 Nov: 9 loop outages, two restarts' excess (185.5 s at 02:39 and 763.6 s at 19:44, D-079) and 5 forecast outages, the overlaps counted once (see "Outages"); 20.93 h covered |
-| M0.5-19 A council round on the parts taken from Lookout, adding a forecast-verification judge | not started (optional) | PRD §18.2 | — |
+| M0.5-18 **Gate:** ≥ 72 h of worker and capture logs | in progress: the clock runs from 12:24:23 UTC on 19 Nov for all 8 cameras (06:30 UTC for Rainier). Under the lead's rule (D-069), both jobs' outages and each capture restart's excess extend it, and it closes at 23:12:07 UTC on Sun 22 Nov at the earliest (the data report to 06:06:26 UTC on 21 Nov; 23:05:58 to 20:01:58 UTC on 20 Nov). PLAN.md's capture-only figure, kept for comparison: 22:44:12 UTC. | `~/lookout-data/capture_log/`, `forecast_log/`; `snow-globe-eval data-report` (D-061, D-069, D-080) | 10.69 h lost to 20:01:58 UTC on 20 Nov: 9 loop outages, two restarts' excess (185.5 s at 02:39 and 763.6 s at 19:44, D-079) and 5 forecast outages, the overlaps counted once (see "Outages"); 20.93 h covered |
+| M0.5-19 A council round on the parts taken from the Lookout draft, adding a forecast-verification judge | not started (optional) | PRD §18.2 | — |
 | M0.5-20 Local stand-ins until AWS is live: the capture loop and the forecast tick | in progress: capture 0.2.1 from the snapshot `3cd2ca7` since 19:56 UTC on 20 Nov (`034c46b` from 02:39 UTC, `cfefa79` before); the forecast tick still from `034c46b`, each with its own venvs; the capture loop runs under `caffeinate -s`, and the forecast tick relies on it. Both are children of the lead's session; the lead's supervisor is written but not started (owner action 1, D-076) | DECISIONS.md D-030, D-049, D-050, D-051, D-076, D-079 | 245 loop passes in the data report's window to 20:01 UTC (69 of 0.1.0, 174 of 0.2.0, 2 of 0.2.1); the forecast tick from 12:18 UTC on 19 Nov |
+| M0.5-21 The rename to Snow Globe (D-080): the code and the docs, then the live switch right after the gate (the lead) | in progress: the code and the docs carry the new names in the working tree, uncommitted. The live switch waits for the gate's close (23:12:07 UTC on Sun 22 Nov at the earliest, read at 06:06 UTC on 21 Nov), and its script, `infra/ops/migrate-to-snow-globe.sh`, checks the close itself: it refuses unless the data report shows 72 h covered. It moves `~/lookout-data` to `~/snow-globe-data` with a symlink back, moves the runtime and the loops' scripts to the new names, and switches the live User-Agent to `SnowGlobe/0.1` (PLAN.md, M0.5). Until then the running jobs keep the old names. | DECISIONS.md D-080; [PLAN.md](PLAN.md), M0.5 | — |
 
 ### M1: Voice to first pixel (Mon 23 Nov → Mon 7 Dec) · not started, with some core logic started early
 
 | Ticket | Status | Evidence | Measured |
 |---|---|---|---|
 | M1-01 Platform spike: one day, 11 checks (PLAN.md 1a) | in progress (early): the spike app is built; none of the 11 checks has run (owner action 6). Checks 6 and 7 use the speech library through the spike's `--features speech` build, which links the real library: 0.1.0 at 03:39 UTC on 20 Nov, and 0.2.0 since the lead rebuilt it at 12:36 UTC (D-074). | `spikes/m1-platform/` (`b73c53b`); [docs/m1/owner-runbook.md](docs/m1/owner-runbook.md), step 3; DECISIONS.md D-032, D-033, D-055, D-074 | 105 unit tests; the speech build 12,991,256 bytes with 1,013 `LookoutSpeech` symbols; see "M1 preparation" |
-| M1-02 `lookout-core`: query lifecycle, `query_gen` cancellation, trace | in progress (early) | `app/core/` (`e7b87e8`) | key-mash: 40,000 cycles, 0 stale paints |
+| M1-02 `snow-globe-core`: query lifecycle, `query_gen` cancellation, trace | in progress (early) | `app/core/` (`e7b87e8`) | key-mash: 40,000 cycles, 0 stale paints |
 | M1-03 Parser fast path and time rules.<br>• ≥ 150 table-driven cases and property tests.<br>• DST and cross-zone cases. | in progress (early): some rule readings wait for the owner (D-039, D-058); back-references ("same place") are to be built on dev row d06, never on a test row (D-057) | `app/core/tests/parser_table.rs`, `properties.rs` | 295 table cases; parse p95 124–126 µs |
 | M1-04 Ephemeris wrapper and solar events over oculus-core `1b5410b` | in progress (early) | `app/core/src/solar.rs`; DECISIONS.md D-025 | sunrise and sunset within 3.9 s of NOAA; Moon within 0.355° |
 | M1-05 Speech A1: `DictationTranscriber` through the Swift static library | in progress (early): library 0.2.0 built, unit-tested on a mock engine and committed (`8443bf3`); never run against the real recognizer, which needs the owner (owner action 6). Its silence pad stays 0 ms by default, set and logged by the shell and harness (D-067). | `app/speech-macos/`; DECISIONS.md D-055, D-056, D-067 | 103 tests; push p99 ≤ 5.12 µs; see "M1 preparation" |
@@ -167,7 +170,7 @@ Most urgent first. Other files cite these numbers (the tickets below, `docs/m1/o
 |---|---|---|---|
 | M1.5-01 Renderer v0, headless: Hillaire sky, cloud slabs, ceiling slab, flat fog, camera v0 | in progress (early): renderer 0.2.0 has cloud slabs, a ceiling slab, fog and camera v0; the Hillaire sky is TODO(M1.5) | `renderer/` (`b5bc726`) | see "Renderer" |
 | M1.5-02 First Rainier plate: base frame, pose, summit band. Needs a captured midday frame with the summit visible. | not started | — | — |
-| M1.5-03 Extractor v0 | not started (extractor v−1 exists in eval) | `eval/src/lookout_eval/extractor.py` | — |
+| M1.5-03 Extractor v0 | not started (extractor v−1 exists in eval) | `eval/src/snow_globe_eval/extractor.py` | — |
 | M1.5-04 **Gate:** dev-only P1 table against persistence, climatology and S_rule | not started | — | — |
 | M1.5-05 **Gate:** cloud Monte Carlo test | in progress (early): passes on renderer 0.2.0; re-run on the M1.5 renderer | `renderer/src/cpu/montecarlo*.ts`; `pnpm montecarlo` | within 1.54 points of the view-ray target at 1,000 seeds |
 | M1.5-06 Design-H archive backfill: T0, T1a, T1b, T3pr, T2, T1c (not a gate item) | in progress: the lead queued T0 and T1a (447 entries) at 09:50 UTC on 20 Nov; T0 is done, T1a is running. The lead removed the six 31 May entries and resumed Big Bend's failed one (D-070, D-071). The plan, regenerated from the live queue, puts T3pr ahead of T1b: T3pr lands 4 days early, T1a and T1c on their targets, and T1b and T2 a day late at 1.0 % errors (D-072). | [docs/research/archive-backfill-plan.md](docs/research/archive-backfill-plan.md) (`6b94942`; regenerated, uncommitted); DECISIONS.md D-052, D-070 to D-072 | At 11:43 UTC the day's 1,000 requests were spent. Queue at 15:47 UTC: 441 entries, 180 done, 1 active, 260 pending. Finish days at 1.0 % errors: T1a 24 Nov, T3pr 25 Nov, T1b 30 Nov, T2 11 Dec, T1c 15 Dec |
@@ -208,7 +211,7 @@ Most urgent first. Other files cite these numbers (the tickets below, `docs/m1/o
 
 | Ticket | Status | Evidence | Measured |
 |---|---|---|---|
-| M5-01 README with the numbers, 60-second demo, `THIRD_PARTY_NOTICES`, and `make score` from a fresh clone | in progress (early): a first `THIRD_PARTY_NOTICES`, written by hand from the lock files and revised on 20 Nov. `docs/checks` keeps it in step with every `uv.lock`, `Cargo.lock` and `package.json`; the Terraform lock files and Lookout's own package versions are checked by hand. The README skeleton (M1-14) | [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES), [README.md](README.md) | — |
+| M5-01 README with the numbers, 60-second demo, `THIRD_PARTY_NOTICES`, and `make score` from a fresh clone | in progress (early): a first `THIRD_PARTY_NOTICES`, written by hand from the lock files and revised on 20 Nov. `docs/checks` keeps it in step with every `uv.lock`, `Cargo.lock` and `package.json`; the Terraform lock files and Snow Globe's own package versions are checked by hand. The README skeleton (M1-14) | [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES), [README.md](README.md) | — |
 
 ### v1 growth (after M5) · not started
 
@@ -222,6 +225,8 @@ Most urgent first. Other files cite these numbers (the tickets below, `docs/m1/o
 ## Measured so far
 
 Every entry below was measured or checked on this machine (MacBook Air M4, macOS 26.5.1), or by NOAA's or NPS's own servers as stated. Times are UTC. The agents' reports and the evidence files hold the full tables.
+
+Every entry predates the rename (D-080), so each keeps the names its run used. `lookout-capture once`, for example, is `snow-globe-capture once` today, and `lk_speech_*` is `sg_speech_*`.
 
 ### Outages
 
@@ -257,7 +262,7 @@ Outages extend the 72 h gate, as they extend the sealed window, and each one is 
   - The stopgap rows are the earlier hand count: missed = round(gap ÷ 5 min) − 1.
   - The passes at 15:09 and 18:03 on 19 Nov, and 05:02, 05:42 and 06:18 on 20 Nov, ran in brief dark wakes.
 - **Totals to 15:46:36 UTC on 20 Nov** (27.37 h elapsed): the gate rule's union is 10.48 h lost (capture outages 10.208 h, the restart's excess 0.052 h, forecast outages 6.039 h, the overlaps counted once), so 16.89 h are covered. Capture's outages alone: 10.21 h (8.22 h on 19 Nov, 1.99 h on 20 Nov). No outage since 06:29:29 UTC.
-- **The 72 h clock** (the lead's rule, D-069): its earliest close is **23:05:58.495 UTC on Sun 22 Nov**, if nothing more is lost (the data report to 20:01:58 UTC on 20 Nov; it was 22:53:14.871 before the 19:44 re-snapshot, D-079).
+- **The 72 h clock** (the lead's rule, D-069): its earliest close is **23:12:06.983 UTC on Sun 22 Nov**, if nothing more is lost (`snow-globe-eval data-report` to 06:06:26 UTC on 21 Nov: 10.796 h lost, 30.906 h covered of 41.701 h elapsed). It was 23:05:58.495 UTC to 20:01:58 UTC on 20 Nov, and 22:53:14.871 before the 19:44 re-snapshot (D-079); the capture outage of 01:23:43–01:34:51 UTC on 21 Nov (368.5 s lost) moved it. On the 21 Nov reading, PLAN.md's earlier rule gives 22:50:21.196 UTC, capture alone 22:58:48.840 UTC, and forecast alone 18:26:42.991 UTC.
   - PLAN.md's earlier rule (the capture loop's outages alone), kept for comparison: 22:44:12.708 UTC. Capture alone, with the restarts' excess: 22:52:40.352 UTC. Forecast alone: 18:26:42.991 UTC.
   - A new outage moves the close later. The re-snapshot's restart cost 763.6 s of excess, not the planned 60–70 s, because the Mac slept through it (D-079).
 - **Forecast catch-up on 19 Nov:** every hourly run of 19 Nov (00Z–23Z) was written by 23:56.
@@ -372,7 +377,7 @@ Outages extend the 72 h gate, as they extend the sealed window, and each one is 
 | Real NPS plate | A 1920×1080 Rainier sample renders in 740.1 ms (SwiftShader) | `pnpm render` on `samples/mountain.jpg` |
 | Test suite | 183 passed (154 unit, 29 headless) in 36.9 s | `pnpm test` |
 
-### lookout-core
+### snow-globe-core
 
 | What | Value | How and when |
 |---|---|---|
@@ -394,7 +399,7 @@ Outages extend the 72 h gate, as they extend the sealed window, and each one is 
 | Lambda smoke runs (forecast handler under the Runtime Interface Emulator, 2048 MB, 1.16 vCPU, tiny profile) | Run 1 (00:17): init 267 ms, first call 1,278 ms (3,588,572 bytes from NOAA, 11 files), second call 187 ms, peak 137.8 MiB. Run 2 (00:26): 299 ms, 1,222 ms, 209 ms, 138.4 MiB. Run 3 (06:59, image of `8246a8b`): 232 ms, 2,696 ms for 2 runs (7,254,750 bytes, 20 files), 38 ms, 144.8 MiB. No GRIB left behind. Laptop numbers, not AWS. | `infra/lambda/smoke.sh` (`INIT REPORT`, `INVOKE RTDONE`, the cgroup's `memory.peak`); `infra/README.md`, "The Lambda image" |
 | EventBridge Scheduler free tier (us-east-1) | "$0 for the first 14 million scheduled invocations" | AWS Price List file published 18 Nov 2026 (D-014) |
 
-### lookout-common and the docs checks
+### snow-globe-common and the docs checks
 
 | What | Value | How and when |
 |---|---|---|

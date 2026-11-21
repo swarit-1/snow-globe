@@ -1,4 +1,4 @@
-"""Frame quality gates (PRD §8.6) on synthetic sidecars (the lookout-capture layout)."""
+"""Frame quality gates (PRD §8.6) on synthetic sidecars (the snow-globe-capture layout)."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from datetime import UTC, datetime
 
 import pytest
 from conftest import FixedEphemeris
-from lookout_common.manifest import load_manifest
+from snow_globe_common.manifest import load_manifest
 
-from lookout_eval.gates import (
+from snow_globe_eval.gates import (
     GATES,
     FrameGates,
     GateResult,
@@ -20,7 +20,7 @@ from lookout_eval.gates import (
     fresh_gate,
     usable_frame_gate,
 )
-from lookout_eval.scores import contingency
+from snow_globe_eval.scores import contingency
 
 VP = load_manifest("rainier.paradise-mountain")
 T = datetime(2026, 11, 19, 20, 0, tzinfo=UTC)

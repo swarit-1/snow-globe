@@ -17,7 +17,7 @@ checks (PLAN.md M1 1a):
   tags     8,10,11 helper: shows the panel and cycles pixel tags for m1-sck (no permission)
 
 options:
-  --run-id ID            run file name under $LOOKOUT_DATA_DIR/spikes/m1/ (default: generated)
+  --run-id ID            run file name under $SNOW_GLOBE_DATA_DIR/spikes/m1/ (default: generated)
   --hotkey ACCEL         global shortcut (default Control+Shift+Space)
   --trials N             trials (hotkey --injected: 20; panel, focus: 3; reveal, cpal, speech: 5)
   --per-order N          hotkey: releases to observe per order (default 10; at most 3N trials)

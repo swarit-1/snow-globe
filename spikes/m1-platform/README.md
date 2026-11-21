@@ -1,5 +1,7 @@
 # M1 1a platform spike
 
+Renamed for Snow Globe on 21 Nov 2026 (D-080): the bundle identifiers are `dev.snowglobe.spike-m1` and `dev.snowglobe.spike-m1.sck` (were `dev.lookout.*`), the panel is titled "Snow Globe M1 spike panel", and the speech library is linked as `libsnow_globe_speech.a` through `snow_globe_speech.h` (`sg_speech_*`). A new bundle identifier is a new identity to macOS, so permissions granted to the old ones (microphone, Speech Recognition, Accessibility, Screen Recording) must be granted again. The data dir is the workers' (`$SNOW_GLOBE_DATA_DIR`, else `$LOOKOUT_DATA_DIR`, else `~/snow-globe-data` or, until it is moved, `~/lookout-data`).
+
 A throwaway Tauri 2 app and three small helpers, one runnable check for each item in
 [PLAN.md](../../PLAN.md) M1 1a (PRD §5.4, §6, §7.1, §10.2–10.6). Nothing here ships; the lead
 decides what moves into `app/`.
@@ -15,8 +17,8 @@ and, for some, a permission.
 
 ## What the spike records, and what it never records
 
-Each check appends JSON lines to `$LOOKOUT_DATA_DIR/spikes/m1/<run-id>.jsonl` (default
-`~/lookout-data/spikes/m1/`). The code refuses to write inside the repository. Every line has:
+Each check appends JSON lines to `$SNOW_GLOBE_DATA_DIR/spikes/m1/<run-id>.jsonl` (default
+`~/snow-globe-data/spikes/m1/`). The code refuses to write inside the repository. Every line has:
 
 | field | meaning |
 |---|---|
@@ -45,7 +47,7 @@ Never recorded:
 
 ```sh
 cd spikes/m1-platform
-export CARGO_TARGET_DIR="$HOME/lookout-data/cache/cargo-target"
+export CARGO_TARGET_DIR="$HOME/lookout-data/cache/cargo-target"   # the same folder after the switch (a symlink)
 cargo build --release --workspace
 cargo test --workspace                      # 105 unit tests, no device access
 cargo clippy --workspace --all-targets -- -D warnings
@@ -174,30 +176,30 @@ syntax). Option-only and Option+Shift shortcuts are refused, because macOS 15+ r
 - **Permissions:**
   - Microphone;
   - Speech Recognition, if the library asks;
-  - the en-US dictation asset installed (`lk_speech_status` = 1 means it is missing).
-- **Build first.** The library comes from `app/speech-macos` (another work package; 0.2.0 is committed in `8443bf3`, D-055). It did not exist when this spike was built, so the check is behind a Cargo feature. The lead built the spike this way at 12:36 UTC on 20 Nov, against `$LOOKOUT_DATA_DIR/cache/speech-macos/release/liblookout_speech.a` 0.2.0 (D-074):
+  - the en-US dictation asset installed (`sg_speech_status` = 1 means it is missing).
+- **Build first.** The library comes from `app/speech-macos` (another work package; 0.2.0 is committed in `8443bf3`, D-055). It did not exist when this spike was built, so the check is behind a Cargo feature. The lead built the spike this way at 12:36 UTC on 20 Nov, against `$SNOW_GLOBE_DATA_DIR/cache/speech-macos/release/libsnow_globe_speech.a` 0.2.0 (D-074):
   ```sh
-  # after app/speech-macos is built (or set LOOKOUT_SPEECH_LIB_DIR / LOOKOUT_SPEECH_LIB_NAME):
+  # after app/speech-macos is built (or set SNOW_GLOBE_SPEECH_LIB_DIR / SNOW_GLOBE_SPEECH_LIB_NAME):
   cargo build --release --offline --locked -p m1-spike-app --features speech
   ```
-  - **The Build block above undoes it:** `cargo build --release --workspace` rebuilds `m1-spike` without the feature, and this check then records `skipped`. Before running it, `strings -a "$BIN/m1-spike" | grep 'lookout-speech 0.2.0'` must print the library's version line; if it prints nothing, rebuild with the command above. The owner runbook runs that command right after the Build block (step 2.1), and its step 3 has the rest of the sequence, starting with `lookout-transcribe status`.
-  - `build.rs` looks for `liblookout_speech.a` in `app/speech-macos/.build/{release,arm64-apple-macosx/release,debug}`, `app/speech-macos/build`, then `$LOOKOUT_DATA_DIR/cache/speech-macos`.
-  - It checks that `include/lookout_speech.h` declares every function.
+  - **The Build block above undoes it:** `cargo build --release --workspace` rebuilds `m1-spike` without the feature, and this check then records `skipped`. Before running it, `strings -a "$BIN/m1-spike" | grep 'snow-globe-speech 0.3.0'` must print the library's version line; if it prints nothing, rebuild with the command above. The owner runbook runs that command right after the Build block (step 2.1), and its step 3 has the rest of the sequence, starting with `snow-globe-transcribe status`.
+  - `build.rs` looks for `libsnow_globe_speech.a` in `app/speech-macos/.build/{release,arm64-apple-macosx/release,debug}`, `app/speech-macos/build`, then `$SNOW_GLOBE_DATA_DIR/cache/speech-macos`.
+  - It checks that `include/snow_globe_speech.h` declares every function.
   - It links the Swift runtime (rpath `/usr/lib/swift`) and the Foundation, AVFoundation, CoreMedia and Speech frameworks.
   - Without the feature, `m1-spike speech` records `skipped` for checks 6 and 7.
 - **Command:** `$BIN/m1-spike speech` (5 trials; add `--print-text` to see partials in the terminal).
 - **What you do:** wait 3 s for the network monitor. Then hold the hotkey, say a place and a time ("Mount Rainier at sunset tomorrow"), and let go.
 - **What it measures:**
-  - On key-down: `lk_speech_start(locale, device rate)`, then the cpal stream pushes mono f32 with `lk_speech_push_f32`. Each push is timed against the ABI's ~1 ms budget.
-  - On key-up: the stream is dropped (so no push can follow), then `lk_speech_finish`, a wait of up to 10 s for FINAL, then `lk_speech_cancel` and `lk_speech_free`.
+  - On key-down: `sg_speech_start(locale, device rate)`, then the cpal stream pushes mono f32 with `sg_speech_push_f32`. Each push is timed against the ABI's ~1 ms budget.
+  - On key-up: the stream is dropped (so no push can follow), then `sg_speech_finish`, a wait of up to 10 s for FINAL, then `sg_speech_cancel` and `sg_speech_free`.
   - Every callback's kind and time, the text length and words. No text is logged.
-  - Key-down → first partial, and **key-up → FINAL**: D-004's release-to-final measure. It is split at the `lk_speech_finish` call:
+  - Key-down → first partial, and **key-up → FINAL**: D-004's release-to-final measure. It is split at the `sg_speech_finish` call:
     - `key_up_to_finish_ms`: the hand-off to the audio thread plus the CoreAudio stream teardown, which the spike puts before finish;
     - `finish_to_final_ms`: the library's flush and finalize.
 - **Pass:** in every trial:
-  - `lk_speech_start` succeeds;
+  - `sg_speech_start` succeeds;
   - at least one PARTIAL has non-empty text;
-  - exactly one FINAL arrives, and it comes after `lk_speech_finish` was called;
+  - exactly one FINAL arrives, and it comes after `sg_speech_finish` was called;
   - no ERROR arrives.
 - **Look for:** `RESULT speech: Pass`, `release_to_final_ms`, `key_up_to_finish_ms`, `finish_to_final_ms`, and `push` (max µs, count over 1 ms).
 
@@ -234,7 +236,7 @@ syntax). Option-only and Option+Shift shortcuts are refused, because macOS 15+ r
   ```
 - **What it measures:**
   - The panel draws a 25-cell black/white strip (8 pt cells) at its top-left corner. It encodes (query_gen 12 bits, tier 2 bits) with a sync pattern and CRC-5. Rust computes the cells; the page only paints them.
-  - `m1-sck` builds an `SCContentFilter(desktopIndependentWindow:)` for the window titled "Lookout M1 spike panel". It captures at the window's native pixel size, BGRA at 60 fps, with no shadow and no cursor.
+  - `m1-sck` builds an `SCContentFilter(desktopIndependentWindow:)` for the window titled "Snow Globe M1 spike panel". It captures at the window's native pixel size, BGRA at 60 fps, with no shadow and no cursor.
   - For every frame: status, presentation time, display time, arrival time, the decoded tag, and the geometry ScreenCaptureKit reports (`contentRect`, `contentScale`, `scaleFactor`, `screenRect`). Then the frame is dropped.
   - `m1-report --write` joins each tag request with the first frame carrying it before the next request. That gives request → composited-frame paint times, for requests made while the capture ran.
 - **Pass:** both parts must pass.
@@ -324,7 +326,7 @@ syntax). Option-only and Option+Shift shortcuts are refused, because macOS 15+ r
 
 ## Known limits
 
-- **Check 6 links the real library, which has not run yet.** The `--features speech` build links `app/speech-macos`'s static library (0.1.0 at 03:39 UTC on 20 Nov; 0.2.0 since the lead rebuilt it at 12:36 UTC: 1,013 `LookoutSpeech` symbols, Speech.framework). The header test in `tauri-app/src/speech.rs` compares the library's header with this ABI. `TODO(M1)`: the binary is still signed with the linker's identifier and no bound Info.plist.
+- **Check 6 links the real library, which has not run yet.** The `--features speech` build links `app/speech-macos`'s static library (0.1.0 at 03:39 UTC on 20 Nov; 0.2.0 since the lead rebuilt it at 12:36 UTC: 1,013 `LookoutSpeech` symbols, Speech.framework; the module's name before the rename, D-080). The header test in `tauri-app/src/speech.rs` compares the library's header with this ABI. `TODO(M1)`: the binary is still signed with the linker's identifier and no bound Info.plist.
 - **Checks 2 and 3 confirm "typing reached the other app" automatically only with the terminal as the other app**, because the spike reads its own stdin. With any other app, your `y`/`n` is the evidence, and it is logged as a `note`.
 - **The tag is opaque.** The PRD §10.4 paint rule (first frame at ≥ 50 % opacity during a 120 ms cross-fade) belongs to the M1 harness. Here the join reports request → first frame carrying the tag.
 - **CRC-5 is not perfect.** It catches every single- and double-cell error. Measured exhaustively in the unit tests (every cut of every pair): a redraw torn between consecutive tags never decodes as a third tag (0 of 29,930 strips in `tags` mode, 0 of 28,392 in `reveal` mode), but between tags 2 to 16 generations apart, 890 of 612,776 torn strips (0.15 %) do. So the join also fails on any tag the app never drew.
@@ -356,4 +358,4 @@ apple-cf 0.11.7. The full graph is in `Cargo.lock` (475 packages).
 | `tauri-app/` | `m1-spike`: the Tauri 2 app (checks 1–7, and `tags` for 8, 10 and 11); `ui/` is the panel page; `Info.plist` holds the microphone and speech usage strings, which Tauri's dev-mode build embeds in the binary |
 | `sck/` | `m1-sck`: ScreenCaptureKit capture, checks 8, 10 and 11 |
 | `inject/` | `m1-inject`: `CGEventPost` injection and the optional listen-only tap, check 9 |
-| `scripts/bundle-sck-helper.sh` | wraps `m1-sck` in an app bundle for check 11's identity runs (output under `$LOOKOUT_DATA_DIR/cache/spike-m1/`) |
+| `scripts/bundle-sck-helper.sh` | wraps `m1-sck` in an app bundle for check 11's identity runs (output under `$SNOW_GLOBE_DATA_DIR/cache/spike-m1/`) |

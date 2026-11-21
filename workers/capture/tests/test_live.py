@@ -12,15 +12,15 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
-from lookout_common.http import polite_client
-from lookout_common.images import exif_summary
-from lookout_common.jsonl import read_jsonl
-from lookout_common.manifest import load_manifests
-from lookout_common.storage import LocalStorage, S3Storage
-from lookout_common.timeutil import isoformat_z
+from snow_globe_common.http import polite_client
+from snow_globe_common.images import exif_summary
+from snow_globe_common.jsonl import read_jsonl
+from snow_globe_common.manifest import load_manifests
+from snow_globe_common.storage import LocalStorage, S3Storage
+from snow_globe_common.timeutil import isoformat_z
 
-from lookout_capture import lambda_handler
-from lookout_capture.live import (
+from snow_globe_capture import lambda_handler
+from snow_globe_capture.live import (
     MIN_POLL_INTERVAL_S,
     POLL_MARGIN_S,
     CaptureOptions,
@@ -28,7 +28,7 @@ from lookout_capture.live import (
     parse_feed,
     status_report,
 )
-from lookout_capture.state import CameraState, camera_state_key
+from snow_globe_capture.state import CameraState, camera_state_key
 
 from .conftest import FakeClock, FakeNPS, fixture_text, make_jpeg
 from .receipts import Latency, run_schedule, server_violations
@@ -165,7 +165,7 @@ def test_ard_change_fetch_store_downscale_and_times(data_root, clock, fake_nps):
     assert side["json_imagedate_raw"] == "Updated 11/18/2026 10:00 PM PST"
     assert side["json_imagedate_utc"] == "2026-11-19T06:00:00Z"
     assert side["exif"]["Artist"] == "National Park Service" and side["source"] == "live"
-    assert side["user_agent"].startswith("Lookout/0.1") and len(side["dhash64"]) == 16
+    assert side["user_agent"].startswith("SnowGlobe/0.1") and len(side["dhash64"]) == 16
     assert side["luma_mean"] > 0 and side["fetched_at_utc"].endswith("Z")
     stored = exif_summary(storage.get_bytes(key))  # EXIF bytes survive the re-encode
     assert stored["datetime"] == "2026:11:18 22:00:00" and stored["width"] == 1920
@@ -177,7 +177,7 @@ def test_ard_change_fetch_store_downscale_and_times(data_root, clock, fake_nps):
     assert len(requests) == len(fake_nps.requests)
     # The User-Agent names the project, never a person; no cookies are sent.
     assert {r["headers"]["user-agent"] for r in fake_nps.requests} == {
-        "Lookout/0.1 (webcam research capture; fetch-on-change)"
+        "SnowGlobe/0.1 (webcam research capture; fetch-on-change)"
     }
     assert not any("cookie" in r["headers"] for r in fake_nps.requests)
 
@@ -531,7 +531,7 @@ def write_stopgap_frame(
             "image_time_utc": stamp.isoformat(),
             "image_time_source": "http_last_modified",
             "stored": "original",
-            "user_agent": "Lookout/0.1 (webcam research capture; fetch-on-change)",
+            "user_agent": "SnowGlobe/0.1 (webcam research capture; fetch-on-change)",
             "capture_version": "stopgap-0",
         },
     )
@@ -685,7 +685,7 @@ def test_concurrent_passes_fetch_each_image_once(data_root, clock, fake_nps):
 
 
 def test_s3_backend_end_to_end(s3_bucket, clock, fake_nps, data_root):
-    storage = S3Storage("lookout-test", "dev", client=s3_bucket)
+    storage = S3Storage("snow-globe-test", "dev", client=s3_bucket)
     set_rainier(fake_nps, clock.now(), etag='"s3"')
     out = runner(storage, fake_nps, clock).run_pass([RAINIER])["outcomes"][RAINIER.id]
     assert out["event"] == "stored"
@@ -704,9 +704,9 @@ def test_s3_backend_end_to_end(s3_bucket, clock, fake_nps, data_root):
 
 
 def test_lambda_handler_runs_one_pass_on_s3(s3_bucket, monkeypatch, fake_nps, data_root):
-    monkeypatch.setenv("LOOKOUT_STORAGE", "s3")
-    monkeypatch.setenv("LOOKOUT_S3_BUCKET", "lookout-test")
-    import lookout_capture.live as live
+    monkeypatch.setenv("SNOW_GLOBE_STORAGE", "s3")
+    monkeypatch.setenv("SNOW_GLOBE_S3_BUCKET", "snow-globe-test")
+    import snow_globe_capture.live as live
 
     real = live.polite_client
     monkeypatch.setattr(
@@ -724,7 +724,7 @@ def test_lambda_handler_runs_one_pass_on_s3(s3_bucket, monkeypatch, fake_nps, da
 
     summary = lambda_handler.handler({"only": [RAINIER.id]}, Context())
     assert summary["runner"] == "lambda" and summary["counts"] == {"stored": 1}
-    keys = S3Storage("lookout-test", client=s3_bucket).list_prefix("frames/")
+    keys = S3Storage("snow-globe-test", client=s3_bucket).list_prefix("frames/")
     assert len([k for k in keys if k.endswith(".jpg")]) == 1
 
 

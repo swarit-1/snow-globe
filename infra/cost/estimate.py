@@ -98,7 +98,7 @@ frames_mb_day = 262.0  # measured: D-028's frame, thumbnail and sidecar sizes at
 light_file_kb = 31.274  # measured: mean of 249 local forecast files (8 fields, f00-f02), 20 Nov
 
 
-# Extrapolated: the full profile (Terraform sets no LOOKOUT_FORECAST_* variable, so all 22 fields and every hour),
+# Extrapolated: the full profile (Terraform sets no SNOW_GLOBE_FORECAST_* variable, so all 22 fields and every hour),
 # from the measured layout of a light file: ~5.7-8 B per value, ~0.70 KB + ~0.10 KB per field for each hour, ~0.65 KB
 # per field of metadata, ~13.8 KB fixed; 57 points.
 def full_file_kb(hours: int, b_per_value: float) -> float:

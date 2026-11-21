@@ -12,11 +12,11 @@ from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
-from lookout_common.manifest import load_manifests
-from lookout_common.storage import LocalStorage
+from snow_globe_common.manifest import load_manifests
+from snow_globe_common.storage import LocalStorage
 
-from lookout_capture.archive import api_code
-from lookout_capture.archive_queue import (
+from snow_globe_capture.archive import api_code
+from snow_globe_capture.archive_queue import (
     STEP_MARGIN_S,
     STEP_MAX_S,
     ArchiveQueue,
@@ -25,8 +25,8 @@ from lookout_capture.archive_queue import (
     make_entry,
     queue_summary,
 )
-from lookout_capture.cli import build_parser, main
-from lookout_capture.heldout import HELD_OUT_FROM
+from snow_globe_capture.cli import build_parser, main
+from snow_globe_capture.heldout import HELD_OUT_FROM
 
 from .conftest import FakeNPS, fixture_json, make_jpeg
 from .test_archive import _client
@@ -457,9 +457,9 @@ def test_an_idle_error_is_logged_and_never_stops_live_capture(data_root, fake_np
 
 @pytest.fixture
 def no_network(monkeypatch):
-    import lookout_common.http as http
+    import snow_globe_common.http as http
 
-    import lookout_capture.archive as archive
+    import snow_globe_capture.archive as archive
 
     def refuse(*args, **kwargs):
         raise AssertionError("a queue command built an HTTP client")
@@ -469,7 +469,7 @@ def no_network(monkeypatch):
 
 
 def test_queue_commands_never_touch_the_network_or_the_fetcher_lock(data_root, capsys, no_network):
-    from lookout_capture.fetcher_guard import nps_fetcher_lock
+    from snow_globe_capture.fetcher_guard import nps_fetcher_lock
 
     with nps_fetcher_lock("the running loop", processes=lambda: []):  # held, as by the loop
         assert (
@@ -709,7 +709,7 @@ def test_a_stopped_entry_counts_as_finished_and_can_be_resumed_with_a_larger_cap
 
 
 def test_the_total_cap_stops_queued_work_over_all_viewpoints(data_root, fake_nps, clock, tmp_path):
-    from lookout_capture.archive import archive_state_key
+    from snow_globe_capture.archive import archive_state_key
 
     storage = LocalStorage(data_root)
     serve_day(fake_nps)
@@ -727,9 +727,9 @@ def test_the_total_cap_stops_queued_work_over_all_viewpoints(data_root, fake_nps
 
 
 def test_the_production_queue_client_is_polite_and_made_only_when_there_is_work(data_root):
-    from lookout_common.http import user_agent
+    from snow_globe_common.http import user_agent
 
-    from lookout_capture.archive_queue import (
+    from snow_globe_capture.archive_queue import (
         CONNECT_TIMEOUT_S,
         READ_TIMEOUT_S,
         REQUEST_DEADLINE_S,
@@ -745,7 +745,7 @@ def test_the_production_queue_client_is_polite_and_made_only_when_there_is_work(
         assert STEP_MAX_S == REQUEST_DEADLINE_S + READ_TIMEOUT_S
         assert client.limiter.min_interval_s == 5.05 and client.limiter.mode == "file"
         assert client.client.headers["User-Agent"] == user_agent()
-        assert user_agent().startswith("Lookout/0.1")
+        assert user_agent().startswith("SnowGlobe/0.1")
         assert client.share_host_backoff and client.storage is storage
     finally:
         client.client.close()

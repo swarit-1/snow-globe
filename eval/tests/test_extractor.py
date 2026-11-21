@@ -20,7 +20,7 @@ from synth_images import (
     to_rgb,
 )
 
-from lookout_eval.extractor import (
+from snow_globe_eval.extractor import (
     ClearDayReference,
     ExtractorParams,
     ReferenceFrame,

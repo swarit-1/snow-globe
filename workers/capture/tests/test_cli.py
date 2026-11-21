@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from lookout_capture.cli import build_parser, main
+from snow_globe_capture.cli import build_parser, main
 
 
 def test_parser_knows_every_command():
@@ -63,7 +63,7 @@ def test_archive_commands_refuse_the_rainier_park_camera(data_root):
 def test_archive_downloads_past_the_held_out_guard_are_refused_before_any_request(
     data_root, monkeypatch
 ):
-    import lookout_capture.archive as archive
+    import snow_globe_capture.archive as archive
 
     def no_client(*args, **kwargs):  # the refusal comes before any client exists
         raise AssertionError("an archive client was built")

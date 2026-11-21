@@ -33,10 +33,10 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
-from lookout_common.http import polite_client
-from lookout_common.storage import LocalStorage
+from snow_globe_common.http import polite_client
+from snow_globe_common.storage import LocalStorage
 
-from lookout_capture.live import CaptureOptions, CaptureRunner
+from snow_globe_capture.live import CaptureOptions, CaptureRunner
 
 from .conftest import FakeClock, FakeNPS, make_jpeg
 
@@ -375,7 +375,7 @@ def run_schedule(
 
     - ``"lambda"``: a fresh runner every 300 s (+ 0..``jitter_s``), ``run_pass(wait 45 s)``
       with Lambda's 120 s timeout and 25 s reserve, as ``lambda_handler.handler``.
-    - ``"loop"``: one runner, ``loop(interval 300, jitter_s)``, as ``lookout-capture loop``.
+    - ``"loop"``: one runner, ``loop(interval 300, jitter_s)``, as ``snow-globe-capture loop``.
 
     With a ``killer``, a kill ends the process (no state is saved after it); a supervisor
     restarts it ``restart_s`` later with a fresh runner (the loop) or the next invocation runs

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lookout:schema:viewpoint:1",
-  "title": "Lookout viewpoint manifest",
-  "description": "One file per viewpoint at viewpoints/manifests/<id>.json (PRD §8.2, Appendix A). Validated in CI by lookout_common.manifest, which also checks rules a schema cannot express: file name = id, place_id = prefix of id, IANA zone loads, one default per place, no alias shared across places (after normalising spaces, hyphens and apostrophes), landmark distance_km and azimuth_deg match the camera position, archive_since null exactly when archive_code is null. Fields marked M2 are optional until the plate build. Departures from the Appendix A sketch: pose fields sit in the top-level 'pose' object (not under camera), landmarks sit in the top-level 'landmarks' array (not under plate), and the hourly cap is polite_caps.max_images_per_hour (not max_per_hour).",
+  "$id": "urn:snow-globe:schema:viewpoint:1",
+  "title": "Snow Globe viewpoint manifest",
+  "description": "One file per viewpoint at viewpoints/manifests/<id>.json (PRD §8.2, Appendix A). Validated in CI by snow_globe_common.manifest, which also checks rules a schema cannot express: file name = id, place_id = prefix of id, IANA zone loads, one default per place, no alias shared across places (after normalising spaces, hyphens and apostrophes), landmark distance_km and azimuth_deg match the camera position, archive_since null exactly when archive_code is null. Fields marked M2 are optional until the plate build. Departures from the Appendix A sketch: pose fields sit in the top-level 'pose' object (not under camera), landmarks sit in the top-level 'landmarks' array (not under plate), and the hourly cap is polite_caps.max_images_per_hour (not max_per_hour).",
   "type": "object",
   "additionalProperties": false,
   "required": [

@@ -7,13 +7,13 @@ import io
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from lookout_common.paths import frame_key, sidecar_key, thumb_key
-from lookout_common.storage import LocalStorage, S3Storage
-from lookout_common.timeutil import isoformat_z
 from PIL import Image
+from snow_globe_common.paths import frame_key, sidecar_key, thumb_key
+from snow_globe_common.storage import LocalStorage, S3Storage
+from snow_globe_common.timeutil import isoformat_z
 
-from lookout_capture.frames import make_thumbnail, sha256_hex
-from lookout_capture.retention import (
+from snow_globe_capture.frames import make_thumbnail, sha256_hex
+from snow_globe_capture.retention import (
     EVERY_FRAME_VIEWPOINTS,
     POLICY_EVERY,
     POLICY_HOURLY,
@@ -180,7 +180,7 @@ def test_delete_staged_locally_removes_empty_staging_folders_only(data_root):
 
 
 def test_delete_staged_in_s3(s3_bucket, data_root):
-    storage = S3Storage("lookout-test", "dev", client=s3_bucket)
+    storage = S3Storage("snow-globe-test", "dev", client=s3_bucket)
     skey = stage(storage, utc(12, 45))
     assert storage.exists(skey)
     assert delete_staged(storage, skey) is True

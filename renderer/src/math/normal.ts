@@ -1,4 +1,4 @@
-/*! @lookout/renderer notice: the inverse normal CDF uses the rational approximation by Peter J. Acklam. */
+/*! @snow-globe/renderer notice: the inverse normal CDF uses the rational approximation by Peter J. Acklam. */
 /**
  * Standard normal distribution helpers.
  *

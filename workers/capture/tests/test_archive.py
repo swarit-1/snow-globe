@@ -10,11 +10,11 @@ from pathlib import Path
 
 import httpx
 import pytest
-from lookout_common.http import MinIntervalLimiter
-from lookout_common.manifest import load_manifests
-from lookout_common.storage import LocalStorage
+from snow_globe_common.http import MinIntervalLimiter
+from snow_globe_common.manifest import load_manifests
+from snow_globe_common.storage import LocalStorage
 
-from lookout_capture.archive import (
+from snow_globe_capture.archive import (
     MAX_TOTAL_ATTEMPTS,
     ArchiveAsset,
     ArchiveBadBody,
@@ -34,7 +34,7 @@ from lookout_capture.archive import (
     search_body,
     search_cache_key,
 )
-from lookout_capture.heldout import (
+from snow_globe_capture.heldout import (
     HeldOutOverride,
     asset_dates,
     asset_local_dates,
@@ -254,7 +254,7 @@ def test_archive_records_name_their_runner_as_live_records_do(fake_nps, clock, t
     """Lead's request (20 Nov 2026): ``archive_request`` records (worker "archive") carry the
     ``runner`` field live ``request`` records have: ``cli-loop`` for the queue inside the loop,
     ``cli-archive`` and ``cli-archive-check`` for the standalone commands, ``cli`` by default."""
-    from lookout_capture.archive_queue import _queue_client
+    from snow_globe_capture.archive_queue import _queue_client
 
     storage = LocalStorage(data_root)
     fake_nps.days["pore"] = fixture_json("days_pore.json")
@@ -538,7 +538,7 @@ def test_an_archive_redirect_is_never_followed_or_retried(fake_nps, clock, tmp_p
     the log. They now follow none: a 302 is one request, logged with where it pointed, and
     (like a 404) not retried. Without the fix the 302 below is followed and the asset fetched
     from its new address: two requests at nps.gov for one logged."""
-    from lookout_capture.archive_queue import _queue_client
+    from snow_globe_capture.archive_queue import _queue_client
 
     storage = LocalStorage(data_root)
     asset = pick_assets(_pre_guard_assets(), pick="midday")[0]
@@ -607,7 +607,7 @@ def test_held_out_reason_reads_every_local_date_and_fails_closed():
 def test_summer_edge_without_local_time_string_is_refused():
     """Critic finding (20 Nov): ImageCreateDateTime stays on standard time in summer, so with
     no LocalTimeString "05/31/2026 11:30:00 PM" (00:30 PDT on 1 Jun) used to pass. Same
-    cases as lookout-eval's test of nps_local_dates (D-038, D-047). The local readings still
+    cases as snow-globe-eval's test of nps_local_dates (D-038, D-047). The local readings still
     turn at local midnight; the guard itself now turns earlier, at UTC midnight (next test)."""
     la = PORE.time_zone
     assert la == "America/Los_Angeles"
@@ -664,7 +664,7 @@ def test_the_guard_also_reads_utc_so_31_may_local_evening_is_held_out(zone):
 
 
 def test_every_utc_reading_counts_and_a_date_without_a_clock_fails_closed():
-    """The UTC readings (``asset_utc_dates``): the instant under both of lookout-common's
+    """The UTC readings (``asset_utc_dates``): the instant under both of snow-globe-common's
     conventions, each local clock converted in the camera's zone (both sides of a DST fold), and,
     for a reading with a date but no readable clock, every UTC date its local day touches."""
     la = PORE.time_zone
@@ -737,14 +737,14 @@ def test_archive_sidecars_carry_the_gate_inputs(fake_nps, clock, tmp_path, data_
     assert side["sharpness_lapvar"] > 0 and "monochrome" not in side["flags"]
 
 
-# --- the archive limiter is cross-process even with LOOKOUT_STORAGE=s3 (review finding) -------
+# --- the archive limiter is cross-process even with SNOW_GLOBE_STORAGE=s3 (review finding) -------
 
 
 def test_archive_limiter_is_file_based_under_s3_storage(monkeypatch, data_root):
-    monkeypatch.setenv("LOOKOUT_STORAGE", "s3")
+    monkeypatch.setenv("SNOW_GLOBE_STORAGE", "s3")
     # Since common's fix, "auto" is file-based everywhere except on Lambda.
     assert MinIntervalLimiter("nps-archive", 5.0).mode == "file"
-    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "lookout-capture")
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "snow-globe-capture")
     assert MinIntervalLimiter("nps-archive", 5.0).mode == "process"
     limiter = archive_limiter()  # the archive's limiter stays file-based even there
     assert limiter.mode == "file" and limiter.min_interval_s == 5.05
@@ -754,8 +754,8 @@ def test_archive_limiter_is_file_based_under_s3_storage(monkeypatch, data_root):
 
 _HOLDER = """
 import json, sys, time
-from lookout_capture.archive import archive_limiter
-from lookout_common.http import MinIntervalLimiter
+from snow_globe_capture.archive import archive_limiter
+from snow_globe_common.http import MinIntervalLimiter
 start_at, interval, which = float(sys.argv[1]), float(sys.argv[2]), sys.argv[3]
 if which == "archive":
     limiter = archive_limiter(interval)
@@ -784,7 +784,7 @@ def _two_processes_holding(tmp_path, data_root, which: str, interval: float):
 
     script = tmp_path / "holder.py"
     script.write_text(subprocess_prelude() + _HOLDER)
-    env = {**os.environ, "LOOKOUT_STORAGE": "s3", "LOOKOUT_DATA_DIR": str(data_root)}
+    env = {**os.environ, "SNOW_GLOBE_STORAGE": "s3", "SNOW_GLOBE_DATA_DIR": str(data_root)}
     start_at = time.time() + 1.5
     procs = [
         subprocess.Popen(

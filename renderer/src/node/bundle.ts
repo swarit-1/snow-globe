@@ -21,9 +21,9 @@ const common: BuildOptions = {
   logLevel: 'silent',
 };
 
-/** IIFE bundle setting globalThis.LookoutRenderer, as a string (for the headless page). */
+/** IIFE bundle setting globalThis.SnowGlobeRenderer, as a string (for the headless page). */
 export async function buildIifeBundle(): Promise<string> {
-  const r = await build({ ...common, format: 'iife', globalName: 'LookoutRenderer', write: false, minify: false });
+  const r = await build({ ...common, format: 'iife', globalName: 'SnowGlobeRenderer', write: false, minify: false });
   return r.outputFiles![0]!.text;
 }
 
@@ -33,11 +33,11 @@ export async function buildEsmBundle(): Promise<string> {
   return r.outputFiles![0]!.text;
 }
 
-/** Writes dist/lookout-renderer.js (ESM) and dist/lookout-renderer.iife.js. */
+/** Writes dist/snow-globe-renderer.js (ESM) and dist/snow-globe-renderer.iife.js. */
 export async function buildDist(outDir: string): Promise<string[]> {
-  const esm = `${outDir}/lookout-renderer.js`;
-  const iife = `${outDir}/lookout-renderer.iife.js`;
+  const esm = `${outDir}/snow-globe-renderer.js`;
+  const iife = `${outDir}/snow-globe-renderer.iife.js`;
   await build({ ...common, format: 'esm', outfile: esm, sourcemap: true, minify: true });
-  await build({ ...common, format: 'iife', globalName: 'LookoutRenderer', outfile: iife, sourcemap: true, minify: true });
+  await build({ ...common, format: 'iife', globalName: 'SnowGlobeRenderer', outfile: iife, sourcemap: true, minify: true });
   return [esm, iife];
 }

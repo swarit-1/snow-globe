@@ -1,4 +1,4 @@
-//! Solar validation (PRD §8.4 "Sunrise and sunset against NOAA to ±1 min"): `lookout_core::solar`
+//! Solar validation (PRD §8.4 "Sunrise and sunset against NOAA to ±1 min"): `snow_globe_core::solar`
 //! over oculus-core against the independent NOAA implementation in `tests/common`.
 //!
 //! 25 dates × all 8 viewpoints, including the 1 Nov 2026 and 14 Mar 2027 DST days and the
@@ -10,8 +10,8 @@ mod common;
 
 use chrono::{Duration, NaiveDate, Utc};
 use common::{Stats, noaa};
-use lookout_core::places::PlaceTable;
-use lookout_core::solar::{Direction, find_crossing, geometric_altitude_deg, local_day_bounds};
+use snow_globe_core::places::PlaceTable;
+use snow_globe_core::solar::{Direction, find_crossing, geometric_altitude_deg, local_day_bounds};
 
 const DATES: [&str; 25] = [
     "2026-06-21",
@@ -106,7 +106,7 @@ fn solar_events_and_altitude_match_noaa() {
                 }
                 assert!(
                     diff_s.abs() <= 60.0,
-                    "{label}: lookout {ours} vs NOAA {theirs} ({diff_s:.1} s)"
+                    "{label}: snow-globe-core {ours} vs NOAA {theirs} ({diff_s:.1} s)"
                 );
             }
             let hours = (end - start).num_hours();

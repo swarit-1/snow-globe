@@ -1,6 +1,6 @@
-//! # lookout-core
+//! # snow-globe-core
 //!
-//! The platform-independent core of Lookout (PRD §6.1): everything between the final transcript
+//! The platform-independent core of Snow Globe (PRD §6.1): everything between the final transcript
 //! and the renderer that can be tested without a microphone, a GPU or the network.
 //!
 //! | Module | What | PRD |
@@ -16,8 +16,8 @@
 //! | [`query`] | the query and its JSON shape | §7.3 |
 //! | [`trace`] | per-query JSON-lines trace with no transcript text | §10.5 |
 //! | [`lifecycle`] | query generations, cancellation, the paint gate, Esc | §5.2, §10.2, §10.3 |
-//! | [`datadir`] | `$LOOKOUT_DATA_DIR` with the repo and iCloud safety checks | CLAUDE.md |
-//! | [`cli`] | the `lookout-parse` command | §7.3 |
+//! | [`datadir`] | `$SNOW_GLOBE_DATA_DIR` with the repo and iCloud safety checks | CLAUDE.md |
+//! | [`cli`] | the `snow-globe-parse` command | §7.3 |
 
 pub mod cli;
 pub mod datadir;

@@ -12,11 +12,11 @@
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use chrono_tz::Tz;
-use lookout_core::parser::RangeReason;
-use lookout_core::query::ParsePath;
-use lookout_core::resolve::{Flag, Horizon, TimeKind};
-use lookout_core::{ParseContext, ParseError, Parser, Query};
 use proptest::prelude::*;
+use snow_globe_core::parser::RangeReason;
+use snow_globe_core::query::ParsePath;
+use snow_globe_core::resolve::{Flag, Horizon, TimeKind};
+use snow_globe_core::{ParseContext, ParseError, Parser, Query};
 
 const PLACES: &[&str] = &[
     "rainier",
@@ -71,6 +71,7 @@ const PREFIXES: &[&str] = &[
     "what about ",
     "how does ",
     "hey lookout show me ",
+    "hey snow globe show me ",
     "um ",
 ];
 const SUFFIXES: &[&str] = &["", "?", " please", " look", " out?"];
@@ -270,11 +271,11 @@ proptest! {
         // other part. Instants in a DST repeat are skipped: their wall time names two instants.
         let tz: Tz = zone.parse().expect("zone");
         let wall = now.with_timezone(&tz).naive_local();
-        prop_assume!(lookout_core::tzutil::localize(tz, wall).0.with_timezone(&Utc) == now);
+        prop_assume!(snow_globe_core::tzutil::localize(tz, wall).0.with_timezone(&Utc) == now);
         let run = |args: &[&str]| {
             let mut v = vec![u.clone()];
             v.extend(args.iter().map(|a| a.to_string()));
-            lookout_core::cli::run(&v)
+            snow_globe_core::cli::run(&v)
         };
         let local = run(&["--now", &wall.format("%Y-%m-%dT%H:%M:%S").to_string(), "--machine-tz", zone]);
         let utc = run(&["--now", &now.to_rfc3339(), "--machine-tz", "Asia/Tokyo"]);

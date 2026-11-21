@@ -22,7 +22,7 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BinaryHeap, HashMap, HashSet};
 
-use lookout_core::lifecycle::{
+use snow_globe_core::lifecycle::{
     CancelToken, GenCounter, PaintDecision, PaintGate, PaintKey, QueryGen, SceneHash, StaleReason,
     Tier, escape,
 };

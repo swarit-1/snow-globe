@@ -3,9 +3,9 @@
 //! parses to its own place through the full parser (fillers and the time grammar never eat it).
 
 use chrono::{DateTime, Utc};
-use lookout_core::places::PlaceTable;
-use lookout_core::query::PlaceStage;
-use lookout_core::{ParseContext, Parser, TimeConfig};
+use snow_globe_core::places::PlaceTable;
+use snow_globe_core::query::PlaceStage;
+use snow_globe_core::{ParseContext, Parser, TimeConfig};
 use std::path::Path;
 
 fn manifest_dir() -> std::path::PathBuf {
@@ -63,7 +63,7 @@ fn every_alias_parses_to_its_own_place() {
                 assert!(
                     q.ambiguities
                         .iter()
-                        .all(|a| a.field != lookout_core::query::AmbiguityField::Place),
+                        .all(|a| a.field != snow_globe_core::query::AmbiguityField::Place),
                     "{utterance:?}: unexpected place chip"
                 );
                 checked += 1;

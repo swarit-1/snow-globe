@@ -104,7 +104,7 @@ pub struct RunLog {
 }
 
 impl RunLog {
-    /// Opens `$LOOKOUT_DATA_DIR/spikes/m1/<run-id>.jsonl` for appending (creating the folder) and
+    /// Opens `$SNOW_GLOBE_DATA_DIR/spikes/m1/<run-id>.jsonl` for appending (creating the folder) and
     /// writes the meta record.
     pub fn open(run_id: &str, check: &str, proc_name: &str, argv: &[String]) -> io::Result<Self> {
         let path = paths::run_path(run_id).map_err(io::Error::other)?;
@@ -440,7 +440,7 @@ mod tests {
         let home = std::env::var("HOME").expect("HOME");
         let argv = vec![
             "show".to_string(),
-            format!("{home}/lookout-data/spikes/m1/x.jsonl"),
+            format!("{home}/snow-globe-data/spikes/m1/x.jsonl"),
         ];
         let log = RunLog::open_at(&dir.path().join("h.jsonl"), "h", "c", "m1-report", &argv)
             .expect("open");
@@ -448,7 +448,7 @@ mod tests {
         let logged = recs[0].v["argv"].to_string();
         assert!(!logged.contains(&home), "{logged}");
         assert!(
-            logged.contains("~/lookout-data/spikes/m1/x.jsonl"),
+            logged.contains("~/snow-globe-data/spikes/m1/x.jsonl"),
             "{logged}"
         );
     }

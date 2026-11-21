@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from lookout_eval.landmark_boxes import BOXES_V1, LandmarkBox, load_boxes
+from snow_globe_eval.landmark_boxes import BOXES_V1, LandmarkBox, load_boxes
 
 GC = "grand-canyon.yavapai"
 
@@ -34,7 +34,7 @@ def test_the_committed_file_says_the_pose_solve_replaces_it() -> None:
 
 def test_the_manifest_has_no_landmarks_from_this_file() -> None:
     """The boxes stay out of the viewpoint manifest (the task's rule)."""
-    from lookout_common.manifest import load_manifest
+    from snow_globe_common.manifest import load_manifest
 
     assert load_manifest(GC).landmarks == ()
 
@@ -70,7 +70,7 @@ def test_bad_boxes_are_refused(box) -> None:
         LandmarkBox("b", box)
 
 
-def _write(tmp_path: Path, entry: dict, kind: str = "lookout.landmark-boxes") -> Path:
+def _write(tmp_path: Path, entry: dict, kind: str = "snow-globe.landmark-boxes") -> Path:
     path = tmp_path / "boxes.json"
     path.write_text(json.dumps({"kind": kind, "version": "v-1", "viewpoints": {GC: entry}}))
     return path
@@ -79,9 +79,9 @@ def _write(tmp_path: Path, entry: dict, kind: str = "lookout.landmark-boxes") ->
 def test_a_quarantined_boxes_file_is_refused_unread(tmp_path: Path) -> None:
     """D-022: a boxes file under <data root>/quarantine/ is refused before it is opened (it is
     unreadable here, so a read would fail with another error)."""
-    from lookout_eval.heldout import LeakageError
+    from snow_globe_eval.heldout import LeakageError
 
-    root = tmp_path / "lookout-data"
+    root = tmp_path / "snow-globe-data"
     good = {"primary": "a", "boxes": [{"name": "a", "box": [0.1, 0.1, 0.2, 0.2]}]}
     folder = root / "quarantine" / "held-out-breach-2026-11-19"
     folder.mkdir(parents=True)
@@ -98,7 +98,7 @@ def test_a_quarantined_boxes_file_is_refused_unread(tmp_path: Path) -> None:
 def test_a_file_must_be_well_formed(tmp_path: Path) -> None:
     good = {"primary": "a", "boxes": [{"name": "a", "box": [0.1, 0.1, 0.2, 0.2]}]}
     assert load_boxes(GC, _write(tmp_path, good)).primary == "a"
-    with pytest.raises(ValueError, match=r"not a lookout\.landmark-boxes"):
+    with pytest.raises(ValueError, match=r"not a snow-globe\.landmark-boxes"):
         load_boxes(GC, _write(tmp_path, good, kind="other"))
     with pytest.raises(KeyError):
         load_boxes("point-reyes.beach", _write(tmp_path, good))

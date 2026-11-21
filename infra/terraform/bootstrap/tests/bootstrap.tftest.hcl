@@ -16,9 +16,9 @@ mock_provider "aws" {
 # is missing here or a pin differs from its default.
 variables {
   region                  = "us-east-1"
-  project                 = "lookout"
+  project                 = "snow-globe"
   state_bucket_name       = ""
-  state_key               = "lookout/terraform.tfstate"
+  state_key               = "snow-globe/terraform.tfstate"
   noncurrent_version_days = 90
   force_destroy           = false
 }
@@ -27,7 +27,7 @@ run "state_bucket_is_versioned_encrypted_and_private" {
   command = plan
 
   assert {
-    condition     = aws_s3_bucket.tfstate.bucket == "lookout-tfstate-123456789012"
+    condition     = aws_s3_bucket.tfstate.bucket == "snow-globe-tfstate-123456789012"
     error_message = "state bucket name"
   }
   assert {
@@ -82,11 +82,11 @@ run "backend_config_uses_native_s3_locking" {
     error_message = "the root backend must lock with S3-native lock files"
   }
   assert {
-    condition     = strcontains(output.backend_hcl, "bucket       = \"lookout-tfstate-123456789012\"")
+    condition     = strcontains(output.backend_hcl, "bucket       = \"snow-globe-tfstate-123456789012\"")
     error_message = "backend_hcl must name the state bucket"
   }
   assert {
-    condition     = strcontains(output.backend_hcl, "key          = \"lookout/terraform.tfstate\"") && strcontains(output.backend_hcl, "region       = \"us-east-1\"")
+    condition     = strcontains(output.backend_hcl, "key          = \"snow-globe/terraform.tfstate\"") && strcontains(output.backend_hcl, "region       = \"us-east-1\"")
     error_message = "backend_hcl must carry the state key and region"
   }
   assert {
@@ -99,11 +99,11 @@ run "explicit_bucket_name_wins" {
   command = plan
 
   variables {
-    state_bucket_name = "my-lookout-state"
+    state_bucket_name = "my-snow-globe-state"
   }
 
   assert {
-    condition     = aws_s3_bucket.tfstate.bucket == "my-lookout-state" && strcontains(output.backend_hcl, "\"my-lookout-state\"")
+    condition     = aws_s3_bucket.tfstate.bucket == "my-snow-globe-state" && strcontains(output.backend_hcl, "\"my-snow-globe-state\"")
     error_message = "state_bucket_name must reach the bucket and backend_hcl"
   }
 }

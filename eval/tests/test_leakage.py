@@ -9,15 +9,15 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 from synth import START, VP, hourly_records, key_for, label_by, make_store, records_every
 
-from lookout_eval.baselines import (
+from snow_globe_eval.baselines import (
     analog,
     climatology,
     persistence_latest,
     persistence_valid_minus_24h,
 )
-from lookout_eval.frames import FrameRecord
-from lookout_eval.heldout import committed_split
-from lookout_eval.leakage import FrameStore, HeldOut, LeakageError, SealedScoring
+from snow_globe_eval.frames import FrameRecord
+from snow_globe_eval.heldout import committed_split
+from snow_globe_eval.leakage import FrameStore, HeldOut, LeakageError, SealedScoring
 
 HELD = HeldOut(((START + timedelta(days=5), START + timedelta(days=7)),))
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
@@ -496,10 +496,10 @@ def _permissive_split():
     import json
     from importlib import resources
 
-    from lookout_eval.heldout import split_from_dict
+    from snow_globe_eval.heldout import split_from_dict
 
     raw = json.loads(
-        resources.files("lookout_eval").joinpath("heldout_periods.json").read_text("utf-8")
+        resources.files("snow_globe_eval").joinpath("heldout_periods.json").read_text("utf-8")
     )
     raw["periods"]["summer-2026"].update(first_day="2030-06-01", last_day="2030-08-31")
     raw["archive_guard"]["from_local_day"] = "2030-06-01"
@@ -509,7 +509,7 @@ def _permissive_split():
 def test_a_store_takes_only_the_committed_split(tmp_path) -> None:
     """Review finding: FrameStore(split=...) and frame_file_verdict(split=...) took any split,
     so frames the committed split holds out could be labelled without SealedScoring."""
-    from lookout_eval.leakage import frame_file_verdict
+    from snow_globe_eval.leakage import frame_file_verdict
 
     t = datetime(2026, 7, 15, 20, 15, tzinfo=UTC)
     breach = _archive(
@@ -566,7 +566,7 @@ def test_climatology_follows_the_design_at_point_reyes() -> None:
 
 
 def test_choose_persistence_reads_the_split_per_viewpoint() -> None:
-    from lookout_eval.baselines import DevCase, choose_persistence
+    from snow_globe_eval.baselines import DevCase, choose_persistence
 
     frames, _ = _committed_world()
     s = make_store(frames, {})

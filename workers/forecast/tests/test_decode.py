@@ -7,10 +7,10 @@ from datetime import timedelta
 import numpy as np
 import pytest
 
-from lookout_forecast.decode import DecodeError, decode_subset, round_sig
-from lookout_forecast.fields import field_by_name
-from lookout_forecast.grid import GridMismatchError
-from lookout_forecast.idx import MessageRange
+from snow_globe_forecast.decode import DecodeError, decode_subset, round_sig
+from snow_globe_forecast.fields import field_by_name
+from snow_globe_forecast.grid import GridMismatchError
+from snow_globe_forecast.idx import MessageRange
 
 from .conftest import RUN
 from .fakebucket import identity, make_message, sub_grid

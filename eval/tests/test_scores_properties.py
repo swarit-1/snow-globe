@@ -1,4 +1,4 @@
-"""Property tests (hypothesis) for lookout_eval.scores (PRD §13.1 "Property", §13.5)."""
+"""Property tests (hypothesis) for snow_globe_eval.scores (PRD §13.1 "Property", §13.5)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from lookout_eval.scores import (
+from snow_globe_eval.scores import (
     Contingency,
     block_bootstrap_indices,
     contingency,
