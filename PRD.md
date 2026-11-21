@@ -3,6 +3,7 @@
 > **Changelog:** v0.4.2, 21 Nov 2026 (UTC).
 > - **The product is renamed Snow Globe** (your decision of 21 Nov; DECISIONS.md D-080). That changes the title, the version and name lines, §0, §1 row 9's call, §2, §8, §12's tree, §13.4's R1 and §21's headline. "The Lookout draft" still names your draft of 18 Nov, which v0.4 merged. Where a bare "Lookout" meant that draft (§0, §1, §18.2, Appendices B and D), it now says so.
 > - The spec names no package, command, environment variable, path or User-Agent string under the old name, so nothing else changes here. The naming map for the code is in D-080.
+> - **Factual correction, 21 Nov:** the cost pointers of §11.3 and §17 add the estimate re-priced for capture 0.3.0 at `8fa6b6a`, before tax (D-086).
 > - No target, gate or cap changed.
 >
 > **Changelog:** v0.4.1, 19–20 Nov 2026 (UTC).
@@ -892,7 +893,7 @@ One small API on Lambda, five scheduled jobs and an on-demand backfill. Keys for
   - Lambda, with a container image for ecCodes (Herbie is not used, D-026).
   - EventBridge Scheduler (its free tier covers 14 M invocations a month).
   - S3 and CloudFront.
-  - Estimated ≈ $0–1 a month in v0.4. The infra code's estimate of 20 Nov, from AWS list prices and a simulation of the committed capture code, is $2.07–4.03 in month 1 with the free tiers, rising by about $0.22 a month as storage grows, so its top is above the $3 cap from month 1 (D-060, which replaces D-035's $1.60–2.81). For capture 0.2.1, whose polls are spaced from the previous answer, it is $2.43–4.40 in month 1, and the bottom of the range passes $3 in month 4 (D-066). The Lambda free-tier figures are checked on AWS's page before deploying.
+  - Estimated ≈ $0–1 a month in v0.4. The infra code's estimate of 20 Nov, from AWS list prices and a simulation of the committed capture code, is $2.07–4.03 in month 1 with the free tiers, rising by about $0.22 a month as storage grows, so its top is above the $3 cap from month 1 (D-060, which replaces D-035's $1.60–2.81). For capture 0.2.1, whose polls are spaced from the previous answer, it is $2.43–4.40 in month 1, and the bottom of the range passes $3 in month 4 (D-066). Re-priced on 21 Nov for capture 0.3.0 at `8fa6b6a`, with measured request times and six seeds, it is $2.57–4.51 in month 1 before tax, and the bottom passes $3 in month 3 (D-086). The Lambda free-tier figures are checked on AWS's page before deploying.
 - **The Tier 2 proxy** must add ≤ 100 ms p95 over a direct call when idle. Lambda (with SnapStart or a compiled runtime) and a Cloudflare Worker are both measured, and the result goes in DECISIONS.md.
 - **GitHub Actions** runs CI only. Its schedules jitter, and a public repo's schedules are disabled after 60 days without activity. The sealed window spans the holidays.
 - **A server-side daily cap** on Tier 2 calls. At the cap, `/v1/refine` answers "keep Tier 1".
@@ -1225,7 +1226,7 @@ Development is capped at $25.
 | Tier 2 during development and the evaluation sample | Interactive use; a sample in evaluation; result cache | ≈ $3–5 | $5 |
 | Ungrounded-generation baseline | ~50 images | ≈ $0.25–1 | $1 |
 | Haiku (only if Foundation Models fails) | < 10 % of asks, cached | ≈ $0.05–0.50 | $1 |
-| Hosting and storage (AWS serverless) | Lambda, Scheduler, S3 (~12 GB in v0.4; ~24 GB under §8.7 as decided), CloudFront | ≈ $0–1 a month (v0.4); $2.07–4.03 in month 1 in the infra estimate of 20 Nov (D-060), $2.43–4.40 for capture 0.2.1 (D-066) | $3 |
+| Hosting and storage (AWS serverless) | Lambda, Scheduler, S3 (~12 GB in v0.4; ~24 GB under §8.7 as decided), CloudFront | ≈ $0–1 a month (v0.4); $2.07–4.03 in month 1 in the infra estimate of 20 Nov (D-060), $2.43–4.40 for capture 0.2.1 (D-066), $2.57–4.51 before tax for capture 0.3.0 (D-086) | $3 |
 | Tier 1, backtests, scoring | Headless shader renders and CPU metrics | $0 | — |
 | **Total** | | **≈ $10–19** | **$24** |
 
