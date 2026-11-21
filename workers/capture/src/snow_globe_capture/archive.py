@@ -15,8 +15,10 @@ Politeness, enforced here for every archive request from every process on this m
   is always the cross-process ``flock`` one on local disk (:func:`archive_limiter`), also
   when ``SNOW_GLOBE_STORAGE=s3``, where ``snow_globe_common`` would otherwise fall back to an
   in-process limiter;
-- error back-off shared by every process (``defer``), honouring ``Retry-After``. A 200
-  whose body is not a decodable JPEG counts as an error too (:class:`ArchiveBadBody`);
+- error back-off shared by every process (``defer``), honouring ``Retry-After``, after every
+  error: a transport error and every HTTP 3xx, 4xx or 5xx answer (a 3xx and a 4xx other than
+  429 only from 0.3.0 on). A 200 whose body is not a decodable JPEG counts as an error too
+  (:class:`ArchiveBadBody`);
 - one back-off for the whole of www.nps.gov, shared with live capture
   (:mod:`snow_globe_capture.host_backoff`): an HTTP 429/503 here also pauses live polling, and a
   hold that a live 429/503 set is waited out before any archive request;
@@ -87,6 +89,7 @@ __all__ = [
     "backfill_assets",
     "cached_search",
     "default_archive_client",
+    "is_retryable",
     "pick_assets",
     "search_body",
 ]
@@ -475,6 +478,13 @@ class ArchiveClient:
         the limiter, the budget and the log); it is logged with its ``Location`` and raised as
         :class:`ArchiveHTTPError`, which is not retried.
 
+        Every error backs off (PRD §15.3, CLAUDE.md "back off on errors"): a transport error,
+        a bad body and every HTTP 3xx, 4xx or 5xx answer defer the limiter for every process,
+        30 s doubling to 30 min with each error in a row (``Retry-After`` honoured for a
+        429/503), until a request succeeds. Until 0.3.0 a 3xx and a 4xx other than 429 did not,
+        so a run of them (nps.gov refusing us, say) went out 5 s apart, with only a budget to
+        stop them.
+
         A www.nps.gov hold in force (:mod:`snow_globe_capture.host_backoff`, set by a live or an
         archive 429/503) is waited out first, through the limiter; an HTTP 429/503 here
         extends that hold, so live capture backs off too.
@@ -527,17 +537,15 @@ class ArchiveClient:
                 self._log(kind, method, url, status, size, waited, elapsed_ms, error, started_wall)
             if redirect is not None and status is not None:
                 self.failures += 1
+                self.limiter.defer(backoff_delay(self.failures, base_s=30.0, cap_s=1800.0))
                 raise ArchiveHTTPError(status, url, f"redirect to {redirect} not followed")
             if status is not None and status >= 400:
                 self.failures += 1
                 wait = retry_after_s(result) if status in (429, 503) else None
-                if status in (429, 503) or status >= 500:
-                    delay = max(
-                        wait or 0.0, backoff_delay(self.failures, base_s=30.0, cap_s=1800.0)
-                    )
-                    self.limiter.defer(delay)
-                    if status in (429, 503):
-                        self._extend_host_hold(url, delay, f"HTTP {status} on archive {kind}")
+                delay = max(wait or 0.0, backoff_delay(self.failures, base_s=30.0, cap_s=1800.0))
+                self.limiter.defer(delay)  # every 4xx and 5xx (0.3.0 on; 429 and 5xx before)
+                if status in (429, 503):
+                    self._extend_host_hold(url, delay, f"HTTP {status} on archive {kind}")
                 raise ArchiveHTTPError(status, url, result.text[:120] if kind != "asset" else "")
             if bad_body:
                 self.failures += 1
@@ -900,9 +908,14 @@ class BackfillResult:
         }
 
 
-def _retryable(exc: ArchiveError) -> bool:
+def is_retryable(exc: ArchiveError) -> bool:
     """Transport errors, HTTP 429/5xx and bad bodies are worth another try; a 404 or a
-    redirect (3xx, never followed) is not."""
+    redirect (3xx, never followed) is not.
+
+    The backfill retries an asset only on such an error, and the archive queue sets an entry
+    whose day search failed back to work by itself only when every one of its search errors
+    was such an error (:mod:`.archive_queue`, D-072, D-078).
+    """
     if isinstance(exc, ArchiveHTTPError):
         return exc.status_code == 429 or exc.status_code >= 500
     return True
@@ -1052,7 +1065,7 @@ def backfill_assets(
                                 "at": isoformat_z(utcnow(), "seconds"),
                             }
                         )
-                        if not _retryable(exc):
+                        if not is_retryable(exc):
                             break
                 if response is None:
                     if result.stopped and last_error is None:

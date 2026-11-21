@@ -38,11 +38,22 @@ __version__ = "0.3.0"
 #: snow-globe-eval does; an hourly archive pick no longer files a frame after 23:30 under its own
 #: date's 00:00. Formats additive: state gains ``last_answer_at``, ``last_answer_bound``,
 #: ``poll_reserved_at``; GET records ``reserved_at``, ``answered_at``, ``answer_bound``.
-#: 0.3.0 (21 Nov 2026): the rename from Lookout to Snow Globe (D-080), and nothing else. The
-#: package, the import and the console script are ``snow-globe-capture``/``snow_globe_capture``,
-#: and this stamp reads ``snow-globe-capture/0.3.0``; records, sidecars and state keep their
-#: formats. Everything written before carries ``lookout-capture/<version>`` (0.1.0 to 0.2.1),
-#: which every reader still accepts (:func:`capture_release`).
+#: 0.3.0 (21 Nov 2026; not run yet: the running loop is 0.2.1 until the switch after the M0.5
+#: gate): the rename from Lookout to Snow Globe (D-080). The package, the import and the
+#: console script are ``snow-globe-capture``/``snow_globe_capture``, and this stamp reads
+#: ``snow-globe-capture/0.3.0``. Everything written before carries ``lookout-capture/<version>``
+#: (0.1.0 to 0.2.1), which every reader still accepts (:func:`capture_release`). Also, all of it
+#: additive (older readers ignore the new keys): the loop's archive queue sets an entry whose
+#: day search failed with errors worth another try back to work by itself, at its first idle on
+#: a later UTC day, at most once a UTC day and 3 times in all (D-072, D-078; ``auto_resumes``,
+#: ``failure_kind`` and ``failed_at`` on the entry, ``search_errors_retryable`` and
+#: ``search_errors_not_retryable`` in its progress, ``capture_version`` and ``auto_resume_max``
+#: in the queue's runner heartbeat, ``queue_auto_resumed`` in the log; on in ``loop`` only,
+#: ``QueueRunner``'s default is off); every archive error answer backs off, a redirect and a 4xx
+#: included (before, only transport errors, 429/5xx and bad bodies); every ``pass`` record gains
+#: ``started_at`` (the pass's wall-clock start, to the millisecond); the loop writes
+#: ``loop_started`` (``pid``, ``started_at``) and, on every stop that is not an interrupt,
+#: ``loop_stopped`` with a ``reason``.
 CAPTURE_NAME = "snow-globe-capture"
 #: The name before the rename: the stamp of every record, sidecar and state written by 0.1.0
 #: to 0.2.1.

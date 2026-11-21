@@ -96,6 +96,7 @@ def _cmd_loop(args: argparse.Namespace, storage: Storage, viewpoints: dict[str, 
     queue_runner = None
     if args.archive_queue:
         from .archive_queue import (
+            AUTO_RESUME_MAX,
             DEFAULT_DAILY_BUDGET,
             DEFAULT_TOTAL_CAP_GB,
             ArchiveQueue,
@@ -111,6 +112,7 @@ def _cmd_loop(args: argparse.Namespace, storage: Storage, viewpoints: dict[str, 
             if args.archive_budget is None
             else args.archive_budget,
             total_cap_gb=total_gb if total_gb > 0 else None,
+            auto_resume_max=AUTO_RESUME_MAX,  # the daily resume of failed day searches (D-078)
         )
     try:
         with CaptureRunner.default(storage, runner="cli-loop") as runner:
@@ -216,17 +218,42 @@ def _print_queue(summary: dict[str, Any]) -> None:
         print(f"  unreadable: {summary['error']}")
     runner = summary.get("runner") or {}
     if runner:
+        made_by = f", {runner['capture_version']}" if runner.get("capture_version") else ""
         print(
-            f"  runner pid {runner.get('pid')} at {runner.get('updated_at')}, budget "
+            f"  runner pid {runner.get('pid')} at {runner.get('updated_at')}{made_by}, budget "
             f"{json.dumps(runner.get('budget'))}"
         )
+    cap = summary.get("auto_resume_max")
     for row in summary.get("rows", []):
         pairs = row.get("pairs")
         print(
             f"  {row['status']:<8} {row['id']:<70} {_dash(row.get('next'))}/{_dash(pairs)} "
             f"{json.dumps(row.get('outcomes', {}))} {row.get('bytes', 0)} B "
             f"{row.get('requests', 0)} req {row.get('reason') or ''}"
+            f"{_auto_resume_note(row, cap)}"
         )
+
+
+def _auto_resume_note(row: dict[str, Any], cap: int | None) -> str:
+    """What the loop's daily resume (D-072, D-078) will do with this entry, for the listing.
+
+    ``cap`` is the ``auto_resume_max`` the queue's last runner recorded (``queue_summary``);
+    None means that runner predates 0.3.0 (or none has stepped yet) and sets nothing back to
+    work by itself, so a qualifying entry is marked for a resume by hand.
+    """
+    from .archive_queue import AUTO_RESUME_MAX
+
+    used = int(row.get("auto_resumes") or 0)
+    if row.get("auto_resumable"):
+        if cap is None:
+            return (
+                " [needs 'archive queue resume': the queue's last runner (0.2.x, or none yet) "
+                "never resumes by itself]"
+            )
+        return f" [auto-resume {used + 1}/{cap} at the loop's first idle on a later UTC day]"
+    if used:
+        return f" [auto-resumed {used}/{AUTO_RESUME_MAX if cap is None else cap}]"
+    return ""
 
 
 def _dash(value: Any) -> str:
@@ -713,7 +740,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--finished", action="store_true", help="every done, refused, failed or stopped one"
     )
     remove.add_argument("--all", action="store_true")
-    resume = qsub.add_parser("resume", help="set stopped (size cap) or failed entries back to work")
+    resume = qsub.add_parser(
+        "resume",
+        help="set stopped (size cap) or failed entries back to work (a 0.3.0 loop itself resumes "
+        "an entry whose day search failed with errors worth another try: timeouts, connection "
+        "errors, HTTP 429/5xx, a body too slow or too large, a body that is not JSON; at its "
+        "first idle on a later UTC day, at most 3 times; 'list' says which)",
+    )
     resume.add_argument("ids", nargs="*", metavar="ID")
     resume.add_argument("--all", action="store_true", help="every stopped or failed entry")
     resume.add_argument(

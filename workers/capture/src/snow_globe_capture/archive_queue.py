@@ -22,6 +22,21 @@ live passes, in the same process and so inside the same host-wide NPS-fetcher lo
   every viewpoint's backfill (:data:`DEFAULT_TOTAL_CAP_GB`, PRD §15.3 "a total size cap");
   resumable state (``state/archive/<id>.json`` lists what is stored, so nothing is downloaded
   twice, and the queue file records each entry's position).
+- **A daily resume of failed day searches** (D-072, D-078): an entry whose day search failed
+  :data:`MAX_ENTRY_ERRORS` times, each time with an error worth another try
+  (:func:`~snow_globe_capture.archive.is_retryable`: a timeout, a connection error, HTTP
+  429/5xx, a body too slow or too large, a body that is not JSON), is set back to work by the
+  loop's runner itself, at its first idle on a later UTC day than the failure, at most once a
+  UTC day and :data:`AUTO_RESUME_MAX` times in all (:meth:`QueueRunner.auto_resume`, logged as
+  ``queue_auto_resumed``). That is the lead's daily ``archive queue resume``, which the
+  backfill plan's finish days assume. It sends nothing itself: the entry then waits its turn
+  under the budget, the spacing and the one-at-a-time rule above. Every other failure (a
+  redirect or another HTTP 4xx among the search's errors, errors counted by code before
+  0.3.0, a search cut short, an internal error, a bad entry), a held-out refusal and a size
+  cap still wait for ``archive queue resume``. It is on only where asked for:
+  ``QueueRunner(auto_resume_max=AUTO_RESUME_MAX)``, as ``snow-globe-capture loop`` builds it;
+  the default 0 keeps a runner built by other code (the backfill planner's simulation) to
+  the 0.2.x behaviour its own accounting models.
 
 A queue entry is one day to backfill at one viewpoint, with options: which assets
 (``hires`` and/or ``thumbmedium``), which frames (``all``, ``hourly`` or ``midday``) and a
@@ -40,11 +55,12 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import re
 import tempfile
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -66,12 +82,15 @@ from .archive import (
     archive_state_key,
     backfill_assets,
     cached_search,
+    is_retryable,
     pick_assets,
 )
 from .heldout import HELD_OUT_FROM
 from .host_backoff import host_hold_until
+from .state import parse_time
 
 __all__ = [
+    "AUTO_RESUME_MAX",
     "CONNECT_TIMEOUT_S",
     "DEFAULT_DAILY_BUDGET",
     "DEFAULT_TOTAL_CAP_GB",
@@ -84,6 +103,7 @@ __all__ = [
     "STEP_MAX_S",
     "ArchiveQueue",
     "QueueRunner",
+    "auto_resumable",
     "default_queue_path",
     "entry_id",
     "make_entry",
@@ -117,6 +137,171 @@ _OPEN = ("pending", "active")
 _FINISHED = ("done", "refused", "failed", "stopped")
 #: Work an entry's own steps can no longer change: its progress is compacted to counts.
 _SETTLED = ("done", "refused", "failed")
+#: An entry whose day search failed is set back to work by the loop's runner at most this many
+#: times in all, at most once a UTC day and never on the UTC day it failed (D-072, D-078).
+AUTO_RESUME_MAX = 3
+#: How the reason of an entry failed by its day search starts (the same text since 0.2.0).
+SEARCH_FAILED = "search failed: "
+#: ``failure_kind`` of an entry failed by its day search (written from 0.3.0 on): 0.3.0 judged
+#: every one of its search errors worth another try (:func:`.archive.is_retryable`); or at least
+#: one was not (a redirect or another HTTP 4xx); or some were counted by code before 0.3.0,
+#: which kept no judgement of them (an entry part-way through its errors at the switch).
+#: Only the first is ever resumed by itself.
+FAILURE_SEARCH_RETRYABLE = "search_retryable"
+FAILURE_SEARCH_NOT_RETRYABLE = "search_not_retryable"
+FAILURE_SEARCH_UNCLASSIFIED = "search_unclassified"
+
+
+def _transport_error_names() -> frozenset[str]:
+    """httpx's transport errors by class name: how ``ArchiveClient._send`` words them."""
+    names: set[str] = set()
+    todo: list[type] = [httpx.TransportError]
+    while todo:
+        cls = todo.pop()
+        names.add(cls.__name__)
+        todo.extend(cls.__subclasses__())
+    return frozenset(names)
+
+
+_TRANSPORT_ERRORS = _transport_error_names()
+#: ``str()`` of an :class:`~.archive.ArchiveHTTPError`: ``HTTP <status> for <url> ...``.
+_HTTP_ERROR_RE = re.compile(r"HTTP (\d{3}) for ")
+#: A body too slow or too large, as ``_send`` words it (``ArchiveError: <url> took longer ...``).
+_BODY_LIMIT_RE = re.compile(r"ArchiveError: \S+ (took longer than|is larger than) ")
+#: A search answer that is not a JSON object (``Search <code> <day>: not JSON``).
+_SEARCH_BODY_RE = re.compile(r"Search \S+ \S+: (not JSON|unexpected \w+)$")
+
+
+def _retryable_text(error: str) -> bool:
+    """:func:`.archive.is_retryable` read back from an error's text (``str(exc)``).
+
+    For an entry failed before 0.3.0, which kept only its reason: ``search failed: `` and the
+    text of the *last* of its three errors, cut to 160 characters (the same wording since
+    0.2.0). The two errors before it left no trace on the entry, so such an entry is judged by
+    its last error alone. True only for the shapes :func:`.archive.is_retryable` calls worth
+    another try: a transport error (``ReadTimeout: ...``), a body too slow or too large, HTTP
+    429 or 5xx, a search answer that is not JSON. A redirect, another HTTP 4xx and any text not
+    recognised give False (fail closed: the entry then waits for ``archive queue resume``).
+    """
+    text = error.strip()
+    match = _HTTP_ERROR_RE.match(text)
+    if match is not None:
+        status = int(match.group(1))
+        return status == 429 or status >= 500
+    name, sep, _rest = text.partition(":")
+    if sep and name in _TRANSPORT_ERRORS:
+        return True
+    return bool(_BODY_LIMIT_RE.match(text) or _SEARCH_BODY_RE.match(text))
+
+
+def _auto_resume_history(entry: Mapping[str, Any]) -> list[Mapping[str, Any]] | None:
+    """The entry's automatic resumes so far, oldest first (``auto_resumes``), or None when the
+    field is not a list of records (edited by hand: no further automatic resume)."""
+    history = entry.get("auto_resumes", [])
+    if not isinstance(history, list) or not all(isinstance(h, Mapping) for h in history):
+        return None
+    return history
+
+
+def auto_resumable(entry: Any, limit: int = AUTO_RESUME_MAX) -> bool:
+    """True for a failed entry the queue runner may set back to work itself (D-072, D-078).
+
+    Its day search failed :data:`MAX_ENTRY_ERRORS` times, each time with an error worth another
+    try (``failure_kind: "search_retryable"``; an entry failed before 0.3.0 has no
+    ``failure_kind`` and is judged by the last error its reason keeps,
+    :func:`_retryable_text`), and it has been set back fewer than ``limit`` times. Never true
+    for another failure, nor for a refused or stopped entry, nor for an entry whose
+    ``progress`` is not a record (edited by hand: fail closed). *When* it is set back is
+    :meth:`QueueRunner.auto_resume`'s rule.
+    """
+    if not isinstance(entry, Mapping) or entry.get("status") != "failed":
+        return False
+    progress = entry.get("progress")
+    if progress is not None and not isinstance(progress, Mapping):
+        return False
+    reason = entry.get("reason")
+    if not isinstance(reason, str) or not reason.startswith(SEARCH_FAILED):
+        return False
+    kind = entry.get("failure_kind")
+    if kind is None:
+        if not _retryable_text(reason[len(SEARCH_FAILED) :]):
+            return False
+    elif kind != FAILURE_SEARCH_RETRYABLE:
+        return False
+    history = _auto_resume_history(entry)
+    return history is not None and len(history) < limit
+
+
+def _search_failure_kind(progress: Mapping[str, Any]) -> str:
+    """``failure_kind`` of an entry whose day search has just failed for the last time.
+
+    ``search_retryable`` only when 0.3.0 judged *every* one of its ``search_errors`` worth
+    another try (``search_errors_retryable`` equals it); ``search_not_retryable`` when one or
+    more was not (a redirect or another HTTP 4xx); else ``search_unclassified``: some of its
+    errors were counted by code before 0.3.0, which kept no judgement of them (fail closed).
+    """
+    errors = int(progress.get("search_errors", 0))
+    if int(progress.get("search_errors_not_retryable", 0)) > 0:
+        return FAILURE_SEARCH_NOT_RETRYABLE
+    if int(progress.get("search_errors_retryable", 0)) == errors:
+        return FAILURE_SEARCH_RETRYABLE
+    return FAILURE_SEARCH_UNCLASSIFIED
+
+
+def _failed_at(entry: Mapping[str, Any]) -> datetime | None:
+    """When the entry failed: ``failed_at`` (written from 0.3.0 on), else its last step's time,
+    which is the failing step's (a failed entry takes no further step); None if neither reads."""
+    progress = entry.get("progress")
+    last_step = progress.get("last_step_at") if isinstance(progress, Mapping) else None
+    for value in (entry.get("failed_at"), last_step):
+        when = parse_time(value)
+        if when is not None:
+            return when
+    return None
+
+
+def _auto_resume_due(entry: Any, today: date, limit: int) -> bool:
+    """:func:`auto_resumable`, and ``today`` (UTC) is a later UTC day than the failure and than
+    each automatic resume before it. An unreadable time counts as today (fail closed)."""
+    if not auto_resumable(entry, limit):
+        return False
+    failed = _failed_at(entry)
+    if failed is None or failed.date() >= today:
+        return False
+    for item in _auto_resume_history(entry) or []:
+        at = parse_time(item.get("at"))
+        if at is None or at.date() >= today:
+            return False
+    return True
+
+
+def _reopen(entry: dict[str, Any], *, max_gb: float | None = None) -> None:
+    """Set a stopped or failed entry back to work, as ``archive queue resume`` does.
+
+    Its error counts and its failure are cleared; an entry whose progress was compacted (or
+    that never got past its search) starts again from its search, and
+    ``state/archive/<id>.json`` still keeps what it stored from being fetched again. Its
+    automatic resumes (``auto_resumes``) stay, so the limit counts them all. ``max_gb`` raises
+    the per-viewpoint size cap, which a "stopped" entry needs.
+    """
+    progress = entry.get("progress") or {}
+    for name in (
+        "stopped",
+        "search_errors",
+        "search_errors_retryable",
+        "search_errors_not_retryable",
+        "internal_errors",
+        "search_cut_short",
+    ):
+        progress.pop(name, None)
+    if not isinstance(progress.get("selected"), list):
+        progress = {"requests": progress.get("requests", 0)}
+    entry["progress"] = progress
+    entry["status"] = "active" if "selected" in progress else "pending"
+    for name in ("reason", "failed_at", "failure_kind"):
+        entry.pop(name, None)
+    if max_gb is not None:
+        entry["max_gb"] = float(max_gb)
 
 
 def default_queue_path() -> Path:
@@ -251,7 +436,9 @@ class ArchiveQueue:
 
         ``max_gb`` raises the entry's per-viewpoint size cap, which a "stopped" entry needs
         (its cap was reached). An entry whose progress was compacted starts again from its
-        search; ``state/archive/<id>.json`` still keeps what it stored from being fetched again.
+        search; ``state/archive/<id>.json`` still keeps what it stored from being fetched again
+        (:func:`_reopen`). The loop resumes an entry whose day search failed by itself, once a
+        UTC day (:meth:`QueueRunner.auto_resume`); this is the lead's way for every other one.
         """
         if max_gb is not None and max_gb <= 0:
             raise ValueError("max_gb must be positive")
@@ -263,16 +450,7 @@ class ArchiveQueue:
                     continue
                 if not (every or entry.get("id") in wanted):
                     continue
-                progress = entry.get("progress") or {}
-                for name in ("stopped", "search_errors", "internal_errors", "search_cut_short"):
-                    progress.pop(name, None)
-                if not isinstance(progress.get("selected"), list):
-                    progress = {"requests": progress.get("requests", 0)}
-                entry["progress"] = progress
-                entry["status"] = "active" if "selected" in progress else "pending"
-                entry.pop("reason", None)
-                if max_gb is not None:
-                    entry["max_gb"] = float(max_gb)
+                _reopen(entry, max_gb=max_gb)
                 resumed.append(str(entry.get("id")))
         return resumed
 
@@ -328,17 +506,40 @@ def _selected_count(progress: Mapping[str, Any]) -> int | None:
     return int(count) if isinstance(count, int) else None
 
 
+def _runner_auto_resume_max(runner: Any) -> int | None:
+    """The ``auto_resume_max`` the queue's last runner recorded (0.3.0 on), else None: a runner
+    from before 0.3.0 (or none yet), which never sets anything back to work by itself."""
+    value = runner.get("auto_resume_max") if isinstance(runner, Mapping) else None
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return max(0, value)
+
+
 def queue_summary(queue: ArchiveQueue) -> dict[str, Any]:
-    """Progress of every entry and the runner's last heartbeat (for ``status``; no network)."""
+    """Progress of every entry and the runner's last heartbeat (for ``status``; no network).
+
+    ``auto_resume_max`` is the cap the queue's last runner recorded in its heartbeat (0 when
+    its automatic resume is off), or None when that runner predates 0.3.0 (or none has
+    stepped yet): such a loop sets nothing back to work by itself. Each row also gives
+    ``auto_resumes``, how many times a loop has set the entry back to work itself, and
+    ``auto_resumable``: a failed entry that qualifies for the automatic resume
+    (:func:`auto_resumable`) under that cap, or under :data:`AUTO_RESUME_MAX` when the cap is
+    None. The loop sets it back to work at its first idle on a later UTC day than the failure
+    (:meth:`QueueRunner.auto_resume`) only when ``auto_resume_max`` is not None.
+    """
     try:
         doc = queue.read()
     except (OSError, ValueError) as exc:
         return {"path": str(queue.path), "error": f"{type(exc).__name__}: {exc}"[:200]}
+    cap = _runner_auto_resume_max(doc.get("runner"))
     rows = []
     for entry in doc["entries"]:
         progress = entry.get("progress") or {}
+        if not isinstance(progress, Mapping):  # edited by hand: listed with no progress
+            progress = {}
         selected = _selected_count(progress)
         pairs = None if selected is None else selected * len(entry.get("kinds") or [])
+        history = _auto_resume_history(entry)
         rows.append(
             {
                 "id": entry.get("id"),
@@ -351,6 +552,8 @@ def queue_summary(queue: ArchiveQueue) -> dict[str, Any]:
                 "requests": progress.get("requests", 0),
                 "stopped": progress.get("stopped"),
                 "reason": entry.get("reason"),
+                "auto_resumes": None if history is None else len(history),
+                "auto_resumable": auto_resumable(entry, AUTO_RESUME_MAX if cap is None else cap),
             }
         )
     by_status = Counter(str(r["status"]) for r in rows)
@@ -359,6 +562,7 @@ def queue_summary(queue: ArchiveQueue) -> dict[str, Any]:
         "entries": len(rows),
         "by_status": dict(sorted(by_status.items())),
         "runner": doc.get("runner"),
+        "auto_resume_max": cap,
         "rows": rows,
     }
 
@@ -384,7 +588,14 @@ def _queue_client(storage: Storage, runner: str = "cli-loop") -> ArchiveClient:
 
 
 class QueueRunner:
-    """Works the queue one archive request at a time, in the gaps between live passes."""
+    """Works the queue one archive request at a time, in the gaps between live passes.
+
+    ``auto_resume_max`` turns on the daily resume of failed day searches (:meth:`auto_resume`):
+    the most automatic resumes an entry gets in all. ``snow-globe-capture loop`` passes
+    :data:`AUTO_RESUME_MAX`; the default 0 leaves every failed entry for ``archive queue
+    resume``, as 0.2.x did, so code that builds a runner to model the loop (the backfill
+    planner's ``loop_sim.py``) keeps that model until it asks for this one.
+    """
 
     def __init__(
         self,
@@ -399,6 +610,7 @@ class QueueRunner:
         step_max_s: float = STEP_MAX_S,
         margin_s: float = STEP_MARGIN_S,
         runner: str = "cli-loop",
+        auto_resume_max: int = 0,
     ) -> None:
         self.storage = storage
         self.viewpoints = viewpoints
@@ -416,6 +628,11 @@ class QueueRunner:
         self._cap_logged = False
         #: Written into the queue's records and its archive client's, as live capture's is.
         self.runner = runner
+        #: Automatic resumes allowed per entry in all (:meth:`auto_resume`); 0 (the default)
+        #: turns them off. Recorded in the queue's ``runner`` heartbeat, for the listing.
+        self.auto_resume_max = max(0, int(auto_resume_max))
+        #: The UTC day an automatic resume last failed to run (logged once a day).
+        self._auto_resume_error_day: date | None = None
 
     @property
     def archive(self) -> ArchiveClient:
@@ -435,11 +652,17 @@ class QueueRunner:
     ) -> dict[str, Any]:
         """Do queue steps while each fits before the next live pass (the loop's ``idle``).
 
-        No step starts while a www.nps.gov hold is in force (``"host_backoff"``: a live or an
-        archive 429/503, :mod:`.host_backoff`), while today's budget is spent, or once every
-        viewpoint's backfill together has reached the total cap (``"total_cap"``).
+        First, entries whose day search failed on an earlier UTC day are set back to work
+        (:meth:`auto_resume`; ``"auto_resumed"`` counts them; it sends nothing). No step starts
+        while a www.nps.gov hold is in force (``"host_backoff"``: a live or an archive 429/503,
+        :mod:`.host_backoff`), while today's budget is spent, or once every viewpoint's backfill
+        together has reached the total cap (``"total_cap"``).
         """
         steps: Counter[str] = Counter()
+        if not stopping():
+            resumed = self._auto_resume_logged()
+            if resumed:
+                steps["auto_resumed"] += len(resumed)
 
         def fits() -> bool:
             wait = self.archive.limiter.next_allowed_in()
@@ -480,6 +703,108 @@ class QueueRunner:
         except (OSError, ValueError):
             return False
         return any(e.get("status") in _OPEN for e in doc["entries"])
+
+    # -- the daily resume (D-072, D-078) --------------------------------------------------
+    def auto_resume(self) -> list[str]:
+        """Set entries whose day search failed back to work, once a UTC day; returns their ids.
+
+        The lead's daily ``archive queue resume``, done by the loop: an entry is set back to
+        work when :func:`auto_resumable` (its day search failed :data:`MAX_ENTRY_ERRORS` times,
+        each time with an error worth another try, and it has been set back fewer than
+        ``auto_resume_max`` times in all) and today (UTC) is a later UTC day than its failure
+        and than its last automatic resume. So an entry that failed on day D goes back to work
+        at the first idle of D + 1 or later, the budget of a new day, as the backfill plan's
+        daily resume assumed; it is set back at most once a UTC day. A refused (held-out) or
+        stopped (size cap) entry, and every other failure, is left for ``archive queue
+        resume``.
+
+        Nothing is sent: the queue file is edited under its lock (:func:`_reopen`, as the
+        manual resume does) and the entry waits its turn under the same budget, spacing and
+        one-at-a-time rule as any other. Each resume is appended to the entry's
+        ``auto_resumes`` (``attempt``, ``at``, the ``reason`` it failed and ``failed_at``) and
+        logged as ``queue_auto_resumed`` with the attempt number and the reason it failed.
+
+        Each entry is set back on a copy, so one that cannot be (a hand edit this code did not
+        foresee) stays exactly as it was, is logged as ``queue_auto_resume_error`` (at most
+        once a UTC day) and never keeps the other entries from being set back.
+        """
+        if self.auto_resume_max <= 0:
+            return []
+        now = self.clock()
+        today = now.astimezone(UTC).date()
+        try:
+            current = self.queue.read()
+        except (OSError, ValueError):
+            return []
+        if not any(self._resume_due(e, today) for e in current["entries"]):
+            return []  # the usual case: no lock taken, nothing written
+        done: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        broken: list[tuple[Any, str]] = []
+        with self.queue.edit() as doc:
+            entries = doc["entries"]
+            for index, entry in enumerate(entries):
+                if not self._resume_due(entry, today):  # checked again under the lock
+                    continue
+                try:
+                    work, item = self._set_back(entry, now)
+                except Exception as exc:  # this entry stays as it was; the others go on
+                    broken.append((entry.get("id"), f"{type(exc).__name__}: {exc}"[:200]))
+                    continue
+                entries[index] = work
+                done.append((work, item))
+        for entry, item in done:
+            self._log(
+                entry,
+                "queue_auto_resumed",
+                reason=item["reason"],
+                attempt=item["attempt"],
+                attempts_max=self.auto_resume_max,
+                failed_at=item["failed_at"],
+            )
+        for queue_entry, error in broken:
+            self._log_resume_error(error, queue_entry)
+        return [str(entry.get("id")) for entry, _item in done]
+
+    @staticmethod
+    def _set_back(entry: Mapping[str, Any], now: datetime) -> tuple[dict[str, Any], dict[str, Any]]:
+        """A copy of ``entry`` set back to work by the daily resume, and its ``auto_resumes``
+        record; ``entry`` itself is left untouched."""
+        work = json.loads(json.dumps(entry))
+        failed = _failed_at(work)
+        history = list(_auto_resume_history(work) or [])
+        item = {
+            "attempt": len(history) + 1,
+            "at": isoformat_z(now, "milliseconds"),
+            "reason": work.get("reason"),
+            "failed_at": None if failed is None else isoformat_z(failed, "milliseconds"),
+        }
+        _reopen(work)
+        work["auto_resumes"] = [*history, item]
+        return work, item
+
+    def _resume_due(self, entry: Any, today: date) -> bool:
+        try:
+            return _auto_resume_due(entry, today, self.auto_resume_max)
+        except Exception:  # a hand-edited entry must not wedge the queue: never resume it
+            return False
+
+    def _log_resume_error(self, error: str, queue_entry: Any = None) -> None:
+        """Log ``queue_auto_resume_error`` at most once a UTC day (``queue_entry``: the entry
+        that could not be set back, or None when the resume as a whole failed)."""
+        today = self.clock().astimezone(UTC).date()
+        if self._auto_resume_error_day == today:
+            return
+        self._auto_resume_error_day = today
+        self._log({"id": queue_entry}, "queue_auto_resume_error", reason=error)
+
+    def _auto_resume_logged(self) -> list[str]:
+        """:meth:`auto_resume`, whose own failure never stops the queue's work (logged once a
+        UTC day as ``queue_auto_resume_error``)."""
+        try:
+            return self.auto_resume()
+        except Exception as exc:
+            self._log_resume_error(f"{type(exc).__name__}: {exc}"[:200])
+            return []
 
     def _host_held(self) -> bool:
         """True while the shared www.nps.gov hold is in force (an unreadable one counts)."""
@@ -540,6 +865,8 @@ class QueueRunner:
             progress["requests"] = int(progress.get("requests", 0)) + sent
             progress["last_step_at"] = isoformat_z(self.clock(), "seconds")
             self.last_step_bytes = max(0, int(progress.get("bytes", 0)) - bytes_before)
+            if work.get("status") == "failed":  # an open entry failed in this step
+                work["failed_at"] = isoformat_z(self.clock(), "milliseconds")
             if work.get("status") in _SETTLED:
                 _compact(progress)
             self._commit(work, sent)
@@ -550,6 +877,12 @@ class QueueRunner:
         return outcome
 
     def _commit(self, work: Mapping[str, Any], sent: int) -> None:
+        """Merge the stepped entry back under the lock and write the runner's heartbeat.
+
+        The heartbeat (``runner``) also says, from 0.3.0 on, which code works the queue
+        (``capture_version``) and whether it sets failed day searches back to work itself
+        (``auto_resume_max``), so the listing never promises a resume the loop will not do.
+        """
         with self.queue.edit() as doc:
             for index, entry in enumerate(doc["entries"]):
                 if entry.get("id") == work.get("id"):
@@ -565,13 +898,19 @@ class QueueRunner:
                 "budget": None
                 if budget is None
                 else {"name": budget.name, "used": budget.used(), "limit": budget.limit},
+                "capture_version": CAPTURE_VERSION,
+                "auto_resume_max": self.auto_resume_max,
             }
 
-    def _log(self, entry: Mapping[str, Any], event: str) -> None:
+    def _log(self, entry: Mapping[str, Any], event: str, **extra: Any) -> None:
+        """One ``capture_log`` record about a queue entry; ``extra`` adds fields (or gives
+        ``reason``). ``t`` is the runner's clock when the record is made, as live capture's."""
         with suppress(Exception):  # the log never stops the loop
+            now = self.clock()
             self.storage.append_jsonl(
-                capture_log_key(self.clock()),
+                capture_log_key(now),
                 {
+                    "t": isoformat_z(now, "milliseconds"),
                     "worker": "archive",
                     "viewpoint_id": entry.get("viewpoint_id"),
                     "event": event,
@@ -579,6 +918,7 @@ class QueueRunner:
                     "status": entry.get("status"),
                     "outcomes": _counts(entry.get("progress") or {}),
                     "reason": entry.get("reason"),
+                    **extra,
                     "runner": self.runner,
                     "capture_version": CAPTURE_VERSION,
                 },
@@ -624,8 +964,18 @@ class QueueRunner:
         except ArchiveError as exc:
             progress["search_errors"] = int(progress.get("search_errors", 0)) + 1
             progress["last_error"] = str(exc)[:200]
+            # Each error is judged as it comes (0.3.0 on). Errors counted before 0.3.0 are in
+            # search_errors but in neither of these, so they are never taken as worth a try.
+            judged = (
+                "search_errors_retryable" if is_retryable(exc) else "search_errors_not_retryable"
+            )
+            progress[judged] = int(progress.get(judged, 0)) + 1
             if progress["search_errors"] >= MAX_ENTRY_ERRORS:
-                entry.update(status="failed", reason=f"search failed: {str(exc)[:160]}")
+                entry.update(
+                    status="failed",
+                    reason=f"{SEARCH_FAILED}{str(exc)[:160]}",
+                    failure_kind=_search_failure_kind(progress),
+                )
                 return "failed"
             return "error"
         if meta.get("cut_short"):

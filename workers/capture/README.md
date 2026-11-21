@@ -1,6 +1,11 @@
 # snow-globe-capture
 
-Renamed from `lookout-capture` on 21 Nov 2026 (D-080). Capture 0.3.0 is 0.2.1 under the Snow Globe names: the console script is `snow-globe-capture`, the stamp in every record, sidecar and state is `snow-globe-capture/0.3.0`, and the default User-Agent is `SnowGlobe/0.1 (webcam research capture; fetch-on-change)`. Everything written before carries `lookout-capture/<version>` and is read as it is (`capture_release`). The running loop keeps the old names until the lead's switch after the M0.5 gate. Measurements below dated before 21 Nov were taken under the old names.
+Renamed from `lookout-capture` on 21 Nov 2026 (D-080). Capture 0.3.0 is 0.2.1 under the Snow Globe names, plus the additive changes below: the console script is `snow-globe-capture`, the stamp in every record, sidecar and state is `snow-globe-capture/0.3.0`, and the default User-Agent is `SnowGlobe/0.1 (webcam research capture; fetch-on-change)`. Everything written before carries `lookout-capture/<version>` and is read as it is (`capture_release`). The running loop keeps the old names until the lead's switch after the M0.5 gate. Measurements below dated before 21 Nov were taken under the old names.
+
+0.3.0 adds three things on top of the rename, all additive (older readers ignore the new keys), and has not run yet; it reaches the live loop at the switch:
+- **The daily resume of failed day searches** (D-072, D-078): the loop (`loop --archive-queue`) sets an archive queue entry whose day search failed with errors worth another try back to work itself, at its first idle on a later UTC day, at most once a UTC day and 3 times in all ("Archive backfill inside the loop", below). Until now the lead or the owner had to run `archive queue resume` every day, and must go on doing so until the switch: the 0.2.1 loop resumes nothing by itself (`archive queue list` says so for each entry while the queue's last runner is 0.2.x).
+- **Records that date restarts exactly:** every `pass` record carries `started_at`, and the loop writes `loop_started` when it starts and `loop_stopped` when it stops ("Dating passes and restarts", below).
+- **Every archive error backs off:** a redirect or an HTTP 4xx answer now defers the `nps-archive` limiter like every other error (30 s doubling to 30 min until a request succeeds). Until 0.3.0 only transport errors, HTTP 429/5xx and bad bodies did, so a run of refusals went out 5 s apart with only the daily budget to stop them ("Archive", below).
 
 Polite capture of the 8 NPS cameras in `viewpoints/manifests/` (PRD §8.6, §11.2, §15.3), PRD §8.7
 storage (thumbnails, and the frame nearest each hour), the NPS AirWebCams archive backfill (also
@@ -21,7 +26,7 @@ PYTHONPATH=src:../common/src .venv/bin/python -m pytest -q
 | `snow-globe-capture loop [--interval 300] [--jitter 30] [--archive-queue PATH] [--archive-budget 1000] [--archive-total-gb 5]` | NPS live (+ archive) | A pass every interval plus 0–jitter s. With `--archive-queue`, queued archive work runs between passes in the same process (below). The first Ctrl-C finishes the current camera and exits; a second interrupts at once. |
 | `snow-globe-capture status [--json] [--archive-queue PATH]` | none | Persisted state per camera (the frame policy the newest frame's writer used, marked `*` where this code would use another; frames staged; last hourly decision; store failures; thumbnails pending; the next poll and what it is counted from, `next_poll_basis`: a recorded answer, an answer bound, a reservation, or state from older code, where the next poll shown is what this code would do if it took over now), today's event counts, and the archive queue's progress. |
 | `snow-globe-capture archive queue add <id> <YYYY-MM-DD>... [--through YYYY-MM-DD] [--hires] [--thumbs] [--pick all\|hourly\|midday] [--daytime-only] [--min-sun-deg X] [--max-gb 1] [--queue PATH]` | none | Queue days to backfill (`--through`: every day of a range, at most 400). A day on or after 1 Jun 2026 is refused (D-019). |
-| `snow-globe-capture archive queue list [--json]` / `remove <id>... [--finished] [--all]` / `resume <id>... [--all] [--max-gb G]` | none | Show or edit the queue (default `state/archive/queue.json`). `--finished` takes done, refused, failed and stopped entries; `resume` sets stopped (size cap) or failed entries back to work, `--max-gb` raising their cap. Safe while the loop runs. |
+| `snow-globe-capture archive queue list [--json]` / `remove <id>... [--finished] [--all]` / `resume <id>... [--all] [--max-gb G]` | none | Show or edit the queue (default `state/archive/queue.json`). `--finished` takes done, refused, failed and stopped entries; `resume` sets stopped (size cap) or failed entries back to work, `--max-gb` raising their cap. A failed day search the loop will resume itself is listed with `[auto-resume n/3 at the loop's first idle on a later UTC day]`, one whose automatic resumes are used up with `[auto-resumed 3/3]`. The promise is read from the queue's heartbeat: while its last runner is 0.2.x (no `auto_resume_max` in it, as until the switch) such an entry is listed with `[needs 'archive queue resume': the queue's last runner (0.2.x, or none yet) never resumes by itself]` instead (`--json`: `auto_resume_max`, None for a 0.2.x runner; per row `auto_resumable`, `auto_resumes`). Safe while the loop runs. |
 | `snow-globe-capture cadence <id> [--hours 24] [--max-gap S] [--json]` | none | The camera's update cadence from `capture_log` and sidecars (below). |
 | `snow-globe-capture storage [--day YYYY-MM-DD] [--only <id>] [--json]` (alias `storage-report`) | none | Bytes per frame and thumbnail per camera from disk, and bytes per day under PRD §8.7 against the old policy. Writes nothing. |
 | `snow-globe-capture archive days <id>` | NPS archive | `GetAvailableDays`: first and last day, days per year. |
@@ -66,7 +71,71 @@ queue between live passes, in the same process and so under the same lock, never
   position, `state/archive/<id>.json` what is stored). Failed downloads are retried in up to 3 sweeps.
 - The queue file is edited under an `flock` on `<file>.lock` and replaced atomically. A finished entry
   keeps only counts (`selected_count`, `outcome_counts`), so the file stays small (under 1 KB an
-  entry). `status` shows each entry's progress and the runner's last step.
+  entry). `status` shows each entry's progress and the runner's last step. From 0.3.0 the runner's
+  heartbeat (`runner` in the file) also names the code (`capture_version`) and its `auto_resume_max`.
+- **The daily resume of failed day searches** (0.3.0; D-072, D-078; `QueueRunner.auto_resume`). An
+  entry is marked failed when its day search fails 3 times running. Until 0.3.0 it then waited for
+  `archive queue resume`, which a lead or the owner had to run every UTC day, or its tranche
+  stalled (the backfill plan's finish days assume that daily resume). Now the loop does it:
+  - **Which entries:** a failed entry whose day search failed 3 times, *each* time with an error
+    worth another try (`archive.is_retryable`: a timeout, a connection error, HTTP 429 or 5xx, a
+    body too slow or too large, a search answer that is not JSON). 0.3.0 judges each search error
+    as it comes (`search_errors_retryable`, `search_errors_not_retryable` in the entry's progress)
+    and records the failure as `failure_kind: "search_retryable"` only when it judged all three
+    so. One redirect or another HTTP 4xx among them makes it `"search_not_retryable"`; errors
+    counted by 0.2.x before the switch (an entry part-way through its three) make it
+    `"search_unclassified"`. Neither is ever resumed by itself.
+  - **Entries 0.2.x failed** have no `failure_kind`, and keep only the *last* of their three errors
+    (the reason, `search failed: <error>`); the two before it left no trace. Such an entry is
+    resumed by itself when that last error is one worth another try (the same rule read from the
+    error's text; a text it does not recognise is not resumed: fail closed). That is no more than
+    the lead's daily `archive queue resume` of any failed entry (D-078), which it takes over.
+  - **When:** at the loop's first idle on a UTC day *after* the UTC day the entry failed
+    (`failed_at`; for 0.2.x entries the failing step's `last_step_at`), so an entry that failed on
+    day D goes back to work in the budget of D + 1, as the lead's daily resume did. At most once a
+    UTC day (also after a wall-clock step back across midnight), and **at most 3 times in all**;
+    after that it waits for `archive queue resume`, which still works and keeps the history.
+  - **Never resumed by itself:** a redirect or another HTTP 4xx among the search's errors, errors
+    counted by 0.2.x, a search cut short ("more pages than fit between live passes"), an internal
+    error, an unknown viewpoint or a bad date, an entry whose `progress` is not a record (a hand
+    edit), a held-out refusal (`refused`) and a size cap (`stopped`).
+  - **It sends nothing.** It edits the queue file under its lock, as `archive queue resume` does:
+    the entry goes back to `pending` at its place in the queue and starts again from its search.
+    The daily budget, the 5.05 s spacing and the one-at-a-time rule are unchanged.
+  - **Records:** each resume is appended to the entry's `auto_resumes` (`attempt`, `at`, the
+    `reason` it failed, `failed_at`) and logged as `queue_auto_resumed` (`queue_entry`, `attempt`,
+    `attempts_max`, `reason`, `failed_at`). Each entry is set back on a copy: one that cannot be
+    stays exactly as it was and never keeps the others from being set back. A resume that fails
+    (that entry's, or the whole resume's: say, the queue file cannot be written) is logged at most
+    once a UTC day as `queue_auto_resume_error` (`queue_entry`: the entry, or null), and the queue's
+    own work goes on.
+  - **On only where asked for:** `snow-globe-capture loop` builds its `QueueRunner` with
+    `auto_resume_max=3`; the class's default is 0 (off: 0.2.x's behaviour), so code that builds a
+    runner to model the loop keeps its own model until it asks for this one. The backfill
+    planner's `loop_sim.py` builds its runner with the default: its days mode is 0.2.x's without
+    `--resume-failed` and the lead's daily resume of every failed entry with it. To model 0.3.0 it has to pass
+    `auto_resume_max` and count a failed entry that `auto_resumable()` accepts as still open, not
+    settled (the planner's change; not made here).
+
+**Dating passes and restarts** (0.3.0; additive). Before 0.3.0 a pass was dated by its record's `t`
+(written at the pass's end) less `duration_s`, and a restart only by the gap between two passes.
+Now, in `capture_log`:
+- **Every `pass` record** (loop, `once` and Lambda) carries `started_at`: the pass's wall-clock start,
+  ISO 8601 UTC with `Z`, to the millisecond (truncated, as every `t` is). Its `t` is still the moment
+  it was written, at the pass's end. (The JSON summary `once` prints keeps its own `started_at` to the
+  second, as before.)
+- **`loop_started`**, the loop's first record, before anything is sent: `capture_version`, `runner`,
+  `pid`, `started_at` (the loop's wall-clock start, to the millisecond), and `interval_s`,
+  `jitter_s` and `viewpoints` (the cameras it polls).
+- **`loop_stopped`**, whenever the loop ends without being interrupted; its `t` is the moment it
+  stopped. `reason` is `signal` (the first SIGINT or SIGTERM, also `signal`, e.g. `"SIGTERM"`, and
+  `signal_at`, when it arrived), `requested`, `max_passes`, `before_pass` (the foreign-fetcher check
+  stopped it, with `error`; 0.2.x wrote this record with `error` only) or `error` (an exception out
+  of a pass, logged and raised again), with `passes`, `pid` and `loop_started_at`. A second signal,
+  a kill or a crash of the process writes none: a `loop_started` that no `loop_stopped` precedes
+  follows a stop that was not clean, which a reader dates from the last record before it.
+
+All three carry `worker: "capture"` and `viewpoint_id: null`, like `pass`.
 
 **Held-out guard** (D-019, D-022, D-038, D-047, `heldout.py`). Archived frames, full size or
 thumbnail, dated on or after **1 Jun 2026** are never requested or read. An asset is held out if
@@ -115,8 +184,8 @@ releases and written into the sidecar.
     failure** (`last_answer_bound`/`answer_bound: failed_after_send`; below).
   - **No redirect is followed** (live and archive clients): httpx would send each hop as one more
     request that neither `capture_log` nor the caps see. A 3xx is an error like a 5xx, logged with
-    its `Location` (`error` and `request` records, `last_error`) and backed off; for the archive it
-    is not retried, like a 404.
+    its `Location` (`error` and `request` records, `last_error`) and backed off (the archive's from
+    0.3.0 on, like its 4xx); for the archive it is not retried, like a 404.
   - A pass waits for a camera whose slot is near, inside its lock and right before the poll, and
     only until the clock reaches the slot. The wait is the **pass's own window, counted from the
     pass's start** (Lambda 45 s, `loop` 60 s, `once --wait-for-due S`): a camera whose slot falls
@@ -332,7 +401,7 @@ every storage call; "jitter" is 0-2 s on each invocation. Waiting is the billed 
 
 **Archive** (`archive.py`):
 - Every request goes through `archive_limiter()`, a file-mode `MinIntervalLimiter("nps-archive", 5 s).hold()`: one at a time across processes, ≥ 5 s end to start. It is file-based even with `SNOW_GLOBE_STORAGE=s3` (common's `auto` mode would fall back to an in-process limiter there).
-- Errors are deferred for every process. A 200 whose body is not a decodable JPEG (an HTML error page, a truncated file) is an error too: not stored, not marked done.
+- Every error is deferred for every process: a transport error, a bad body and every HTTP 3xx, 4xx or 5xx answer back the `nps-archive` limiter off, 30 s doubling to 30 min with each error in a row, until a request succeeds (`Retry-After` honoured for a 429/503). Until 0.3.0 a 3xx and a 4xx other than 429 deferred nothing (review of 21 Nov 2026): against an HTTP 403 on every search, over 40 queued entries and a day of the loop's idles (the scenario of `test_a_run_of_refusals_backs_the_queue_off_instead_of_spending_its_budget`), the queue sent 120 searches in 715 s (5 s apart within each idle), every entry's three, with only its daily budget (1,000) to stop it; it now sends 53 in the 24 h, 30 s apart doubling to 1,800 s (measured on the fake clock, 21 Nov 2026). A 200 whose body is not a decodable JPEG (an HTML error page, a truncated file) is an error too: not stored, not marked done.
 - A failing asset (transport error, HTTP 429/5xx, bad body) is tried at most 3 times per run and 6 times in all; failures are kept in `state/archive/<id>.json` under `failed`. A 404 is not retried.
 - An optional persisted request budget applies.
 - An asset already stored, or listed in `state/archive/<id>.json`, is never requested again.
@@ -413,8 +482,8 @@ the six hourly cameras meet (13–21 MB each, PRD ~17) while the two design-P ca
 - Live sidecars are `sidecar_schema` 2 (additive over 1: `frame_policy`, `thumb`, and in thumbnails `variant`/`full_frame`, in promoted frames `hourly_selection`), written by `capture_version` `lookout-capture/0.2.0`; frames of the frozen 0.1.0 loop say 0.1.0 and schema 1.
 - `archive/<id>/<UTC date>/<stamp>_<assetid[:8]>.jpg` (hires) or `..._thumbmedium.jpg` + `.json`.
 - `capture_log/<UTC date>.jsonl`:
-  - capture events: `request` (one per nps.gov request: stage, method, status, bytes, ms, `sent_at`, `answered_at`; a failure that may still reach nps.gov also `answer_bound: failed_after_send` and `answer_bound_at`; a 3xx its `location`; on Lambda `lambda_log_stream`), `answer_bound` (an answer this code had to bound: a reservation a crash left unanswered, or state from code that recorded no answer; a GET's own stamps as `get_t`/`get_reserved_at`, since every record's `t` is the moment it was written), `stored`, `unchanged`, `duplicate`, `rate_capped`, `error` (stage `head`, `json`, `image`, `store` or `internal`), `backoff`, `promoted`, `staging_dropped` (with a reason), `staging_error`, `thumb_repaired`, `thumb_given_up`, `pass`, `idle_error`, `loop_stopped`. Every poll outcome carries the feed's validator (`json_last_modified`, or `head_last_modified`/`http_last_modified`), for `cadence`;
-  - archive events: `archive_request`, `stored`, `error`, `held_out_override`, `queue_done`, `queue_stopped`, `queue_refused`, `queue_failed`, `queue_total_cap` (once per process). Each carries `runner` as live records do: `cli-loop` (the queue inside the loop), `cli-archive`, `cli-archive-check`.
+  - capture events: `request` (one per nps.gov request: stage, method, status, bytes, ms, `sent_at`, `answered_at`; a failure that may still reach nps.gov also `answer_bound: failed_after_send` and `answer_bound_at`; a 3xx its `location`; on Lambda `lambda_log_stream`), `answer_bound` (an answer this code had to bound: a reservation a crash left unanswered, or state from code that recorded no answer; a GET's own stamps as `get_t`/`get_reserved_at`, since every record's `t` is the moment it was written), `stored`, `unchanged`, `duplicate`, `rate_capped`, `error` (stage `head`, `json`, `image`, `store` or `internal`), `backoff`, `promoted`, `staging_dropped` (with a reason), `staging_error`, `thumb_repaired`, `thumb_given_up`, `pass` (with `started_at` from 0.3.0), `idle_error`, `loop_started` (0.3.0), `loop_stopped` (see "Dating passes and restarts"). Every poll outcome carries the feed's validator (`json_last_modified`, or `head_last_modified`/`http_last_modified`), for `cadence`;
+  - archive events: `archive_request`, `stored`, `error`, `held_out_override`, `queue_done`, `queue_stopped`, `queue_refused`, `queue_failed`, `queue_total_cap` (once per process), and from 0.3.0 `queue_auto_resumed` and `queue_auto_resume_error` (at most once a UTC day; `queue_entry` the entry that could not be set back, or null). Each carries `runner` as live records do: `cli-loop` (the queue inside the loop), `cli-archive`, `cli-archive-check`. From 0.3.0 the queue's own records take `t` from the runner's clock when they are made, as live records do (before, the write stamped it: the same moment in production).
   - `state/capture/hosts/www.nps.gov.json`: the www.nps.gov hold (`not_before`, `reason`, `source`: `live` or `archive`).
 - `SNOW_GLOBE_STORAGE=s3` runs the same code against S3. The Lambda entry point is `snow_globe_capture.lambda_handler.handler`.
   - **One log write per pass:** with S3 every record of a pass, the `pass` record included, is written by one `append_jsonl_many` when the pass ends (each S3 append is a GET and a PUT of the day's whole log). Locally each record is appended at once. Records a failed write could not store are printed to stderr as JSON lines (`capture_log_unwritten`; CloudWatch keeps a Lambda's) and sent first with the runner's next pass (up to 2,000); with less than 2 × 25 s left, the records so far are written before each further camera.

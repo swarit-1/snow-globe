@@ -564,6 +564,44 @@ def test_an_archive_redirect_is_never_followed_or_retried(fake_nps, clock, tmp_p
     assert _queue_client(storage).client.follow_redirects is False
 
 
+@pytest.mark.parametrize("status", [301, 302, 400, 403, 404, 410])
+def test_a_redirect_or_a_4xx_backs_off_like_every_other_error(status, fake_nps, clock, tmp_path):
+    """Review finding (21 Nov 2026; there since 0.2.0): a 3xx or a 4xx other than 429 deferred
+    nothing, so a run of them (nps.gov refusing us, say) went out 5 s apart with only a budget
+    to stop them. Every error answer now backs off for every process sharing the limiter,
+    30 s doubling to 30 min, until a request succeeds."""
+    fake_nps.days["pore"] = fixture_json("days_pore.json")
+    answers = [status] * 8
+    original = fake_nps.handler
+
+    def refusing(request: httpx.Request) -> httpx.Response:
+        if not answers:
+            return original(request)
+        sent = {"method": request.method, "url": str(request.url), "t": clock.now()}
+        fake_nps.requests.append(sent)
+        moved = {"Location": "https://www.nps.gov/maintenance.htm"} if status < 400 else {}
+        answers.pop()
+        return httpx.Response(status, headers=moved, text="refused")
+
+    fake_nps.handler = refusing  # type: ignore[method-assign]
+    archive = _client(fake_nps, clock, tmp_path)
+    for n in range(8):
+        with pytest.raises(ArchiveHTTPError) as caught:
+            archive.available_days("pore")
+        assert caught.value.status_code == status
+        if n == 0:  # another process sharing the limiter file waits too
+            assert _client(fake_nps, clock, tmp_path).limiter.next_allowed_in() == pytest.approx(
+                30.0, abs=0.01
+            )
+    archive.available_days("pore")  # the server answers again
+    archive.available_days("pore")
+    times = [r["t"] for r in fake_nps.requests]
+    gaps = [(b - a).total_seconds() for a, b in itertools.pairwise(times)]
+    expected = [30.0, 60.0, 120.0, 240.0, 480.0, 960.0, 1800.0, 1800.0, 5.0]  # then reset
+    assert gaps == pytest.approx(expected, abs=0.01)
+    assert archive.failures == 0 and archive.stats.errors == 8
+
+
 # --- the held-out guard (D-019) ----------------------------------------------------------------
 
 

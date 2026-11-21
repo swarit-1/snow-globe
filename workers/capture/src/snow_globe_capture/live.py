@@ -297,6 +297,8 @@ class CaptureRunner:
         self._last_request: float | None = None
         self._stop = False
         self._signals = 0
+        #: The first SIGINT/SIGTERM and when it came (logged when the loop stops).
+        self._stop_signal: tuple[int, datetime] | None = None
         #: Records of the pass in progress, when logs are batched (S3); None otherwise.
         self._log_buffer: list[tuple[str, dict[str, Any]]] | None = None
         #: Batched records whose write failed, sent first with the next pass's batch.
@@ -1779,6 +1781,7 @@ class CaptureRunner:
         self._log(
             None,
             "pass",
+            started_at=isoformat_z(started, "milliseconds"),  # 0.3.0 on; ``t`` is its end
             cameras=len(order),
             counts=summary["counts"],
             duration_s=summary["duration_s"],
@@ -1805,8 +1808,34 @@ class CaptureRunner:
     def _on_signal(self, signum: int, frame: FrameType | None) -> None:
         self._signals += 1
         self._stop = True
+        if self._signals == 1:  # what stopped the loop, for its ``loop_stopped`` record
+            self._stop_signal = (signum, self.clock())
         if self._signals > 1:
             raise KeyboardInterrupt
+
+    def _loop_stopped(
+        self, started: datetime, passes: int, reason: str, **fields: Any
+    ) -> dict[str, Any]:
+        """Log ``loop_stopped`` (0.3.0 on: ``reason``, ``passes``, ``pid``, ``loop_started_at``;
+        a signal's name and ``signal_at``). Its ``t`` is the moment the loop stopped."""
+        extra: dict[str, Any] = {}
+        if self._stop_signal is not None:
+            signum, at = self._stop_signal
+            try:
+                name = signal.Signals(signum).name
+            except ValueError:
+                name = str(signum)
+            extra = {"signal": name, "signal_at": isoformat_z(at, "milliseconds")}
+        return self._log(
+            None,
+            "loop_stopped",
+            reason=reason,
+            passes=passes,
+            pid=os.getpid(),
+            loop_started_at=isoformat_z(started, "milliseconds"),
+            **extra,
+            **fields,
+        )
 
     def loop(
         self,
@@ -1833,22 +1862,49 @@ class CaptureRunner:
         request gap (1 s) after the pass's last live request, so the archive's first request
         keeps the same courtesy spacing from it. An exception it raises is logged
         (``idle_error``) and never stops live capture.
+
+        **Records that date restarts** (0.3.0 on; additive): ``loop_started`` first
+        (``capture_version``, ``runner``, ``pid``, ``started_at``: the loop's wall-clock start,
+        to the millisecond; also ``interval_s``, ``jitter_s``, ``viewpoints``), and
+        ``loop_stopped`` whenever the loop ends without being interrupted, its ``t`` the moment
+        it stopped, with ``reason``: ``signal`` (the first SIGINT/SIGTERM, also ``signal`` and
+        ``signal_at``), ``requested`` (:meth:`request_stop`), ``max_passes``, ``before_pass``
+        (with ``error``; the record 0.2.x wrote too) or ``error`` (an exception out of a pass,
+        logged, then raised again), and ``passes``, ``pid``, ``loop_started_at``. A second
+        signal (``KeyboardInterrupt``), a kill or a crash of the process writes none, so a
+        ``loop_started`` with no ``loop_stopped`` before it follows a stop that was not clean.
         """
         previous: dict[int, Any] = {}
         if install_signals:
             for sig in (signal.SIGINT, signal.SIGTERM):
                 previous[sig] = signal.signal(sig, self._on_signal)
         passes = 0
+        started = self.clock()
         try:
+            self._log(
+                None,
+                "loop_started",
+                pid=os.getpid(),
+                started_at=isoformat_z(started, "milliseconds"),
+                interval_s=interval_s,
+                jitter_s=jitter_s,
+                viewpoints=[vp.id for vp in viewpoints],
+            )
             while not self._stop:
                 start = self.monotonic()
                 if before_pass is not None:
                     try:
                         before_pass()
                     except Exception as exc:
-                        self._log(None, "loop_stopped", error=f"{type(exc).__name__}: {exc}"[:300])
+                        error = f"{type(exc).__name__}: {exc}"[:300]
+                        self._loop_stopped(started, passes, "before_pass", error=error)
                         raise
-                self.run_pass(viewpoints, wait_for_due_s=60.0)
+                try:
+                    self.run_pass(viewpoints, wait_for_due_s=60.0)
+                except Exception as exc:  # not expected: a pass catches each camera's errors
+                    error = f"{type(exc).__name__}: {exc}"[:300]
+                    self._loop_stopped(started, passes, "error", error=error)
+                    raise
                 passes += 1
                 if max_passes is not None and passes >= max_passes:
                     break
@@ -1864,6 +1920,13 @@ class CaptureRunner:
                     if remaining <= 0.001:  # never spin on a sub-millisecond remainder
                         break
                     self.sleep(min(1.0, remaining))
+            if self._signals:
+                reason = "signal"
+            elif self._stop:
+                reason = "requested"
+            else:
+                reason = "max_passes"
+            self._loop_stopped(started, passes, reason)
         finally:
             for sig, handler in previous.items():
                 signal.signal(sig, handler)
