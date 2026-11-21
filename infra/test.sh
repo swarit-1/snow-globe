@@ -9,7 +9,9 @@
 #   6. infra/tests/test_scripts.sh: deploy.sh and build.sh against stub aws/terraform/docker
 #   7. infra/tests/test_dockerignore.sh: the Lambda build context, checked with BuildKit (SKIP without Docker)
 #   8. infra/tests/test_cost.sh: the hosting estimate's arithmetic (infra/cost/estimate.py) on the committed
-#      simulation, against the figures in infra/README.md; ruff on infra/cost when ruff is installed
+#      simulation (seeds pooled), against the figures in infra/README.md; forecast's S3 requests counted by running
+#      its code, and a short self-checked capture simulation (each SKIPs without the venv it needs); ruff on
+#      infra/cost when ruff is installed
 #   9. tflint, when installed (config: infra/terraform/.tflint.hcl)
 #  10. infra/tests/test_migrate.sh: infra/ops/migrate-to-snow-globe.sh (the rename's live switch, D-080) against stub
 #      loops on a scratch HOME (macOS only; SKIP elsewhere)

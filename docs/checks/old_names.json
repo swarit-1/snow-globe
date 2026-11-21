@@ -8,7 +8,7 @@
     "*tests/fixtures/*": "recorded old-format fixtures, and byte-identical copies of the live loop scripts",
     "eval/src/snow_globe_eval/heldout_periods.json": "hash-pinned on record (D-038): moved byte for byte, old kind and all",
     "eval/src/snow_globe_eval/landmark_boxes_v1.json": "hash-pinned on record: moved byte for byte",
-    "infra/cost/sim_capture_8246a8b.json": "a committed simulation output of the 8246a8b image, quoted by infra/README.md",
+    "infra/cost/sim_capture_8246a8b.json": "a committed simulation output of the 8246a8b image, named in infra/cost/sim_capture_s3.py's run list (D-066)",
     "viewpoints/manifests/*": "dated provenance notes of 19 Nov (~/lookout-data/samples/...), valid through the symlink"
   },
   "counts": {

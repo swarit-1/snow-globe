@@ -191,7 +191,19 @@ say "forecast stand-in: pid(s) ${FC_PIDS:-none running}${FC_SNAP:+, cwd $FC_SNAP
 SUP_PID=""
 if [ -f "$OLD_RT/supervisor.pid" ]; then
   cand="$(cat "$OLD_RT/supervisor.pid")"
-  if alive "$cand" && command_of "$cand" | grep -q -- "$OLD_RT/bin/supervise.sh"; then SUP_PID="$cand"; fi
+  if alive "$cand" && command_of "$cand" | grep -q -- "supervise.sh"; then
+    # Owner action 1 starts it from its own folder as `/bin/bash supervise.sh`, so the command line may hold
+    # only the relative name: accept the full path, or a working folder that is this runtime's bin/ (D-081).
+    cand_cwd="$(lsof -a -p "$cand" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
+    bin_real="$(cd "$OLD_RT/bin" 2>/dev/null && pwd -P)"
+    if command_of "$cand" | grep -q -- "$OLD_RT/bin/supervise.sh"; then
+      SUP_PID="$cand"
+    elif [ -n "$cand_cwd" ] && { [ "$cand_cwd" = "$OLD_RT/bin" ] || [ "$cand_cwd" = "$bin_real" ]; }; then
+      SUP_PID="$cand"
+    else
+      die "supervisor.pid names a running supervise.sh (pid $cand, cwd ${cand_cwd:-unknown}) that is not this runtime's; stop it by hand first: kill $cand"
+    fi
+  fi
 fi
 say "supervisor: ${SUP_PID:-not running}"
 OLD_CURRENT="$(readlink "$OLD_RT/current")" || die "no $OLD_RT/current"

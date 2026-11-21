@@ -1,0 +1,1060 @@
+{
+ "pooled_runs": 6,
+ "capture_version": "snow-globe-capture/0.3.0",
+ "warmup_hours": 168.0,
+ "hours_counted": 432.0,
+ "passes_counted": 5184,
+ "viewpoints": 8,
+ "wall_s": 1906.5,
+ "request_times": {
+  "file": "nps_request_times_0.2.1.json",
+  "sha256": "0b06d16e50ff07354e9be0ad35beb9226d9d4b3700caa2223c26265cf47a8056",
+  "source": {
+   "log_files": [
+    "capture_log/2026-11-20.jsonl",
+    "capture_log/2026-11-21.jsonl"
+   ],
+   "capture_version": "0.2.1",
+   "runner": "cli-loop",
+   "first_sent_at": "2026-11-20T20:01:20.784Z",
+   "last_sent_at": "2026-11-21T06:59:36.296Z",
+   "until": "2026-11-21T07:00:00Z",
+   "requests": 1341,
+   "answered": 1340,
+   "left_out_unanswered": 1
+  },
+  "pools": {
+   "json cold": "json cold",
+   "json warm": "json warm",
+   "head cold": "head (all)",
+   "head warm": "head warm",
+   "image cold": "image (all)",
+   "image warm": "image warm"
+  },
+  "seeds": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "drawn_counted": {
+   "head cold": 1173,
+   "head warm": 3941,
+   "image warm": 13457,
+   "json cold": 10109,
+   "json warm": 25695
+  }
+ },
+ "s3_latency_ms": 0.0,
+ "outcomes": {
+  "not_due": 554,
+  "rate_capped": 15854,
+  "stored": 13457,
+  "unchanged": 11607
+ },
+ "not_due_per_camera_per_day": 3.85,
+ "nps_requests_total": 181345,
+ "nps_requests_counted_by_stage": {
+  "head": 5114,
+  "image": 13457,
+  "json": 35804
+ },
+ "s3_calls_by_operation": {
+  "PutObject": 201515,
+  "GetObject": 178721,
+  "DeleteObject": 61674,
+  "HeadObject": 12693,
+  "ListObjectsV2": 3132
+ },
+ "s3_calls_by_operation_and_prefix": {
+  "DeleteObject cache/staging/": 20202,
+  "DeleteObject state/locks/": 41472,
+  "GetObject cache/staging/": 12693,
+  "GetObject capture_log/": 5184,
+  "GetObject state/capture/": 82944,
+  "GetObject state/capture/hosts/": 77900,
+  "HeadObject cache/staging/": 10101,
+  "HeadObject frames/": 2592,
+  "ListObjectsV2 cache/staging/": 432,
+  "ListObjectsV2 frames/": 2700,
+  "PutObject cache/staging/": 20196,
+  "PutObject capture_log/": 5184,
+  "PutObject frames/": 11902,
+  "PutObject state/capture/": 95847,
+  "PutObject state/locks/": 41472,
+  "PutObject thumbs/": 26914
+ },
+ "s3_calls_per_pass": {
+  "mean": 88.3,
+  "min": 50,
+  "max": 225
+ },
+ "fake_seconds_total": {
+  "pass": 197559.704,
+  "wait": 186016.613,
+  "nps_requests": 11543.092,
+  "s3_requests": 0.0,
+  "sleep_by_caller": {
+   "_space": 18891.961,
+   "_wait_until": 167124.651
+  }
+ },
+ "fake_pass_seconds": {
+  "mean": 38.11,
+  "max": 65.04
+ },
+ "fake_wait_seconds": {
+  "mean": 35.88,
+  "max": 53.34,
+  "mean_by_run": [
+   36.19,
+   34.9,
+   35.83,
+   35.07,
+   37.15,
+   36.14
+  ],
+  "p50_by_run": [
+   39.66,
+   37.72,
+   39.14,
+   36.96,
+   39.9,
+   39.5
+  ],
+  "p95_by_run": [
+   44.33,
+   44.27,
+   44.27,
+   44.42,
+   44.24,
+   44.27
+  ]
+ },
+ "fake_nps_request_seconds_per_pass": 2.23,
+ "fake_s3_seconds_per_pass": 0.0,
+ "fake_sleep_seconds_per_pass_by_caller": {
+  "_space": 3.64,
+  "_wait_until": 32.24
+ },
+ "noncurrent_bytes_by_prefix": {
+  "cache/staging/": 111834364,
+  "capture_log/": 7033118715,
+  "state/capture/": 5441937203,
+  "state/locks/": 6982768
+ },
+ "noncurrent_versions_by_prefix": {
+  "cache/staging/": 20202,
+  "capture_log/": 5166,
+  "state/capture/": 95847,
+  "state/locks/": 41472
+ },
+ "current_bytes_by_prefix": {
+  "cache/staging/": 366915,
+  "capture_log/": 27164276,
+  "frames/": 37343222,
+  "state/capture/": 502730,
+  "thumbs/": 57723760
+ },
+ "delete_markers": 61674,
+ "moto_keys_disposed": 462145,
+ "capture_log_bytes_counted": 48878131,
+ "replicates": [
+  {
+   "capture_version": "snow-globe-capture/0.3.0",
+   "warmup_hours": 168.0,
+   "hours_counted": 72.0,
+   "passes_counted": 864,
+   "viewpoints": 8,
+   "wall_s": 300.8,
+   "request_times": {
+    "file": "nps_request_times_0.2.1.json",
+    "sha256": "0b06d16e50ff07354e9be0ad35beb9226d9d4b3700caa2223c26265cf47a8056",
+    "source": {
+     "log_files": [
+      "capture_log/2026-11-20.jsonl",
+      "capture_log/2026-11-21.jsonl"
+     ],
+     "capture_version": "0.2.1",
+     "runner": "cli-loop",
+     "first_sent_at": "2026-11-20T20:01:20.784Z",
+     "last_sent_at": "2026-11-21T06:59:36.296Z",
+     "until": "2026-11-21T07:00:00Z",
+     "requests": 1341,
+     "answered": 1340,
+     "left_out_unanswered": 1
+    },
+    "seed": 1,
+    "pools": {
+     "json cold": "json cold",
+     "json warm": "json warm",
+     "head cold": "head (all)",
+     "head warm": "head warm",
+     "image cold": "image (all)",
+     "image warm": "image warm"
+    },
+    "drawn_counted": {
+     "head cold": 214,
+     "head warm": 638,
+     "image warm": 2236,
+     "json cold": 1727,
+     "json warm": 4239
+    }
+   },
+   "s3_latency_ms": 0.0,
+   "checked": null,
+   "outcomes": {
+    "stored": 2236,
+    "unchanged": 1860,
+    "rate_capped": 2722,
+    "not_due": 94
+   },
+   "not_due_per_camera_per_day": 3.92,
+   "nps_requests_total": 30229,
+   "nps_requests_counted_by_stage": {
+    "head": 852,
+    "image": 2236,
+    "json": 5966
+   },
+   "s3_calls_by_operation": {
+    "PutObject": 33550,
+    "GetObject": 29809,
+    "DeleteObject": 10272,
+    "HeadObject": 2112,
+    "ListObjectsV2": 522
+   },
+   "s3_calls_by_operation_and_prefix": {
+    "DeleteObject cache/staging/": 3360,
+    "DeleteObject state/locks/": 6912,
+    "GetObject cache/staging/": 2112,
+    "GetObject capture_log/": 864,
+    "GetObject state/capture/": 13824,
+    "GetObject state/capture/hosts/": 13009,
+    "HeadObject cache/staging/": 1680,
+    "HeadObject frames/": 432,
+    "ListObjectsV2 cache/staging/": 72,
+    "ListObjectsV2 frames/": 450,
+    "PutObject cache/staging/": 3356,
+    "PutObject capture_log/": 864,
+    "PutObject frames/": 1980,
+    "PutObject state/capture/": 15966,
+    "PutObject state/locks/": 6912,
+    "PutObject thumbs/": 4472
+   },
+   "s3_calls_per_pass": {
+    "mean": 88.27,
+    "min": 58,
+    "max": 225
+   },
+   "fake_seconds_total": {
+    "pass": 33233.057,
+    "wait": 31271.843,
+    "nps_requests": 1961.214,
+    "s3_requests": 0.0,
+    "sleep_by_caller": {
+     "_space": 3103.813,
+     "_wait_until": 28168.03
+    }
+   },
+   "fake_pass_seconds": {
+    "mean": 38.46,
+    "p50": 42.05,
+    "p95": 46.2,
+    "max": 65.04
+   },
+   "fake_wait_seconds": {
+    "mean": 36.19,
+    "p50": 39.66,
+    "p95": 44.33,
+    "max": 48.43
+   },
+   "fake_nps_request_seconds_per_pass": 2.27,
+   "fake_s3_seconds_per_pass": 0.0,
+   "fake_sleep_seconds_per_pass_by_caller": {
+    "_space": 3.59,
+    "_wait_until": 32.6
+   },
+   "noncurrent_bytes_by_prefix": {
+    "cache/staging/": 18602542,
+    "capture_log/": 1171854205,
+    "state/capture/": 906387032,
+    "state/locks/": 1163834
+   },
+   "noncurrent_versions_by_prefix": {
+    "cache/staging/": 3360,
+    "capture_log/": 861,
+    "state/capture/": 15966,
+    "state/locks/": 6912
+   },
+   "current_bytes_by_prefix": {
+    "cache/staging/": 354952,
+    "capture_log/": 27157930,
+    "frames/": 37347458,
+    "state/capture/": 501587,
+    "thumbs/": 57721721
+   },
+   "delete_markers": 10272,
+   "moto_keys_disposed": 77029,
+   "capture_log_bytes_counted": 8144848,
+   "capture_log_sizes": {
+    "capture_log/2026-11-20.jsonl": 2731323,
+    "capture_log/2026-11-21.jsonl": 2713512,
+    "capture_log/2026-11-22.jsonl": 2707952,
+    "capture_log/2026-11-23.jsonl": 2717867,
+    "capture_log/2026-11-24.jsonl": 2707658,
+    "capture_log/2026-11-25.jsonl": 2722692,
+    "capture_log/2026-11-26.jsonl": 2712078,
+    "capture_log/2026-11-27.jsonl": 2712315,
+    "capture_log/2026-11-28.jsonl": 2714794,
+    "capture_log/2026-11-29.jsonl": 2717739
+   }
+  },
+  {
+   "capture_version": "snow-globe-capture/0.3.0",
+   "warmup_hours": 168.0,
+   "hours_counted": 72.0,
+   "passes_counted": 864,
+   "viewpoints": 8,
+   "wall_s": 300.9,
+   "request_times": {
+    "file": "nps_request_times_0.2.1.json",
+    "sha256": "0b06d16e50ff07354e9be0ad35beb9226d9d4b3700caa2223c26265cf47a8056",
+    "source": {
+     "log_files": [
+      "capture_log/2026-11-20.jsonl",
+      "capture_log/2026-11-21.jsonl"
+     ],
+     "capture_version": "0.2.1",
+     "runner": "cli-loop",
+     "first_sent_at": "2026-11-20T20:01:20.784Z",
+     "last_sent_at": "2026-11-21T06:59:36.296Z",
+     "until": "2026-11-21T07:00:00Z",
+     "requests": 1341,
+     "answered": 1340,
+     "left_out_unanswered": 1
+    },
+    "seed": 2,
+    "pools": {
+     "json cold": "json cold",
+     "json warm": "json warm",
+     "head cold": "head (all)",
+     "head warm": "head warm",
+     "image cold": "image (all)",
+     "image warm": "image warm"
+    },
+    "drawn_counted": {
+     "head cold": 126,
+     "head warm": 727,
+     "image warm": 2253,
+     "json cold": 1596,
+     "json warm": 4375
+    }
+   },
+   "s3_latency_ms": 0.0,
+   "checked": null,
+   "outcomes": {
+    "stored": 2253,
+    "unchanged": 1917,
+    "rate_capped": 2654,
+    "not_due": 88
+   },
+   "not_due_per_camera_per_day": 3.67,
+   "nps_requests_total": 30219,
+   "nps_requests_counted_by_stage": {
+    "head": 853,
+    "image": 2253,
+    "json": 5971
+   },
+   "s3_calls_by_operation": {
+    "PutObject": 33641,
+    "GetObject": 29821,
+    "DeleteObject": 10294,
+    "HeadObject": 2123,
+    "ListObjectsV2": 522
+   },
+   "s3_calls_by_operation_and_prefix": {
+    "DeleteObject cache/staging/": 3382,
+    "DeleteObject state/locks/": 6912,
+    "GetObject cache/staging/": 2123,
+    "GetObject capture_log/": 864,
+    "GetObject state/capture/": 13824,
+    "GetObject state/capture/hosts/": 13010,
+    "HeadObject cache/staging/": 1691,
+    "HeadObject frames/": 432,
+    "ListObjectsV2 cache/staging/": 72,
+    "ListObjectsV2 frames/": 450,
+    "PutObject cache/staging/": 3380,
+    "PutObject capture_log/": 864,
+    "PutObject frames/": 1990,
+    "PutObject state/capture/": 15989,
+    "PutObject state/locks/": 6912,
+    "PutObject thumbs/": 4506
+   },
+   "s3_calls_per_pass": {
+    "mean": 88.43,
+    "min": 56,
+    "max": 222
+   },
+   "fake_seconds_total": {
+    "pass": 32007.227,
+    "wait": 30153.492,
+    "nps_requests": 1853.736,
+    "s3_requests": 0.0,
+    "sleep_by_caller": {
+     "_space": 3162.715,
+     "_wait_until": 26990.777
+    }
+   },
+   "fake_pass_seconds": {
+    "mean": 37.05,
+    "p50": 41.12,
+    "p95": 45.98,
+    "max": 64.47
+   },
+   "fake_wait_seconds": {
+    "mean": 34.9,
+    "p50": 37.72,
+    "p95": 44.27,
+    "max": 49.99
+   },
+   "fake_nps_request_seconds_per_pass": 2.15,
+   "fake_s3_seconds_per_pass": 0.0,
+   "fake_sleep_seconds_per_pass_by_caller": {
+    "_space": 3.66,
+    "_wait_until": 31.24
+   },
+   "noncurrent_bytes_by_prefix": {
+    "cache/staging/": 18721639,
+    "capture_log/": 1172721784,
+    "state/capture/": 908593820,
+    "state/locks/": 1163874
+   },
+   "noncurrent_versions_by_prefix": {
+    "cache/staging/": 3382,
+    "capture_log/": 861,
+    "state/capture/": 15989,
+    "state/locks/": 6912
+   },
+   "current_bytes_by_prefix": {
+    "cache/staging/": 364991,
+    "capture_log/": 27176438,
+    "frames/": 37368677,
+    "state/capture/": 503721,
+    "thumbs/": 57842974
+   },
+   "delete_markers": 10294,
+   "moto_keys_disposed": 77019,
+   "capture_log_bytes_counted": 8161255,
+   "capture_log_sizes": {
+    "capture_log/2026-11-20.jsonl": 2727063,
+    "capture_log/2026-11-21.jsonl": 2712081,
+    "capture_log/2026-11-22.jsonl": 2703491,
+    "capture_log/2026-11-23.jsonl": 2714551,
+    "capture_log/2026-11-24.jsonl": 2717242,
+    "capture_log/2026-11-25.jsonl": 2722317,
+    "capture_log/2026-11-26.jsonl": 2718438,
+    "capture_log/2026-11-27.jsonl": 2713428,
+    "capture_log/2026-11-28.jsonl": 2721224,
+    "capture_log/2026-11-29.jsonl": 2726603
+   }
+  },
+  {
+   "capture_version": "snow-globe-capture/0.3.0",
+   "warmup_hours": 168.0,
+   "hours_counted": 72.0,
+   "passes_counted": 864,
+   "viewpoints": 8,
+   "wall_s": 300.8,
+   "request_times": {
+    "file": "nps_request_times_0.2.1.json",
+    "sha256": "0b06d16e50ff07354e9be0ad35beb9226d9d4b3700caa2223c26265cf47a8056",
+    "source": {
+     "log_files": [
+      "capture_log/2026-11-20.jsonl",
+      "capture_log/2026-11-21.jsonl"
+     ],
+     "capture_version": "0.2.1",
+     "runner": "cli-loop",
+     "first_sent_at": "2026-11-20T20:01:20.784Z",
+     "last_sent_at": "2026-11-21T06:59:36.296Z",
+     "until": "2026-11-21T07:00:00Z",
+     "requests": 1341,
+     "answered": 1340,
+     "left_out_unanswered": 1
+    },
+    "seed": 3,
+    "pools": {
+     "json cold": "json cold",
+     "json warm": "json warm",
+     "head cold": "head (all)",
+     "head warm": "head warm",
+     "image cold": "image (all)",
+     "image warm": "image warm"
+    },
+    "drawn_counted": {
+     "head cold": 115,
+     "head warm": 736,
+     "image warm": 2250,
+     "json cold": 1712,
+     "json warm": 4249
+    }
+   },
+   "s3_latency_ms": 0.0,
+   "checked": null,
+   "outcomes": {
+    "unchanged": 1861,
+    "stored": 2250,
+    "rate_capped": 2701,
+    "not_due": 100
+   },
+   "not_due_per_camera_per_day": 4.17,
+   "nps_requests_total": 30228,
+   "nps_requests_counted_by_stage": {
+    "head": 851,
+    "image": 2250,
+    "json": 5961
+   },
+   "s3_calls_by_operation": {
+    "PutObject": 33614,
+    "GetObject": 29725,
+    "DeleteObject": 10292,
+    "HeadObject": 2122,
+    "ListObjectsV2": 522
+   },
+   "s3_calls_by_operation_and_prefix": {
+    "DeleteObject cache/staging/": 3380,
+    "DeleteObject state/locks/": 6912,
+    "GetObject cache/staging/": 2122,
+    "GetObject capture_log/": 864,
+    "GetObject state/capture/": 13824,
+    "GetObject state/capture/hosts/": 12915,
+    "HeadObject cache/staging/": 1690,
+    "HeadObject frames/": 432,
+    "ListObjectsV2 cache/staging/": 72,
+    "ListObjectsV2 frames/": 450,
+    "PutObject cache/staging/": 3376,
+    "PutObject capture_log/": 864,
+    "PutObject frames/": 1988,
+    "PutObject state/capture/": 15974,
+    "PutObject state/locks/": 6912,
+    "PutObject thumbs/": 4500
+   },
+   "s3_calls_per_pass": {
+    "mean": 88.28,
+    "min": 50,
+    "max": 222
+   },
+   "fake_seconds_total": {
+    "pass": 32908.75,
+    "wait": 30958.817,
+    "nps_requests": 1949.933,
+    "s3_requests": 0.0,
+    "sleep_by_caller": {
+     "_space": 3244.003,
+     "_wait_until": 27714.814
+    }
+   },
+   "fake_pass_seconds": {
+    "mean": 38.09,
+    "p50": 41.16,
+    "p95": 45.95,
+    "max": 63.57
+   },
+   "fake_wait_seconds": {
+    "mean": 35.83,
+    "p50": 39.14,
+    "p95": 44.27,
+    "max": 50.95
+   },
+   "fake_nps_request_seconds_per_pass": 2.26,
+   "fake_s3_seconds_per_pass": 0.0,
+   "fake_sleep_seconds_per_pass_by_caller": {
+    "_space": 3.75,
+    "_wait_until": 32.08
+   },
+   "noncurrent_bytes_by_prefix": {
+    "cache/staging/": 18713591,
+    "capture_log/": 1173884140,
+    "state/capture/": 907483290,
+    "state/locks/": 1163850
+   },
+   "noncurrent_versions_by_prefix": {
+    "cache/staging/": 3380,
+    "capture_log/": 861,
+    "state/capture/": 15974,
+    "state/locks/": 6912
+   },
+   "current_bytes_by_prefix": {
+    "cache/staging/": 353928,
+    "capture_log/": 27176014,
+    "frames/": 37352785,
+    "state/capture/": 502759,
+    "thumbs/": 57732819
+   },
+   "delete_markers": 10292,
+   "moto_keys_disposed": 77028,
+   "capture_log_bytes_counted": 8154373,
+   "capture_log_sizes": {
+    "capture_log/2026-11-20.jsonl": 2732550,
+    "capture_log/2026-11-21.jsonl": 2709981,
+    "capture_log/2026-11-22.jsonl": 2722699,
+    "capture_log/2026-11-23.jsonl": 2720078,
+    "capture_log/2026-11-24.jsonl": 2716256,
+    "capture_log/2026-11-25.jsonl": 2717489,
+    "capture_log/2026-11-26.jsonl": 2702588,
+    "capture_log/2026-11-27.jsonl": 2716236,
+    "capture_log/2026-11-28.jsonl": 2718334,
+    "capture_log/2026-11-29.jsonl": 2719803
+   }
+  },
+  {
+   "capture_version": "snow-globe-capture/0.3.0",
+   "warmup_hours": 168.0,
+   "hours_counted": 72.0,
+   "passes_counted": 864,
+   "viewpoints": 8,
+   "wall_s": 334.9,
+   "request_times": {
+    "file": "nps_request_times_0.2.1.json",
+    "sha256": "0b06d16e50ff07354e9be0ad35beb9226d9d4b3700caa2223c26265cf47a8056",
+    "source": {
+     "log_files": [
+      "capture_log/2026-11-20.jsonl",
+      "capture_log/2026-11-21.jsonl"
+     ],
+     "capture_version": "0.2.1",
+     "runner": "cli-loop",
+     "first_sent_at": "2026-11-20T20:01:20.784Z",
+     "last_sent_at": "2026-11-21T06:59:36.296Z",
+     "until": "2026-11-21T07:00:00Z",
+     "requests": 1341,
+     "answered": 1340,
+     "left_out_unanswered": 1
+    },
+    "seed": 4,
+    "pools": {
+     "json cold": "json cold",
+     "json warm": "json warm",
+     "head cold": "head (all)",
+     "head warm": "head warm",
+     "image cold": "image (all)",
+     "image warm": "image warm"
+    },
+    "drawn_counted": {
+     "head cold": 142,
+     "head warm": 709,
+     "image warm": 2235,
+     "json cold": 1706,
+     "json warm": 4253
+    }
+   },
+   "s3_latency_ms": 0.0,
+   "checked": null,
+   "outcomes": {
+    "unchanged": 1914,
+    "stored": 2235,
+    "rate_capped": 2661,
+    "not_due": 102
+   },
+   "not_due_per_camera_per_day": 4.25,
+   "nps_requests_total": 30228,
+   "nps_requests_counted_by_stage": {
+    "head": 851,
+    "image": 2235,
+    "json": 5959
+   },
+   "s3_calls_by_operation": {
+    "PutObject": 33537,
+    "GetObject": 29712,
+    "DeleteObject": 10264,
+    "HeadObject": 2108,
+    "ListObjectsV2": 522
+   },
+   "s3_calls_by_operation_and_prefix": {
+    "DeleteObject cache/staging/": 3352,
+    "DeleteObject state/locks/": 6912,
+    "GetObject cache/staging/": 2108,
+    "GetObject capture_log/": 864,
+    "GetObject state/capture/": 13824,
+    "GetObject state/capture/hosts/": 12916,
+    "HeadObject cache/staging/": 1676,
+    "HeadObject frames/": 432,
+    "ListObjectsV2 cache/staging/": 72,
+    "ListObjectsV2 frames/": 450,
+    "PutObject cache/staging/": 3354,
+    "PutObject capture_log/": 864,
+    "PutObject frames/": 1980,
+    "PutObject state/capture/": 15957,
+    "PutObject state/locks/": 6912,
+    "PutObject thumbs/": 4470
+   },
+   "s3_calls_per_pass": {
+    "mean": 88.13,
+    "min": 57,
+    "max": 218
+   },
+   "fake_seconds_total": {
+    "pass": 32334.684,
+    "wait": 30304.145,
+    "nps_requests": 2030.539,
+    "s3_requests": 0.0,
+    "sleep_by_caller": {
+     "_space": 3171.466,
+     "_wait_until": 27132.679
+    }
+   },
+   "fake_pass_seconds": {
+    "mean": 37.42,
+    "p50": 40.38,
+    "p95": 46.16,
+    "max": 64.74
+   },
+   "fake_wait_seconds": {
+    "mean": 35.07,
+    "p50": 36.96,
+    "p95": 44.42,
+    "max": 48.39
+   },
+   "fake_nps_request_seconds_per_pass": 2.35,
+   "fake_s3_seconds_per_pass": 0.0,
+   "fake_sleep_seconds_per_pass_by_caller": {
+    "_space": 3.67,
+    "_wait_until": 31.4
+   },
+   "noncurrent_bytes_by_prefix": {
+    "cache/staging/": 18554114,
+    "capture_log/": 1171579451,
+    "state/capture/": 905108770,
+    "state/locks/": 1163768
+   },
+   "noncurrent_versions_by_prefix": {
+    "cache/staging/": 3352,
+    "capture_log/": 861,
+    "state/capture/": 15957,
+    "state/locks/": 6912
+   },
+   "current_bytes_by_prefix": {
+    "cache/staging/": 375967,
+    "capture_log/": 27162716,
+    "frames/": 37302767,
+    "state/capture/": 502578,
+    "thumbs/": 57671207
+   },
+   "delete_markers": 10264,
+   "moto_keys_disposed": 77028,
+   "capture_log_bytes_counted": 8132454,
+   "capture_log_sizes": {
+    "capture_log/2026-11-20.jsonl": 2721090,
+    "capture_log/2026-11-21.jsonl": 2722966,
+    "capture_log/2026-11-22.jsonl": 2714489,
+    "capture_log/2026-11-23.jsonl": 2718826,
+    "capture_log/2026-11-24.jsonl": 2716878,
+    "capture_log/2026-11-25.jsonl": 2723612,
+    "capture_log/2026-11-26.jsonl": 2712401,
+    "capture_log/2026-11-27.jsonl": 2705928,
+    "capture_log/2026-11-28.jsonl": 2711518,
+    "capture_log/2026-11-29.jsonl": 2715008
+   }
+  },
+  {
+   "capture_version": "snow-globe-capture/0.3.0",
+   "warmup_hours": 168.0,
+   "hours_counted": 72.0,
+   "passes_counted": 864,
+   "viewpoints": 8,
+   "wall_s": 334.6,
+   "request_times": {
+    "file": "nps_request_times_0.2.1.json",
+    "sha256": "0b06d16e50ff07354e9be0ad35beb9226d9d4b3700caa2223c26265cf47a8056",
+    "source": {
+     "log_files": [
+      "capture_log/2026-11-20.jsonl",
+      "capture_log/2026-11-21.jsonl"
+     ],
+     "capture_version": "0.2.1",
+     "runner": "cli-loop",
+     "first_sent_at": "2026-11-20T20:01:20.784Z",
+     "last_sent_at": "2026-11-21T06:59:36.296Z",
+     "until": "2026-11-21T07:00:00Z",
+     "requests": 1341,
+     "answered": 1340,
+     "left_out_unanswered": 1
+    },
+    "seed": 5,
+    "pools": {
+     "json cold": "json cold",
+     "json warm": "json warm",
+     "head cold": "head (all)",
+     "head warm": "head warm",
+     "image cold": "image (all)",
+     "image warm": "image warm"
+    },
+    "drawn_counted": {
+     "head cold": 291,
+     "head warm": 563,
+     "image warm": 2242,
+     "json cold": 1663,
+     "json warm": 4318
+    }
+   },
+   "s3_latency_ms": 0.0,
+   "checked": null,
+   "outcomes": {
+    "stored": 2242,
+    "unchanged": 1960,
+    "rate_capped": 2633,
+    "not_due": 77
+   },
+   "not_due_per_camera_per_day": 3.21,
+   "nps_requests_total": 30226,
+   "nps_requests_counted_by_stage": {
+    "head": 854,
+    "image": 2242,
+    "json": 5981
+   },
+   "s3_calls_by_operation": {
+    "PutObject": 33597,
+    "GetObject": 29886,
+    "DeleteObject": 10276,
+    "HeadObject": 2114,
+    "ListObjectsV2": 522
+   },
+   "s3_calls_by_operation_and_prefix": {
+    "DeleteObject cache/staging/": 3364,
+    "DeleteObject state/locks/": 6912,
+    "GetObject cache/staging/": 2114,
+    "GetObject capture_log/": 864,
+    "GetObject state/capture/": 13824,
+    "GetObject state/capture/hosts/": 13084,
+    "HeadObject cache/staging/": 1682,
+    "HeadObject frames/": 432,
+    "ListObjectsV2 cache/staging/": 72,
+    "ListObjectsV2 frames/": 450,
+    "PutObject cache/staging/": 3366,
+    "PutObject capture_log/": 864,
+    "PutObject frames/": 1982,
+    "PutObject state/capture/": 15989,
+    "PutObject state/locks/": 6912,
+    "PutObject thumbs/": 4484
+   },
+   "s3_calls_per_pass": {
+    "mean": 88.42,
+    "min": 56,
+    "max": 222
+   },
+   "fake_seconds_total": {
+    "pass": 33890.377,
+    "wait": 32101.713,
+    "nps_requests": 1788.664,
+    "s3_requests": 0.0,
+    "sleep_by_caller": {
+     "_space": 3051.975,
+     "_wait_until": 29049.737
+    }
+   },
+   "fake_pass_seconds": {
+    "mean": 39.22,
+    "p50": 42.66,
+    "p95": 45.98,
+    "max": 55.54
+   },
+   "fake_wait_seconds": {
+    "mean": 37.15,
+    "p50": 39.9,
+    "p95": 44.24,
+    "max": 48.83
+   },
+   "fake_nps_request_seconds_per_pass": 2.07,
+   "fake_s3_seconds_per_pass": 0.0,
+   "fake_sleep_seconds_per_pass_by_caller": {
+    "_space": 3.53,
+    "_wait_until": 33.62
+   },
+   "noncurrent_bytes_by_prefix": {
+    "cache/staging/": 18620613,
+    "capture_log/": 1171947433,
+    "state/capture/": 907889091,
+    "state/locks/": 1163696
+   },
+   "noncurrent_versions_by_prefix": {
+    "cache/staging/": 3364,
+    "capture_log/": 861,
+    "state/capture/": 15989,
+    "state/locks/": 6912
+   },
+   "current_bytes_by_prefix": {
+    "cache/staging/": 375652,
+    "capture_log/": 27159952,
+    "frames/": 37386256,
+    "state/capture/": 502754,
+    "thumbs/": 57702072
+   },
+   "delete_markers": 10276,
+   "moto_keys_disposed": 77026,
+   "capture_log_bytes_counted": 8155212,
+   "capture_log_sizes": {
+    "capture_log/2026-11-20.jsonl": 2712692,
+    "capture_log/2026-11-21.jsonl": 2710831,
+    "capture_log/2026-11-22.jsonl": 2720298,
+    "capture_log/2026-11-23.jsonl": 2705556,
+    "capture_log/2026-11-24.jsonl": 2717492,
+    "capture_log/2026-11-25.jsonl": 2729385,
+    "capture_log/2026-11-26.jsonl": 2708486,
+    "capture_log/2026-11-27.jsonl": 2715240,
+    "capture_log/2026-11-28.jsonl": 2720574,
+    "capture_log/2026-11-29.jsonl": 2719398
+   }
+  },
+  {
+   "capture_version": "snow-globe-capture/0.3.0",
+   "warmup_hours": 168.0,
+   "hours_counted": 72.0,
+   "passes_counted": 864,
+   "viewpoints": 8,
+   "wall_s": 334.5,
+   "request_times": {
+    "file": "nps_request_times_0.2.1.json",
+    "sha256": "0b06d16e50ff07354e9be0ad35beb9226d9d4b3700caa2223c26265cf47a8056",
+    "source": {
+     "log_files": [
+      "capture_log/2026-11-20.jsonl",
+      "capture_log/2026-11-21.jsonl"
+     ],
+     "capture_version": "0.2.1",
+     "runner": "cli-loop",
+     "first_sent_at": "2026-11-20T20:01:20.784Z",
+     "last_sent_at": "2026-11-21T06:59:36.296Z",
+     "until": "2026-11-21T07:00:00Z",
+     "requests": 1341,
+     "answered": 1340,
+     "left_out_unanswered": 1
+    },
+    "seed": 6,
+    "pools": {
+     "json cold": "json cold",
+     "json warm": "json warm",
+     "head cold": "head (all)",
+     "head warm": "head warm",
+     "image cold": "image (all)",
+     "image warm": "image warm"
+    },
+    "drawn_counted": {
+     "head cold": 285,
+     "head warm": 568,
+     "image warm": 2241,
+     "json cold": 1705,
+     "json warm": 4261
+    }
+   },
+   "s3_latency_ms": 0.0,
+   "checked": null,
+   "outcomes": {
+    "stored": 2241,
+    "unchanged": 2095,
+    "rate_capped": 2483,
+    "not_due": 93
+   },
+   "not_due_per_camera_per_day": 3.88,
+   "nps_requests_total": 30215,
+   "nps_requests_counted_by_stage": {
+    "head": 853,
+    "image": 2241,
+    "json": 5966
+   },
+   "s3_calls_by_operation": {
+    "PutObject": 33576,
+    "GetObject": 29768,
+    "DeleteObject": 10276,
+    "HeadObject": 2114,
+    "ListObjectsV2": 522
+   },
+   "s3_calls_by_operation_and_prefix": {
+    "DeleteObject cache/staging/": 3364,
+    "DeleteObject state/locks/": 6912,
+    "GetObject cache/staging/": 2114,
+    "GetObject capture_log/": 864,
+    "GetObject state/capture/": 13824,
+    "GetObject state/capture/hosts/": 12966,
+    "HeadObject cache/staging/": 1682,
+    "HeadObject frames/": 432,
+    "ListObjectsV2 cache/staging/": 72,
+    "ListObjectsV2 frames/": 450,
+    "PutObject cache/staging/": 3364,
+    "PutObject capture_log/": 864,
+    "PutObject frames/": 1982,
+    "PutObject state/capture/": 15972,
+    "PutObject state/locks/": 6912,
+    "PutObject thumbs/": 4482
+   },
+   "s3_calls_per_pass": {
+    "mean": 88.26,
+    "min": 54,
+    "max": 222
+   },
+   "fake_seconds_total": {
+    "pass": 33185.609,
+    "wait": 31226.603,
+    "nps_requests": 1959.006,
+    "s3_requests": 0.0,
+    "sleep_by_caller": {
+     "_space": 3157.989,
+     "_wait_until": 28068.614
+    }
+   },
+   "fake_pass_seconds": {
+    "mean": 38.41,
+    "p50": 41.39,
+    "p95": 46.16,
+    "max": 64.94
+   },
+   "fake_wait_seconds": {
+    "mean": 36.14,
+    "p50": 39.5,
+    "p95": 44.27,
+    "max": 53.34
+   },
+   "fake_nps_request_seconds_per_pass": 2.27,
+   "fake_s3_seconds_per_pass": 0.0,
+   "fake_sleep_seconds_per_pass_by_caller": {
+    "_space": 3.66,
+    "_wait_until": 32.49
+   },
+   "noncurrent_bytes_by_prefix": {
+    "cache/staging/": 18621865,
+    "capture_log/": 1171131702,
+    "state/capture/": 906475200,
+    "state/locks/": 1163746
+   },
+   "noncurrent_versions_by_prefix": {
+    "cache/staging/": 3364,
+    "capture_log/": 861,
+    "state/capture/": 15972,
+    "state/locks/": 6912
+   },
+   "current_bytes_by_prefix": {
+    "cache/staging/": 375999,
+    "capture_log/": 27152605,
+    "frames/": 37301387,
+    "state/capture/": 502984,
+    "thumbs/": 57671766
+   },
+   "delete_markers": 10276,
+   "moto_keys_disposed": 77015,
+   "capture_log_bytes_counted": 8129989,
+   "capture_log_sizes": {
+    "capture_log/2026-11-20.jsonl": 2725779,
+    "capture_log/2026-11-21.jsonl": 2719536,
+    "capture_log/2026-11-22.jsonl": 2732005,
+    "capture_log/2026-11-23.jsonl": 2701826,
+    "capture_log/2026-11-24.jsonl": 2718763,
+    "capture_log/2026-11-25.jsonl": 2713690,
+    "capture_log/2026-11-26.jsonl": 2711017,
+    "capture_log/2026-11-27.jsonl": 2707324,
+    "capture_log/2026-11-28.jsonl": 2707730,
+    "capture_log/2026-11-29.jsonl": 2714935
+   }
+  }
+ ]
+}

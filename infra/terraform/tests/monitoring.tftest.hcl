@@ -195,6 +195,69 @@ run "budget_matches_spec" {
   }
 }
 
+# Credits and refunds are negative amounts that AWS Budgets counts by default. The account has $100 of sign-up credits
+# and an AWS Activate application for $5,000 (21 Nov 2026), so a budget that netted them would stay near $0 for two
+# years: no email, and D-035's hard stop would never fire. The budget must count costs before both.
+run "budget_counts_costs_before_credits_and_refunds" {
+  command = plan
+
+  assert {
+    condition     = length(aws_budgets_budget.monthly.cost_types) == 1
+    error_message = "the budget must set its cost types (AWS's defaults count credits and refunds)"
+  }
+  assert {
+    condition     = aws_budgets_budget.monthly.cost_types[0].include_credit == false
+    error_message = "credits must be excluded: they would hide real spend from the emails and the hard stop"
+  }
+  assert {
+    condition     = aws_budgets_budget.monthly.cost_types[0].include_refund == false
+    error_message = "refunds must be excluded: a refund in a month would hide that month's spend"
+  }
+  # Nothing else may shrink what the budget sees: every other cost type stays counted (unset means AWS's default,
+  # true), at unblended rates.
+  assert {
+    condition = alltrue([
+      for counted in [
+        aws_budgets_budget.monthly.cost_types[0].include_discount,
+        aws_budgets_budget.monthly.cost_types[0].include_other_subscription,
+        aws_budgets_budget.monthly.cost_types[0].include_recurring,
+        aws_budgets_budget.monthly.cost_types[0].include_subscription,
+        aws_budgets_budget.monthly.cost_types[0].include_support,
+        aws_budgets_budget.monthly.cost_types[0].include_tax,
+        aws_budgets_budget.monthly.cost_types[0].include_upfront,
+      ] : coalesce(counted, true)
+    ])
+    error_message = "only credits and refunds are excluded; every other cost type stays counted"
+  }
+  assert {
+    condition     = !coalesce(aws_budgets_budget.monthly.cost_types[0].use_amortized, false) && !coalesce(aws_budgets_budget.monthly.cost_types[0].use_blended, false)
+    error_message = "the budget reads unblended costs, as billed"
+  }
+  # The Budgets API takes either FilterExpression and Metrics or CostFilters and CostTypes, not a mix.
+  assert {
+    condition     = length(aws_budgets_budget.monthly.filter_expression) == 0 && aws_budgets_budget.monthly.metrics == null
+    error_message = "cost_types cannot be combined with filter_expression or metrics in one budget"
+  }
+  # The hard stop and the emails read this one budget, so what it counts is what they act on.
+  assert {
+    condition     = aws_budgets_budget_action.hard_stop[0].budget_name == aws_budgets_budget.monthly.name && aws_budgets_budget_action.hard_stop[0].notification_type == "ACTUAL"
+    error_message = "the hard stop acts on this budget's actual spend"
+  }
+}
+
+run "budget_still_counts_costs_before_credits_when_scoped_to_the_tag" {
+  command = plan
+
+  variables {
+    budget_scope_to_project_tag = true
+  }
+
+  assert {
+    condition     = aws_budgets_budget.monthly.cost_types[0].include_credit == false && aws_budgets_budget.monthly.cost_types[0].include_refund == false
+    error_message = "the tag-scoped budget must also count costs before credits and refunds"
+  }
+}
+
 # PRD §17: hosting has a hard cap of $3 a month. The owner must hear before the cap, and at it.
 run "budget_never_lets_hosting_pass_the_prd_cap_unannounced" {
   command = plan

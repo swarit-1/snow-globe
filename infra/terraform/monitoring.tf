@@ -92,9 +92,14 @@ resource "aws_budgets_budget" "monthly" {
   limit_unit   = "USD"
   time_unit    = "MONTHLY"
 
-  # Count gross usage: promotional credits (new accounts get up to $200) would otherwise hide real spend.
+  # Count costs before credits and refunds, so the emails and the hard stop see gross usage. AWS includes both by
+  # default, and both arrive as negative amounts: the account's $100 of sign-up credits, and the $5,000 of AWS Activate
+  # credits applied for on 21 Nov 2026 (two years), would hold a netted budget near $0, so no email and no hard stop
+  # would ever fire. Every other cost type keeps AWS's default (counted; unblended rates). The Budgets API reference
+  # marks CostTypes deprecated in favour of FilterExpression and Metrics (infra/README.md, "Hard stop at the cap").
   cost_types {
     include_credit = false
+    include_refund = false
   }
 
   dynamic "cost_filter" {

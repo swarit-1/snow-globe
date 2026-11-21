@@ -348,4 +348,28 @@ grep -q "^tick .* code $OLD/cache/runtime/3cd2ca7" "$NRT/logs/forecast_loop.out"
 ok
 end_case
 
+new_case a_supervisor_started_the_owners_way_is_found_and_stopped_first
+# Owner action 1: `cd` into the runtime's bin/ and start `/bin/bash supervise.sh` detached, so its command line holds
+# only the relative name (D-081). The switch must still find it through supervisor.pid and stop it before the loops.
+(cd "$RT/bin" && "${RUNENV[@]}" nohup /bin/bash supervise.sh >>"$RT/logs/supervisor.out" 2>&1 </dev/null &)
+for _ in $(seq 1 100); do
+  if [ -f "$RT/supervisor.pid" ] && kill -0 "$(cat "$RT/supervisor.pid")" 2>/dev/null; then break; fi
+  /bin/sleep 0.1
+done
+SUP="$(cat "$RT/supervisor.pid")"
+kill -0 "$SUP" 2>/dev/null || fail "the stub supervisor did not start"
+ps -p "$SUP" -o command= | grep -q -- "$RT/bin/supervise.sh" && fail "the supervisor's command line holds the full path; the case would not test the relative start"
+migrate FAKE_MET=false bash "$MIG" --dry-run --source-dir "$SRC"
+[ "$RC" -eq 0 ] || fail "dry run exit $RC"
+contains "$OUT" "supervisor: $SUP" "the dry run finds the relatively started supervisor"
+migrate bash "$MIG" --source-dir "$SRC" --detach
+[ "$RC" -eq 0 ] || fail "exit $RC"
+contains "$OUT" "stopping the supervisor $SUP first" "the supervisor stopped before the loops"
+if kill -0 "$SUP" 2>/dev/null; then fail "the supervisor $SUP still runs"; fi
+NRT="$H/snow-globe-data/cache/runtime"
+[ "$(count "$H/.*capture loop")" = 1 ] || fail "capture processes: $(pgrep -fl "$H/.*capture loop")"
+[ "$(count "/bin/bash $NRT/bin/forecast_loop.sh")" = 1 ] || fail "new stand-ins: $(pgrep -fl forecast_loop.sh)"
+ok
+end_case
+
 echo "infra/tests/test_migrate.sh: $PASSED passed, 0 failed"
