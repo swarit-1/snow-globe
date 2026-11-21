@@ -160,8 +160,13 @@ def test_backtest_pair_held_out_adds_days_and_guards_the_truth_before_opening_it
 def test_heldout_prints_the_committed_split(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["heldout"]) == 0
     summary = json.loads(capsys.readouterr().out)
-    # the committed split's own kind, kept with its pre-registered hash (D-038, D-080)
-    assert summary["kind"] == "lookout.heldout-periods" and summary["version"] >= 1
+    # the current split, version 2, under the new kind; then version 1's identity, which
+    # the M0.5 pair's records cite, with its own kind and pre-registered hash (D-038, D-080)
+    assert summary["kind"] == "snow-globe.heldout-periods" and summary["version"] == 2
+    assert summary["revision"].startswith("Version 2 (21 Nov 2026) corrects text only")
+    (earlier,) = summary["earlier_versions"]
+    assert earlier["kind"] == "lookout.heldout-periods" and earlier["version"] == 1
+    assert earlier["sha256"].startswith("c437544e")
     rainier = summary["viewpoints"][VP_ID]
     assert rainier["held_out_utc"] == [["2026-12-15T08:00:00Z", "2027-01-15T08:00:00Z"]]
     assert summary["viewpoints"]["grand-teton.science-center"]["scored"] is False

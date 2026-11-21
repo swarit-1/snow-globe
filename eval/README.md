@@ -1,6 +1,6 @@
 # snow-globe-eval
 
-Renamed from `lookout-eval` on 21 Nov 2026 (D-080); 0.2.0 is the same code under the Snow Globe names. It reads every file and log written under the old ones: `lookout.*` kinds, `lookout-capture/<version>` stamps (the data report compares releases, so the rename alone is never a restart), and the committed held-out split and landmark boxes, which keep their old `kind` because their SHA-256 values are on record. Measurements below dated before 21 Nov were taken under the old names.
+Renamed from `lookout-eval` on 21 Nov 2026 (D-080); 0.2.0 is the same code under the Snow Globe names. It reads every file and log written under the old ones: `lookout.*` kinds, `lookout-capture/<version>` stamps (the data report compares releases, so the rename alone is never a restart), and the held-out split's version 1 and the landmark boxes, which keep their old `kind` because their SHA-256 values are on record (the split's current version 2 is a new file under the new kind). Measurements below dated before 21 Nov were taken under the old names.
 
 Verification for Snow Globe (PRD §13): verification scores, the ephemeris wrapper, daylight, the frame quality
 gates, extractor v−1, baselines, the committed held-out split and the leakage guard, and the backtest pair.
@@ -69,7 +69,7 @@ the run it was made with.
 | `gates.py` | §8.6 | The frame quality gates: Fresh, Daylight and Usable frame applied; Same view, Clear lens and the Colour-mode cut-off not yet (reported as "not checked"); exclusion mask and counts |
 | `extractor.py` | §13.3 | v−1 landmark visibility from normalised Sobel energy against a Sun-binned clear-day reference; camera-in-cloud flag; camera-fault class (dark, saturated, blank) |
 | `frames.py` | data layout | Frame records (with NPS's own archive times) and the `frames/` and `archive/` catalogue; never reads under `quarantine/` |
-| `heldout.py`, `heldout_periods.json` | §13.2, §13.9 | The committed held-out split (D-019, D-022, D-024): periods per viewpoint and design, the archive guard, the quarantine, scoring exclusions; strict, versioned loader |
+| `heldout.py`, `heldout_periods_v2.json`, `heldout_periods.json` | §13.2, §13.9 | The committed held-out split (D-019, D-022, D-024), version 2 current and version 1 kept byte for byte: periods per viewpoint and design, the archive guard, the quarantine, scoring exclusions; strict, versioned loader; `cited_split` resolves a record's citation of either version |
 | `leakage.py` | §13.1, §13.9 | `FrameStore` with issue-time and fit views that raise `LeakageError`, under the committed split; no labels on held-out frames outside the sealed scoring; `frame_file_verdict` for one file |
 | `baselines.py` | §13.6, §9.1 | Persistence (a), (b) and the dev-only choice; climatology; S_rule; analog (Tier 0) |
 | `forecast_io.py` | §8.3 | Reads snow-globe-forecast run files: interpolation, availability, datums, winds, the summit ray |
@@ -83,9 +83,18 @@ the run it was made with.
 
 ## Choices worth knowing
 
-- **The held-out split** is committed in `src/snow_globe_eval/heldout_periods.json` (version 1). Every pair
-  record names its version and SHA-256. Local days are in each viewpoint's manifest zone; a test checks the
-  zones match.
+- **The held-out split** is committed in `src/snow_globe_eval/heldout_periods_v2.json` (version 2, SHA-256
+  `82574ceb38ebed8ad6c5f61d02868244bf0673d8c900e0bbcc477143a95ae3a3`), which every new record cites by its
+  version and SHA-256. Version 2 changes text only: its `archive_guard.date_rule` states the rule the
+  guards apply (any local or UTC date on or after 1 Jun 2026, the standard-time reading included; D-047,
+  D-070), its `kind` is the renamed one (D-080), and a `revision` note says what changed. Its periods,
+  viewpoints, scoring exclusions, guard date and quarantine folder are version 1's, which a test checks.
+  Version 1, `heldout_periods.json` (SHA-256 `c437544eecdd7a0d33b67c2374e1d388ebe45c36aeca4b2923b39c0d1d31de83`,
+  D-038), stays byte for byte, old `kind` and all: the M0.5 backtest pair's records cite it.
+  `committed_split(1)` loads it and `cited_split(citation)` resolves a record's `split` to either
+  version (by version and SHA-256), for a reader of records: no code reads a record's citation back yet,
+  so only its tests call it. `snow-globe-eval heldout` prints version 2 and version 1's identity.
+  Local days are in each viewpoint's manifest zone; a test checks the zones match.
 
   | Viewpoint | Held out | Notes |
   |---|---|---|
@@ -196,31 +205,61 @@ in full in `data_report/__init__.py`:
   an estimated due time from the median measured lag: of the window's complete runs, else of every
   complete run read, else D-027's 120 min. Cycles due up to 6 h before the window lose the part inside
   it, and no live run in the logs loses the whole window. With no per-tick record, these are lower bounds.
-- **Restarts:** a `capture_version` or runner change, a `loop_stopped` record, or two pass starts under
-  295 s apart (the 300 s interval less a 5 s tolerance); for the stand-in, a change of fields or hours.
-  A capture restart's **excess** is the longest any camera went from its last poll before the restart to
-  its first poll after (send to send), less one 300 s interval, when positive. It is lost from that
-  camera's last poll + 300 s to its next poll; a camera not polled again yet is measured to the window's
-  end. A poll is before the restart when its record was written by the old loop's last record (its
-  `loop_stopped` record, else its last record, of the old version and runner, before the new loop's first
-  pass start). So a new loop that polls at once is split right, and so is one that sleeps in its first
-  pass when a `loop_stopped` record or a version or runner change tells the loops apart. The 02:39
-  restart of 20 Nov: polls 483.080–485.471 s apart, excess 185.471 s (Acadia).
+- **Restarts:** a `capture_version` or runner change, a `loop_stopped` or `loop_started` record between two
+  passes, or two pass starts under 295 s apart (the 300 s interval less a 5 s tolerance); for the
+  stand-in, a change of fields or hours. A pass starts at its `started_at` where capture logs it (0.3.0 on),
+  else at t − `duration_s` (every record so far; `started_from` says which). A capture restart's
+  **excess** is the longest any camera went from its last poll before the restart to its first poll after
+  (send to send), less one 300 s interval, when positive. It is lost from that camera's last poll + 300 s
+  to its next poll. A poll is before the restart when the old loop wrote it: at or before, in the logs,
+  the last record before the new loop's `loop_started` record (exact while the wall clock runs forward: a
+  loop writes it first, inside the NPS fetcher lock; records are ordered by `t`, then file and line, so a
+  clock stepped back across the restart can misplace it), else the old loop's `loop_stopped` record, else
+  its last record of the old version
+  and runner before the new loop's first pass start (`split_by`). So a new loop that polls at once is
+  split right, and so is one that sleeps in its first pass, always with 0.3.0's records and, before them,
+  when a `loop_stopped` record or a version or runner change tells the loops apart. The 02:39 restart of
+  20 Nov: polls 483.080–485.471 s apart, excess 185.471 s (Acadia).
+- **A camera not polled since a restart** (the lead's ruling, D-078): no poll after the restart in the
+  logs read. It is flagged on its row (`not_polled_since_restart`, and in the table) and listed in the
+  restart's `not_polled_since` with its own gap to the window's end. What that gap counts depends on the
+  latest capture loop in the logs read, the one that would poll it next (`capture.latest_loop`: its latest
+  pass record's `outcomes`, which every release logs for each camera of the pass, or a newer
+  `loop_started` record's `viewpoints`), which `in_latest_loop` gives:
+  - **listed** (`left_out` false): the camera is waiting, not yet due (after an ordinary restart, every
+    camera until the new loop's first polls) or in a back-off. Its gap so far counts in the excess, to
+    the window's end (`ongoing`), so the excess only grows until the next poll is logged and the clock
+    never shows met early. Leaving these out too would show 0 s of excess until the first polls: on the
+    live logs cut at 19:58 and at 20:01 UTC on 20 Nov, between the 19:44 restart's first pass (19:56:14,
+    every camera not yet due) and its first polls (20:01:20–20:01:36), the close would have been
+    322.174 s early.
+  - **not listed** (dropped), or no record lists the latest loop's cameras (`left_out` true): left out of
+    the excess, so a dropped camera can never keep the clock from closing, through its own restart or an
+    earlier one.
+
+  Once the logs hold its next poll it counts like any camera, its whole gap included: a long back-off set
+  before a restart is then in that restart's excess (D-069's rule as written), and so is the time a
+  dropped camera was out, from the moment a later loop lists it again.
 - **Polite collection at nps.gov** (PRD §15.3; the lead's rule of 20 Nov): nps.gov received a request no
   earlier than its send and no later than its answer. From the records' millisecond stamps, the earliest
   receipt is `sent_at` (capture 0.2.1), else t − `elapsed_ms` − 0.05 ms (`elapsed_ms` is rounded to
   0.1 ms; this assumes the Mac did not sleep mid-request), and none for a record with neither; the
-  latest is `answered_at` (rounded up), else t + 1 ms (t is written after the answer, truncated). So
+  latest is `answer_bound_at` (capture 0.2.1's bound for a request that failed after it may have left,
+  `answer_bound: failed_after_send`: 300 s after the failure), else `answered_at` (rounded up), else
+  t + 1 ms (t is written after the answer, truncated), and none for a record that names an `answer_bound`
+  with no `answer_bound_at`. So
   nps.gov saw two consecutive polls at least earliest(N+1) − latest(N) apart, and 5 consecutive image
   GETs over at least earliest(5th) − latest(1st). The report gives the shortest of each per camera and
   counts the **unproven** pairs and windows: not provably 300 s (3600 s) apart, because the bound is
-  under the limit (`under_limit`) or a send cannot be placed (`unbounded`). Unproven is not shown
+  under the limit (`under_limit`) or a send or an answer cannot be placed (`unbounded`). Unproven is not shown
   closer. The send-to-send columns stay beside them, and the tables and `rules.bases` name each
   figure's basis. Bounds are shown rounded down to the millisecond.
 - **The 72 h clock:** covered = elapsed − lost. The headline is the **gate rule**, the lead's decision of
   20 Nov that settles D-061: lost = the union of both jobs' outages and each capture restart's excess.
   Beside it, labelled: PLAN.md's capture-only figure (the capture outages alone) and each job's own
-  (capture: outages and restart excess; forecast: outages). Report `schema_version` 2.
+  (capture: outages and restart excess; forecast: outages). Report `schema_version` 3 (from 21 Nov: the
+  D-078 flag with `in_latest_loop`, `left_out` and the section's `latest_loop`, the restart split fields
+  and `answer_bound_at`; the figures of every record so far are those of version 2).
 - **State files** (`state/capture/<id>.json`, the fetcher lock) are read as they are when the report runs
   (`state_now`), not as of `--until`. The home directory is printed as `~`.
 
@@ -302,8 +341,9 @@ all (renderer timing, three runs, SwiftShader).
   - fits within one camera epoch (PRD §13.9). D-024's usable span per design-H camera is only a note in
     the split, so `FitView` does not filter by it, and a design-H fit can mix epochs. For example, Point
     Reyes's 2021–22 3:2 frames are a different view. This is not leakage. The fix is a per-viewpoint
-    `development_from` in the split (version 2, with a DECISIONS.md entry), applied in `FitView` and the
-    pair's fitted-asset check (`TODO(M2)` in `leakage.FitView`).
+    `development_from` in a new version of the split (version 3, since version 2 is the text-only
+    correction; with a DECISIONS.md entry), applied in `FitView` and the pair's fitted-asset check
+    (`TODO(M2)` in `leakage.FitView`).
 - **M1.5:**
   - per-layer cloud bases from model levels instead of the pressure-band mapping in `scene.py`, and the
     `PRES:cloud base` cross-check before `HGT:cloud base` is used (the M0.5 pair's camera cell had a

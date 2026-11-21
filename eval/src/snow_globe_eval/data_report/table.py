@@ -20,6 +20,12 @@ def _minutes(seconds: float | None) -> str:
 
 #: Short names for the table: capture 0.1.0's keep-everything, and D-028's two policies.
 _POLICY_SHORT = {"legacy-every": "legacy", "every": "every", "hourly-nearest": "hourly"}
+#: A camera not polled since a restart: does the latest loop in the logs list it?
+_IN_LATEST_LOOP = {
+    False: " (dropped: not one of the latest loop's cameras)",
+    True: " (one of the latest loop's cameras, not yet polled: not yet due, or in a back-off)",
+    None: " (no record lists the latest loop's cameras)",
+}
 
 
 def _policies(by_policy: Sequence[Mapping[str, Any]]) -> str:
@@ -68,19 +74,38 @@ def _capture_lines(capture: Mapping[str, Any]) -> list[str]:
         f"{'downloads by policy':<24}{'capped':>7}{'errors':>7}{'longest gap':>13}"
         f"{'min send gap':>14}{'GETs/h':>7}",
     ]
-    notes, later = [], []
+    notes, later, unpolled = [], [], []
     for vp, row in capture["viewpoints"].items():
         gaps = row["poll_gap_s"]
         longest = gaps["longest"]["s"] if gaps["longest"] else None
         shortest = gaps["shortest_on_send_times"]
         min_gap = "-" if shortest is None else f"{shortest['s']:.3f} s"
         frames = row["frames"]
+        flag = row.get("not_polled_since_restart")
+        mark = (
+            f"  [not polled since the restart at {_short(flag['restart_started_utc'])}]"
+            if flag
+            else ""
+        )
         lines.append(
             f"{vp:<28}{row['polls']:>6}{row['image_gets']:>6}{frames['full_size']:>6}"
             f"{frames['thumbnails']:>6}  {_policies(frames['by_policy']):<24}"
             f"{row['rate_capped']['total']:>7}{row['errors']['error_records']:>7}"
             f"{_minutes(longest):>13}{min_gap:>14}{row['max_image_gets_in_rolling_hour']['count']:>7}"
+            f"{mark}"
         )
+        if flag:
+            kept = _IN_LATEST_LOOP.get(flag.get("in_latest_loop"), "")
+            counts = (
+                "Left out of that restart's excess, so it cannot hold the clock open (D-078)"
+                if flag.get("left_out", True)
+                else "Counted in that restart's excess to the window's end until its next poll"
+            )
+            unpolled.append(
+                f"  {vp}: not polled since the restart at {_short(flag['restart_started_utc'])}"
+                f"{kept}; last poll sent {_short(flag['last_poll_utc'])}, "
+                f"{_minutes(flag['gap_to_window_end_s'])} before the window's end. {counts}"
+            )
         for kind, check in frames["disk"].items():
             if check["logged_missing"] or check["on_disk_not_logged"]:
                 notes.append(
@@ -97,6 +122,7 @@ def _capture_lines(capture: Mapping[str, Any]) -> list[str]:
         "as capture's scheduler spaced the polls; GETs/h is the most image GETs sent in any "
         "rolling hour (send times)"
     )
+    lines.extend(unpolled)
     lines.extend(notes or ["  disk: every logged frame and thumbnail is on disk, none unlogged"])
     return lines + later
 
@@ -127,8 +153,8 @@ def _polite_lines(report: Mapping[str, Any]) -> list[str]:
         if polls["unbounded"] or gets["unbounded"]:
             unbounded.append(
                 f"  {vp}: {polls['unbounded']} poll pairs and {gets['unbounded']} GET windows are "
-                "unproven because a request's send cannot be placed (no sent_at, no usable "
-                "elapsed_ms)"
+                "unproven because a request's send or answer cannot be placed (no sent_at and no "
+                "usable elapsed_ms, or an answer_bound with no answer_bound_at)"
             )
     lines.append(
         f"  unproven: not provably {poll_limit:g} s ({hour:g} s for {per_window} GETs) apart at "
@@ -139,7 +165,8 @@ def _polite_lines(report: Mapping[str, Any]) -> list[str]:
         "  bases: least gap = the next poll's earliest receipt - the previous poll's latest; "
         f"least span = the {per_window}th GET's earliest receipt - the 1st's latest, over every "
         f"{per_window} consecutive GETs. earliest = sent_at, else t - elapsed_ms - 0.05 ms; "
-        "latest = answered_at, else t + 1 ms (t is written after the answer, to the ms)"
+        "latest = answer_bound_at (a request that failed after it may have left: 300 s after "
+        "the failure), else answered_at, else t + 1 ms (t is written after the answer, to the ms)"
     )
     return lines + unbounded
 
@@ -217,22 +244,43 @@ def _outage_lines(report: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+#: How a restart's polls were split (a restart row's ``split_by``, capture.stopped_after).
+_SPLIT_BY = {
+    "loop_started": "the last record before loop_started",
+    "loop_stopped": "its loop_stopped record",
+    "old_loop_last_record": "the old loop's last record",
+}
+
+
 def _restart_lines(report: Mapping[str, Any]) -> list[str]:
     capture, forecast = report["capture"], report["forecast"]
     lines = ["Starts, stops and settings changes"]
     for row in capture["restarts"]:
         outage = ", an outage" if row["an_outage"] else ""
-        gaps = row["poll_gaps_s"]
-        excess = (
-            f"; excess {row['excess_s']:.3f} s (polls {min(gaps.values()):.3f}-"
-            f"{max(gaps.values()):.3f} s apart across it, longest "
-            f"{row['longest_poll_gap']['viewpoint_id']})"
-            if gaps
-            else "; excess - (no camera polled before it)"
-        )
+        gaps, unpolled = row["poll_gaps_s"], row.get("not_polled_since") or {}
+        left_out = [vp for vp, u in unpolled.items() if u.get("left_out", True)]
+        waiting = [vp for vp, u in unpolled.items() if not u.get("left_out", True)]
+        if gaps:
+            longest = row["longest_poll_gap"]
+            excess = (
+                f"; excess {row['excess_s']:.3f} s (polls {min(gaps.values()):.3f}-"
+                f"{max(gaps.values()):.3f} s apart across it, longest "
+                f"{longest['viewpoint_id']}{', ongoing' if longest['ongoing'] else ''})"
+            )
+        elif unpolled:
+            excess = "; excess - (no camera polled on both sides of it)"
+        else:
+            excess = "; excess - (no camera polled before it)"
+        if waiting:
+            excess += (
+                f"; not polled since it yet, counted to the window's end: {', '.join(waiting)}"
+            )
+        if left_out:
+            excess += f"; not polled since it: {', '.join(left_out)} (left out, D-078)"
+        split = _SPLIT_BY.get(str(row.get("split_by")), "the old loop's last record")
         lines.append(
-            f"  capture restart: stopped after {_short(row['stopped_after_utc'])}, started "
-            f"{_short(row['started_utc'])} ({row['duration_s']:.1f} s; passes "
+            f"  capture restart: stopped after {_short(row['stopped_after_utc'])} ({split}), "
+            f"started {_short(row['started_utc'])} ({row['duration_s']:.1f} s; passes "
             f"{row['pass_gap_s']:.1f} s apart{outage}{excess}): {'; '.join(row['evidence'])}"
         )
     for row in forecast["settings_changes"]:
@@ -257,7 +305,13 @@ def _exclusion_lines(report: Mapping[str, Any]) -> list[str]:
             f" {_short(row['first_utc'])} to {_short(row['last_utc'])}" if row["first_utc"] else ""
         )
         refs = "; ".join(
-            str(ref.get("ref") or ref.get("key") or ref.get("start") or "")
+            str(
+                ref.get("ref")
+                or ref.get("key")
+                or ref.get("start")
+                or ref.get("viewpoint_id")
+                or ""
+            )
             for ref in row["refs"][:3]
         )
         lines.append(

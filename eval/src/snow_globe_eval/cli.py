@@ -3,8 +3,9 @@
 - ``snow-globe-eval backtest-pair``: one v−1 backtest pair (see :mod:`.backtest_pair`).
 - ``snow-globe-eval ephem-check``: the ephemeris against NPS's ``SolarElevationAngle``
   (see :mod:`.ephem_check`).
-- ``snow-globe-eval heldout``: the committed held-out split (PRD §13.2, :mod:`.heldout`), and
-  with ``--check`` what it lets given frame files be used for (metadata only).
+- ``snow-globe-eval heldout``: the committed held-out split (PRD §13.2, :mod:`.heldout`; the
+  current version in full, and the identity of each earlier one, which older records cite),
+  and with ``--check`` what it lets given frame files be used for (metadata only).
 - ``snow-globe-eval data-report``: the M0.5 gate's log evidence, per viewpoint, with outages,
   exclusions and the 72 h clock (PRD §16 M0.5, :mod:`.data_report`); offline and read-only.
 
@@ -327,12 +328,15 @@ def _ephem_check(args: argparse.Namespace) -> int:
 
 
 def _heldout(args: argparse.Namespace) -> int:
-    from .heldout import committed_split
+    from .heldout import committed_split, committed_splits
     from .leakage import frame_file_verdict
 
     split = committed_split()
     if not args.check:
-        print(json.dumps(split.summary(), indent=2))
+        # The current split in full, and the identity of each earlier committed version,
+        # which older records cite (the M0.5 pair's records cite version 1).
+        earlier = [s.to_record() for v, s in committed_splits().items() if v < split.version]
+        print(json.dumps({**split.summary(), "earlier_versions": earlier}, indent=2))
         return 0
     from snow_globe_common.paths import data_dir
 

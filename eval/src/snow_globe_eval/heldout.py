@@ -1,9 +1,23 @@
 """The committed held-out split and its guards (D-019, D-022, D-024; PRD §13.2, §13.9).
 
 PRD §13.2: "the split is committed before any held-out frame is touched". The split is
-``heldout_periods.json`` beside this module. It is committed and versioned: its ``version``
-and the file's SHA-256 go into every record that depends on it (:meth:`HeldOutSplit.to_record`).
-:func:`committed_split` loads it with strict checks. Per viewpoint it gives:
+committed and versioned beside this module, one file per version (:data:`SPLIT_RESOURCES`): its
+``version`` and the file's SHA-256 go into every record that depends on it
+(:meth:`HeldOutSplit.to_record`). :func:`committed_split` loads one with strict checks: by
+default the current version, which new records cite.
+
+- **Version 1**, ``heldout_periods.json`` (SHA-256 ``c437544e…``, D-038), stays byte for byte:
+  the M0.5 backtest pair's records cite it, old ``kind`` and all. Its ``archive_guard.date_rule``
+  text is out of date (it calls the standard-time reading "eval only" and names no UTC date;
+  D-047, D-070); the rule the guard applies is the one below.
+- **Version 2**, ``heldout_periods_v2.json``, has the same periods, viewpoints, scoring
+  exclusions, guard date and quarantine folder, and corrected text: the date rule as applied,
+  the renamed ``kind`` (D-080), and a ``revision`` note saying what changed.
+
+:func:`cited_split` resolves a record's citation to the committed version it names, either
+one: an API for a reader of records. No code reads a record's citation back yet (new records
+write version 2's, and tests check what they write), so nothing calls it outside its tests.
+Per viewpoint the split gives:
 
 - **Held-out periods**, as whole local days in the viewpoint's time zone:
   - design P's sealed window, 15 Dec 2026 – 14 Jan 2027, extended by any outage (Rainier,
@@ -16,13 +30,16 @@ and the file's SHA-256 go into every record that depends on it (:meth:`HeldOutSp
 - **The archive guard** (D-019): archived NPS frames dated on or after 1 Jun 2026 are refused
   for development at every viewpoint. A frame is refused if *any* reading of its date, local
   or UTC, is on or after that day (the lead's reading of 20 Nov 2026, pending the owner's
-  D-038): the dates of ``ImageCreateDateTime`` and ``LocalTimeString``, the civil date of its
-  UTC time, ``ImageCreateDateTime`` read as local standard time (NPS's summer convention), the
-  UTC date of each of those and of the instant itself, and the record's own UTC time, local and
-  UTC (:func:`nps_dates`). This is the rule of ``workers/capture/src/snow_globe_capture/heldout.py``
-  (which has read the standard-time date too since D-047), reproduced here (eval does not
-  import capture) and kept in parity with it by tests on both sides (:func:`nps_local_dates`,
-  :func:`nps_utc_dates`, :func:`archive_guard_reason`).
+  D-038; D-070): the dates of ``ImageCreateDateTime`` and ``LocalTimeString``, the civil date
+  of its UTC time, ``ImageCreateDateTime`` read as local standard time (NPS's summer
+  convention, D-047), the UTC date of each of those and of the instant itself, and the
+  record's own UTC time, local and UTC (:func:`nps_dates`); and if no date can be read (it
+  fails closed). Split version 2's ``archive_guard.date_rule`` states this rule; version 1's
+  text predates D-047 and D-070, and the rule applies to both, since only their text differs.
+  This is the rule of ``workers/capture/src/snow_globe_capture/heldout.py`` (which has read the
+  standard-time date too since D-047), reproduced here (eval does not import capture) and kept
+  in parity with it by tests on both sides (:func:`nps_local_dates`, :func:`nps_utc_dates`,
+  :func:`archive_guard_reason`).
 - **The quarantine** (D-022): anything under ``<data dir>/quarantine/`` is refused on every
   path, for every data dir the machine may use: ``$SNOW_GLOBE_DATA_DIR``, ``$LOOKOUT_DATA_DIR``,
   ``~/snow-globe-data`` and ``~/lookout-data`` (the old names, D-080)
@@ -64,8 +81,10 @@ from snow_globe_common.paths import (
 from snow_globe_common.timeutil import isoformat_z, parse_nps_archive_time
 
 __all__ = [
+    "CURRENT_SPLIT_VERSION",
     "DESIGNS",
     "HELDOUT_PERIODS_RESOURCE",
+    "SPLIT_RESOURCES",
     "ArchiveGuard",
     "DayRange",
     "FrameLike",
@@ -78,7 +97,9 @@ __all__ = [
     "SealedScoring",
     "ViewpointSplit",
     "archive_guard_reason",
+    "cited_split",
     "committed_split",
+    "committed_splits",
     "key_quarantine_reason",
     "load_split",
     "nps_dates",
@@ -88,11 +109,18 @@ __all__ = [
     "split_from_dict",
 ]
 
-#: The committed split, a package resource beside this module.
-HELDOUT_PERIODS_RESOURCE = "heldout_periods.json"
+#: Every committed version of the split, a package resource beside this module, by version.
+#: Each file keeps its bytes: records cite its SHA-256.
+SPLIT_RESOURCES: Mapping[int, str] = MappingProxyType(
+    {1: "heldout_periods.json", 2: "heldout_periods_v2.json"}
+)
+#: The version :func:`committed_split` gives by default, and so the one new records cite.
+CURRENT_SPLIT_VERSION = 2
+#: The current split's file.
+HELDOUT_PERIODS_RESOURCE = SPLIT_RESOURCES[CURRENT_SPLIT_VERSION]
 KIND = "snow-globe.heldout-periods"
 #: The kind before the rename (D-080). The committed version-1 split carries it and keeps it:
-#: its SHA-256 is pre-registered (D-038), so its bytes never change.
+#: its SHA-256 is pre-registered (D-038), so its bytes never change. Version 2 carries KIND.
 LEGACY_KIND = "lookout.heldout-periods"
 #: Kinds a split document may carry, the current one first.
 KINDS: tuple[str, ...] = (KIND, LEGACY_KIND)
@@ -736,7 +764,9 @@ class ScoringExclusion:
 
 @dataclass(frozen=True)
 class ArchiveGuard:
-    """D-019's guard: archived frames dated on or after ``from_day`` wait for the sealed scoring."""
+    """D-019's guard: an archived frame waits for the sealed scoring when any of its dates,
+    local or UTC (:func:`nps_dates`; D-047, D-070), is on or after ``from_day``, or when none
+    can be read. Both split versions give 1 Jun 2026; version 2's ``date_rule`` text is this."""
 
     from_day: date
     source: str = ""
@@ -776,6 +806,8 @@ class HeldOutSplit:
     quarantine_dir: str
     #: The kind the document carries (:data:`KINDS`): records name the split as it is written.
     kind: str = KIND
+    #: What this version changed from the one before (version 2 on; empty for version 1).
+    revision: str = ""
 
     def viewpoint(self, viewpoint_id: str) -> ViewpointSplit:
         """A viewpoint's split; :class:`LeakageError` for a viewpoint the split does not name.
@@ -907,6 +939,7 @@ class HeldOutSplit:
             **self.to_record(),
             "decided": self.decided.isoformat(),
             "freeze": self.freeze.isoformat(),
+            "revision": self.revision or None,
             "periods": {name: p.to_dict() for name, p in self.periods.items()},
             "viewpoints": viewpoints,
             "scoring_exclusions": [
@@ -1007,7 +1040,7 @@ def split_from_dict(data: Mapping[str, Any], *, sha256: str, source: str) -> Hel
             "archive_guard",
             "quarantine",
         },
-        {"change_rule", "day_basis"},
+        {"change_rule", "day_basis", "revision"},
     )
     if data["kind"] not in KINDS:
         raise ValueError(f"{source}: kind must be {KIND!r} (or {LEGACY_KIND!r} before D-080)")
@@ -1135,6 +1168,7 @@ def split_from_dict(data: Mapping[str, Any], *, sha256: str, source: str) -> Hel
         archive_guard=guard,
         quarantine_dir=quarantine_dir,
         kind=data["kind"],
+        revision=top.text("revision") if "revision" in data else "",
     )
 
 
@@ -1149,7 +1183,51 @@ def load_split(path: str | os.PathLike[str]) -> HeldOutSplit:
 
 
 @cache
-def committed_split() -> HeldOutSplit:
-    """The committed split, ``snow_globe_eval/heldout_periods.json`` (loaded once)."""
-    raw = resources.files("snow_globe_eval").joinpath(HELDOUT_PERIODS_RESOURCE).read_bytes()
-    return _parse(raw, f"snow_globe_eval/{HELDOUT_PERIODS_RESOURCE}")
+def _committed(version: int) -> HeldOutSplit:
+    name = SPLIT_RESOURCES.get(version)
+    if name is None:
+        raise ValueError(f"no committed held-out split has version {version!r}")
+    raw = resources.files("snow_globe_eval").joinpath(name).read_bytes()
+    split = _parse(raw, f"snow_globe_eval/{name}")
+    if split.version != version:
+        raise ValueError(f"snow_globe_eval/{name} says version {split.version}, not {version}")
+    return split
+
+
+def committed_split(version: int | None = None) -> HeldOutSplit:
+    """A committed split (loaded once): the current one, :data:`CURRENT_SPLIT_VERSION`, by
+    default, which is what every new record cites; or an earlier ``version``, for records
+    that cite it (:func:`cited_split`). The file must say the version it is listed under."""
+    return _committed(CURRENT_SPLIT_VERSION if version is None else version)
+
+
+def committed_splits() -> dict[int, HeldOutSplit]:
+    """Every committed version of the split, oldest first."""
+    return {version: _committed(version) for version in sorted(SPLIT_RESOURCES)}
+
+
+def cited_split(citation: Mapping[str, Any]) -> HeldOutSplit:
+    """The committed split a record cites (its ``split``, :meth:`HeldOutSplit.to_record`).
+
+    Every committed version resolves: a citation matches the one with its ``version`` and
+    ``sha256``, under either kind (:data:`KINDS`) and whatever ``source`` path it names, since
+    records written before the rename name the package by its old name (D-080). The M0.5
+    backtest pair's records cite version 1; new records cite version 2. ``ValueError`` when no
+    committed version matches: such a record used a split that is not in git. It is for a
+    reader of records; none calls it yet (module docstring).
+    """
+    if not isinstance(citation, Mapping):
+        raise ValueError("a split citation must be an object with version and sha256")
+    version, sha256, kind = citation.get("version"), citation.get("sha256"), citation.get("kind")
+    whole = isinstance(version, int) and not isinstance(version, bool)
+    splits = committed_splits().values()
+    for split in splits:
+        if whole and split.version == version and split.sha256 == sha256:
+            if kind is not None and kind not in KINDS:
+                raise ValueError(f"the cited split's kind {kind!r} is not one of {list(KINDS)}")
+            return split
+    known = ", ".join(f"v{s.version} {s.sha256[:12]}" for s in splits)
+    raise ValueError(
+        f"no committed held-out split has version {version!r} and sha256 {sha256!r} "
+        f"(committed: {known})"
+    )

@@ -32,13 +32,19 @@ from snow_globe_eval.frames import (
     storage_reader,
 )
 from snow_globe_eval.heldout import (
+    CURRENT_SPLIT_VERSION,
     HELDOUT_PERIODS_RESOURCE,
+    KIND,
+    LEGACY_KIND,
+    SPLIT_RESOURCES,
     LeakageError,
     QuarantineGuard,
     SealedScoring,
     _standard_time_date,  # the summer reading, checked directly
     archive_guard_reason,
+    cited_split,
     committed_split,
+    committed_splits,
     key_quarantine_reason,
     load_split,
     nps_dates,
@@ -49,9 +55,22 @@ from snow_globe_eval.heldout import (
 )
 from snow_globe_eval.leakage import FrameStore
 
-SPLIT_FILE = (
-    Path(__file__).resolve().parents[1] / "src" / "snow_globe_eval" / HELDOUT_PERIODS_RESOURCE
-)
+PACKAGE = Path(__file__).resolve().parents[1] / "src" / "snow_globe_eval"
+SPLIT_FILE = PACKAGE / HELDOUT_PERIODS_RESOURCE  # the current version, 2
+SPLIT_V1_FILE = PACKAGE / SPLIT_RESOURCES[1]
+#: Each committed version's SHA-256, pinned on purpose: changing a file must change this.
+SPLIT_V1_SHA256 = "c437544eecdd7a0d33b67c2374e1d388ebe45c36aeca4b2923b39c0d1d31de83"  # D-038
+SPLIT_V2_SHA256 = "82574ceb38ebed8ad6c5f61d02868244bf0673d8c900e0bbcc477143a95ae3a3"
+#: The split as the M0.5 backtest pair's four records of 19-20 Nov cite it (scores/pairs/
+#: grand-canyon.yavapai/20240115T194500Z_L24h_7838502574.run1-4.json, read 21 Nov), written
+#: under the package's name before the rename (D-080).
+M05_PAIR_CITATION = {
+    "kind": LEGACY_KIND,
+    "version": 1,
+    "sha256": SPLIT_V1_SHA256,
+    "source": "lookout_eval/heldout_periods.json",
+    "decisions": ["D-019", "D-022", "D-024"],
+}
 CAPTURE_HELDOUT = (
     Path(__file__).resolve().parents[2] / "workers/capture/src/snow_globe_capture/heldout.py"
 )
@@ -89,18 +108,91 @@ def _live(vp: str, moment: datetime) -> FrameRecord:
 
 
 def test_the_committed_split_is_versioned_and_hashed() -> None:
+    """New records cite version 2, the current split, under the renamed kind (D-080)."""
     split = committed_split()
     raw = SPLIT_FILE.read_bytes()
-    assert split.version == 1 and split.sha256 == hashlib.sha256(raw).hexdigest()
-    # The committed file keeps the kind it was hashed with (D-038, D-080); records cite it so.
+    assert CURRENT_SPLIT_VERSION == 2 and split.version == 2
+    assert split.sha256 == hashlib.sha256(raw).hexdigest() == SPLIT_V2_SHA256
     assert split.to_record() == {
-        "kind": "lookout.heldout-periods",
-        "version": 1,
-        "sha256": hashlib.sha256(raw).hexdigest(),
-        "source": "snow_globe_eval/heldout_periods.json",
-        "decisions": ["D-019", "D-022", "D-024"],
+        "kind": KIND,
+        "version": 2,
+        "sha256": SPLIT_V2_SHA256,
+        "source": "snow_globe_eval/heldout_periods_v2.json",
+        "decisions": ["D-019", "D-022", "D-024", "D-038", "D-047", "D-070", "D-080", "D-085"],
     }
-    assert split.decided == date(2026, 11, 19) and split.freeze == date(2026, 12, 14)
+    assert split.decided == date(2026, 11, 21) and split.freeze == date(2026, 12, 14)
+    assert split.revision.startswith("Version 2 (21 Nov 2026) corrects text only")
+    assert committed_split(2) is split and committed_split(CURRENT_SPLIT_VERSION) is split
+
+
+def test_split_version_1_stays_byte_for_byte_for_the_records_that_cite_it() -> None:
+    """D-038's file keeps its bytes, its SHA-256 and its old kind: the M0.5 pair's records
+    cite it, and they resolve to it (as recorded, under the package's old name)."""
+    v1 = committed_split(1)
+    assert hashlib.sha256(SPLIT_V1_FILE.read_bytes()).hexdigest() == SPLIT_V1_SHA256
+    assert v1.sha256 == SPLIT_V1_SHA256 and v1.version == 1 and v1.kind == LEGACY_KIND
+    assert v1.decided == date(2026, 11, 19) and v1.revision == ""
+    assert v1.to_record() == {**M05_PAIR_CITATION, "source": "snow_globe_eval/heldout_periods.json"}
+    assert list(committed_splits()) == [1, 2]
+    assert cited_split(M05_PAIR_CITATION) is v1
+    assert cited_split(committed_split().to_record()) is committed_split()
+    with pytest.raises(ValueError, match="no committed held-out split has version 3"):
+        committed_split(3)
+
+
+@pytest.mark.parametrize(
+    ("citation", "message"),
+    [
+        ({**M05_PAIR_CITATION, "sha256": "0" * 64}, "no committed held-out split"),
+        ({**M05_PAIR_CITATION, "version": 2}, "no committed held-out split"),  # v1's hash
+        ({**M05_PAIR_CITATION, "version": True}, "no committed held-out split"),
+        ({**M05_PAIR_CITATION, "kind": "snow-globe.other"}, "kind"),
+        ({"version": 1}, "no committed held-out split"),
+        ([1, SPLIT_V1_SHA256], "must be an object"),
+    ],
+)
+def test_a_citation_of_no_committed_split_is_refused(citation, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        cited_split(citation)
+
+
+def test_split_version_2_changes_text_only() -> None:
+    """The periods must not change: v2 differs from v1 in kind, version, date, decisions, its
+    revision note and three texts, and the rules both give are the same."""
+    v1 = json.loads(SPLIT_V1_FILE.read_text(encoding="utf-8"))
+    v2 = json.loads(SPLIT_FILE.read_text(encoding="utf-8"))
+    changed = {k for k in v1.keys() | v2.keys() if v1.get(k) != v2.get(k)}
+    assert changed == {
+        "kind",
+        "version",
+        "decided",
+        "decisions",
+        "revision",
+        "archive_guard",
+        "quarantine",
+    }
+    for block, texts in (("archive_guard", {"date_rule", "source"}), ("quarantine", {"rule"})):
+        assert {k for k in v1[block] if v1[block][k] != v2[block][k]} == texts
+        assert v1[block].keys() == v2[block].keys()
+    rule = v2["archive_guard"]["date_rule"]
+    assert "eval only" in v1["archive_guard"]["date_rule"] and "eval only" not in rule
+    assert "local or UTC" in rule and "UTC date of its instant" in rule and "D-070" in rule
+    assert "standard time" in rule and "D-047" in rule and "fails closed" in rule
+    old, new = committed_split(1), committed_split(2)
+    for field in ("freeze", "periods", "viewpoints", "scoring_exclusions", "quarantine_dir"):
+        assert getattr(old, field) == getattr(new, field), field
+    assert old.archive_guard.from_day == new.archive_guard.from_day == date(2026, 6, 1)
+    for vp in ALL:
+        assert old.held_out(vp) == new.held_out(vp)
+        for design in (None, *new.viewpoint(vp).designs):
+            assert old.fit_bound(vp, design) == new.fit_bound(vp, design)
+    evening = _archive(  # 31 May local evening at Point Reyes: 1 Jun in UTC (D-070)
+        PORE, datetime(2026, 6, 1, 5, 45, tzinfo=UTC), "05/31/2026 09:45:00 PM", None
+    )
+    may = _archive(PORE, datetime(2026, 5, 30, 20, tzinfo=UTC), "05/30/2026 12:00:00 PM", None)
+    for record in (evening, may):
+        assert old.held_out_reason(record) == new.held_out_reason(record)
+    assert new.held_out_reason(evening) is not None and new.held_out_reason(may) is None
 
 
 def test_the_committed_periods_are_those_of_d019_d022_d024() -> None:
@@ -810,6 +902,8 @@ def test_an_extension_extends_the_sealed_window(tmp_path: Path) -> None:
         (lambda d: d.update(schema_version=2), "schema_version"),
         (lambda d: d.update(version=0), "positive integer"),
         (lambda d: d.update(surprise=True), "unknown keys"),
+        (lambda d: d.update(revision=" "), "revision must be a non-empty string"),
+        (lambda d: d.update(revision=2), "revision must be a non-empty string"),
         (lambda d: d.pop("archive_guard"), "missing"),
         (lambda d: d["archive_guard"].update(viewpoints=[RAINIER]), "must be 'all'"),
         (lambda d: d["archive_guard"].update(from_local_day="2026-6-1"), "YYYY-MM-DD"),

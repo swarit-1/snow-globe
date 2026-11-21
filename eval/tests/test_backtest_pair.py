@@ -182,9 +182,13 @@ def test_full_pair_with_a_stand_in_renderer(world) -> None:
     assert checks["result"] == "passed" and len(checks["references"]) == 3
     assert all(c["passed"] for c in checks["references"]) and checks["plate"]["passed"]
     assert checks["held_out_source"].startswith(
-        "committed split snow_globe_eval/heldout_periods.json"
+        "committed split snow_globe_eval/heldout_periods_v2.json v2 (sha256 82574ceb38eb)"
     )
+    # New records cite the current split, version 2 (the M0.5 records stay on version 1).
     assert checks["split"] == committed_split().to_record()
+    assert (
+        checks["split"]["version"] == 2 and checks["split"]["kind"] == "snow-globe.heldout-periods"
+    )
     assert checks["held_out"] == [["2026-12-15T00:00:00-08:00", "2027-01-15T00:00:00-08:00"]]
     assert checks["fit_bound_utc"] == "2026-12-15T08:00:00Z" and checks["design"] is None
     assert checks["truth_held_out"] is False and checks["sealed_scoring"] is None

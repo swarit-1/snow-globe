@@ -14,13 +14,14 @@ Counted records are ``worker: capture`` records of a scheduled runner inside the
   settles D-048's open question): nps.gov received a request no earlier than its send and no
   later than its answer. :func:`earliest_receipt` and :func:`latest_receipt` bound those from
   the record's millisecond stamps (``sent_at``, else ``t − elapsed_ms`` less 0.05 ms;
-  ``answered_at``, else ``t`` + 1 ms). So the least gap nps.gov can have seen between two
-  consecutive polls is ``earliest(N+1) − latest(N)`` (``poll_gap_at_nps``), and the least
-  span of 5 consecutive image GETs is ``earliest(5th) − latest(1st)`` (``image_gets_at_nps``:
-  5 GETs within 3600 s would break the cap of 4 in any rolling hour). A pair or window whose
-  bound is under the limit, or whose last request has no earliest receipt, is *unproven*:
-  not shown to be at least 300 s (3600 s) apart at nps.gov, which is not the same as shown
-  to be closer;
+  ``answer_bound_at``, the bound capture logs for a request that failed after it may have
+  left, else ``answered_at``, else ``t`` + 1 ms). So the least gap nps.gov can have seen
+  between two consecutive polls is ``earliest(N+1) − latest(N)`` (``poll_gap_at_nps``), and
+  the least span of 5 consecutive image GETs is ``earliest(5th) − latest(1st)``
+  (``image_gets_at_nps``: 5 GETs within 3600 s would break the cap of 4 in any rolling hour).
+  A pair or window whose bound is under the limit, or whose last request has no earliest
+  receipt or first request no latest, is *unproven*: not shown to be at least 300 s (3600 s)
+  apart at nps.gov, which is not the same as shown to be closer;
 - **frames stored**, by the policy that applied (PRD §8.7, D-028): capture 0.1.0 kept every
   download at full size with no thumbnail (``legacy-every``); 0.2.0 keeps every frame at the
   design-P cameras (``every``) and, elsewhere, only the frame nearest each UTC hour
@@ -36,8 +37,20 @@ Counted records are ``worker: capture`` records of a scheduled runner inside the
 Outages and restarts come from the pass records (package docstring). A restart's *excess*
 (the gate rule's lost time for it, :func:`restart_excess`) comes from the poll records: the
 longest any camera went from its last poll before the restart to its first poll after, less
-one 300 s interval. A poll is before the restart when its record was written by the old loop's
-last record (:func:`stopped_after`).
+one 300 s interval. A poll is before the restart when the old loop wrote it: at or before the
+old loop's last record (:func:`stopped_after`), which a ``loop_started`` record or a pass's
+``started_at`` places exactly where capture logs them (unless the wall clock stepped back
+across the restart). A camera with no poll after the restart is flagged on its row
+(``not_polled_since_restart``; the lead's ruling of 20 Nov, D-078). Its gap so far counts, to
+the window's end, while the latest loop in the logs lists it (not yet due, or in a back-off);
+when that loop does not list it (dropped), it is left out of the excess (D-078).
+
+TODO(M1): ``answer_bound`` events of kind ``unanswered_reservation`` (a poll or GET reserved
+by a process that died before it saved the answer, so it may have been sent with no request
+record) are not yet turned into requests for the bounds at nps.gov; none is in the logs so
+far. The other ``answer_bound`` events (``legacy_state``, ``legacy_record``: capture 0.2.1's
+first read of 0.2.0's state) bound requests whose own records are in the logs and bound them
+more tightly, so they are not needed.
 """
 
 from __future__ import annotations
@@ -58,6 +71,7 @@ from .common import (
     Exclusions,
     Interval,
     Line,
+    LogKey,
     Logs,
     Reader,
     ReportOptions,
@@ -79,6 +93,9 @@ from .common import (
 
 __all__ = [
     "POLL_STAGES",
+    "SPLIT_LOOP_STARTED",
+    "SPLIT_LOOP_STOPPED",
+    "SPLIT_OLD_LOOP",
     "Pass",
     "capture_exclusion",
     "capture_section",
@@ -100,12 +117,20 @@ ELAPSED_ROUNDING = timedelta(microseconds=50)
 
 @dataclass(frozen=True, slots=True)
 class Pass:
-    """One scheduled ``pass`` record; ``start`` is its ``t`` minus ``duration_s``."""
+    """One scheduled ``pass`` record, and when the pass began.
+
+    ``start`` is the record's own ``started_at``, the pass's wall-clock start, where capture
+    logs one (``exact_start``); one later than the record's ``t`` (a wall-clock step back
+    during the pass) is not used. Otherwise, as for every record of capture 0.1.0 to 0.2.1,
+    ``start`` is ``t`` less ``duration_s``, which is on the monotonic clock (it does not count
+    sleep) and rounded to 0.01 s, so it can fall after the pass's true start.
+    """
 
     line: Line
     start: datetime
     version: str
     runner: str
+    exact_start: bool = False
 
     @property
     def t(self) -> datetime:
@@ -113,14 +138,14 @@ class Pass:
 
     @classmethod
     def of(cls, line: Line) -> Pass:
+        version = str(line.record.get("capture_version") or "unknown")
+        runner = str(line.record.get("runner") or "unknown")
+        started = timestamp(line.record.get("started_at"))
+        if started is not None and started <= line.t:
+            return cls(line, started, version, runner, exact_start=True)
         duration = number(line.record.get("duration_s"))
         start = line.t - timedelta(seconds=duration) if duration and duration > 0 else line.t
-        return cls(
-            line,
-            start,
-            str(line.record.get("capture_version") or "unknown"),
-            str(line.record.get("runner") or "unknown"),
-        )
+        return cls(line, start, version, runner)
 
 
 def _elapsed_ms(record: Mapping[str, Any]) -> float | None:
@@ -174,15 +199,34 @@ def earliest_receipt(line: Line) -> datetime | None:
     return line.t - timedelta(milliseconds=elapsed) - ELAPSED_ROUNDING
 
 
-def latest_receipt(line: Line) -> datetime:
-    """The latest nps.gov can have received a request: no later than its answer (PRD §15.3).
+def latest_receipt(line: Line) -> datetime | None:
+    """The latest nps.gov can have received a request: no later than its answer (PRD §15.3),
+    or None if the record cannot say.
 
-    ``answered_at`` when capture logs it (0.2.1: one clock reading once the response was read
-    in full or the request failed, rounded *up* to the millisecond). Else ``t`` + 1 ms:
-    capture reads ``t`` after the answer, but truncates it to the millisecond, so the reading
-    behind it can be up to 1 ms later than the stamp.
+    - ``answer_bound_at`` when the record carries one. Capture 0.2.1 adds it, with
+      ``answer_bound: "failed_after_send"``, to a request that failed after it may have left
+      this machine, with no response head back (a read timeout, a reset). nps.gov may still
+      receive such a request after the failure, so capture counts it as answered then:
+      ``FAILED_AFTER_SEND_BOUND_S`` (300 s) after the failure, rounded up to the millisecond,
+      the stamp its scheduler waits from. The later of it and ``answered_at`` (the failure's
+      own reading) is used, so a damaged record cannot make the bound earlier.
+    - Else ``answered_at`` when capture logs it (0.2.1: one clock reading once the response
+      was read in full or the request failed, rounded *up* to the millisecond).
+    - Else ``t`` + 1 ms: capture reads ``t`` after the answer, but truncates it to the
+      millisecond, so the reading behind it can be up to 1 ms later than the stamp.
+    - None when the record names an ``answer_bound`` but has no readable ``answer_bound_at``:
+      it says the request may have reached nps.gov after its stamps, without saying how late,
+      so a pair or window that starts with it proves nothing.
+
+    Records before 0.2.1 name no such bound, so a request of theirs that failed after its
+    send is bounded at its failure, as before.
     """
+    bound = timestamp(line.record.get("answer_bound_at"))
     answered = timestamp(line.record.get("answered_at"))
+    if bound is not None:
+        return bound if answered is None else max(bound, answered)
+    if line.record.get("answer_bound"):
+        return None
     return answered if answered is not None else line.t + STAMP_RESOLUTION
 
 
@@ -369,40 +413,74 @@ def _outages(
 
 
 def restart_excess(
-    split: datetime,
-    polls: Mapping[str, Sequence[tuple[datetime, datetime]]],
+    split: LogKey,
+    polls: Mapping[str, Sequence[tuple[LogKey, datetime]]],
     window: Window,
     options: ReportOptions,
+    listed: frozenset[str] | None = None,
 ) -> tuple[dict[str, Any], list[Interval]]:
     """A capture restart's excess: what the gate rule loses for it, and the interval lost.
 
     The lead's rule for the 72 h clock (20 Nov; settles D-061): each camera's gap runs from
     its last poll before the restart to its first poll after, and the excess is the longest of
     those gaps less one ``capture_interval_s``, when positive. The interval lost is that
-    camera's last poll + one interval to its next poll, clipped to the window. A poll is
-    before the restart when its record was written at or before ``split``, the old loop's last
-    record (:func:`stopped_after`); a record's ``t`` follows its answer, so the new loop's
-    first poll comes after the split even when it was sent within milliseconds of the new
-    pass's start. A camera with no poll after the restart in the logs read is measured to the
-    window's end (``ongoing``); one with no poll before it is left out. ``polls`` are each
-    camera's polls as ``(t, send)``, sorted by ``t``, from every log read (the last poll before
-    a restart can be before ``since``). Gaps are send to send (:func:`send_time`), as the
-    ``longest`` poll gap is.
+    camera's last poll + one interval to its next poll, clipped to the window.
+
+    A poll is before the restart when its record is at or before ``split`` in the logs (the
+    old loop's last record, :func:`stopped_after`, by :attr:`.common.Line.key`). A record's
+    ``t`` follows its answer, so the new loop's first poll comes after the split even when it
+    was sent within milliseconds of the new pass's start.
+
+    - A camera with no poll before the restart in the logs read is left out.
+    - A camera with no poll after it in the logs read is listed in ``not_polled_since`` with
+      its gap so far, from its last poll to the window's end (D-078's flag). What it counts
+      depends on ``listed``, the cameras of the latest capture loop in the logs read
+      (:func:`_latest_loop`), the loop that would poll it next (``in_latest_loop``):
+
+      - **listed** (``left_out`` False): not yet due (after an ordinary restart, every camera
+        until the new loop's first polls) or held back by a back-off. Its gap so far counts,
+        to the window's end (``ongoing``), as before the lead's ruling, so the excess never
+        shrinks as the window runs on: the clock cannot show met before the next poll and
+        lose it after.
+      - **not listed** (dropped from the loop), or ``listed`` None (no record names the
+        loop's cameras): left out of the excess (``left_out``; the lead's ruling of 20 Nov,
+        D-078). Measured to the window's end it would grow with the window, so one dropped
+        camera could keep the 72 h clock from ever closing.
+
+      Once the logs hold its next poll it counts like any other camera, its whole gap
+      included (D-069 as written): a back-off set before the restart, and the time a camera
+      dropped at it was out, from the moment a later loop lists it again.
+
+    ``polls`` are each camera's polls as ``(key, send)``, sorted, from every log read (the
+    last poll before a restart can be before ``since``, and the first after it after
+    ``until``). Gaps are send to send (:func:`send_time`), as the ``longest`` poll gap is.
     """
     interval = timedelta(seconds=options.capture_interval_s)
-    gaps: dict[str, tuple[datetime, datetime, bool]] = {}
+    gaps: dict[str, tuple[datetime, datetime]] = {}
+    unpolled: dict[str, datetime] = {}
     for vp, rows in polls.items():
         index = bisect.bisect_right(rows, split, key=lambda row: row[0])
         if index == 0:
             continue  # no poll before the restart in the logs read
         last = rows[index - 1][1]
-        after = rows[index][1] if index < len(rows) else None
-        end = after if after is not None else max(window.until, last)
-        gaps[vp] = (last, end, end >= window.until)
+        if index < len(rows):
+            gaps[vp] = (last, rows[index][1])
+            continue
+        unpolled[vp] = last
+        if listed is not None and vp in listed:  # the latest loop polls it: its gap so far counts
+            gaps[vp] = (last, max(window.until, last))
     fields: dict[str, Any] = {
         "poll_gaps_s": {
-            vp: round((end - last).total_seconds(), 3)
-            for vp, (last, end, _) in sorted(gaps.items())
+            vp: round((end - last).total_seconds(), 3) for vp, (last, end) in sorted(gaps.items())
+        },
+        "not_polled_since": {
+            vp: {
+                "last_poll_utc": iso(last),
+                "gap_to_window_end_s": round(max(0.0, (window.until - last).total_seconds()), 3),
+                "in_latest_loop": None if listed is None else vp in listed,
+                "left_out": listed is None or vp not in listed,
+            }
+            for vp, last in sorted(unpolled.items())
         },
         "longest_poll_gap": None,
         "excess_s": 0.0,
@@ -410,7 +488,7 @@ def restart_excess(
     }
     if not gaps:
         return fields, []
-    vp, (last, end, ongoing) = max(gaps.items(), key=lambda item: item[1][1] - item[1][0])
+    vp, (last, end) = max(gaps.items(), key=lambda item: item[1][1] - item[1][0])
     gap = (end - last).total_seconds()
     lost = clip([(last + interval, end)], window)
     fields.update(
@@ -419,7 +497,7 @@ def restart_excess(
             "s": round(gap, 3),
             "from_utc": iso(last),
             "to_utc": iso(end),
-            "ongoing": ongoing,
+            "ongoing": end >= window.until,
         },
         excess_s=round(max(0.0, gap - options.capture_interval_s), 3),
         lost_s=round(measure(lost), 3),
@@ -435,32 +513,113 @@ def _runner(line: Line) -> str:
     return str(line.record.get("runner") or "unknown")
 
 
-def stopped_after(a: Pass, b: Pass, scheduled: Sequence[Line], stops: Sequence[Line]) -> datetime:
-    """The old loop's last record before the restart between passes ``a`` and ``b``.
+#: How :func:`stopped_after` found the old loop's last record (a restart row's ``split_by``).
+SPLIT_LOOP_STARTED = "loop_started"
+SPLIT_LOOP_STOPPED = "loop_stopped"
+SPLIT_OLD_LOOP = "old_loop_last_record"
 
-    It splits each camera's polls into before and after (:func:`restart_excess`). It is the
-    last ``loop_stopped`` record between the passes (a loop writes one as it exits), else the
-    last record of ``a``'s ``capture_version`` and runner before ``b``'s start (its ``t`` less
-    ``duration_s``), else ``a``'s own ``t``.
 
-    ``duration_s`` is on the monotonic clock, which does not count sleep, so when the new
-    loop's first pass spanned a sleep its computed start falls after the polls it made before
-    the sleep. A ``loop_stopped`` record, or a change of version or runner, still tells the
-    two loops' records apart; with neither, those polls count as the old loop's.
-    TODO(M1): split at a pass's wall-clock start, or a ``loop_started`` record, once capture
-    logs one (neither 0.2.0 nor 0.2.1 does).
+def stopped_after(
+    a: Pass,
+    b: Pass,
+    scheduled: Sequence[Line],
+    stops: Sequence[Line],
+    starts: Sequence[Line] = (),
+) -> tuple[Line, str]:
+    """The old loop's last record before the restart between passes ``a`` and ``b``, and how
+    it was found.
+
+    It splits each camera's polls into before and after (:func:`restart_excess`):
+
+    1. ``loop_started``: when a ``loop_started`` record lies between the two pass records,
+       the last scheduled record before the first of them. A loop writes it as it starts,
+       holding the NPS fetcher lock, so the old loop has exited and everything it wrote was
+       written before it. That makes the split exact while the wall clock runs forward
+       across the restart. It is not exact when the clock steps back across it: records are
+       ordered by ``(t, source, line)`` (:attr:`.common.Line.key`), not by when they were
+       written, so a ``loop_started`` stamped before the old loop's last records sorts
+       before them. A loop that started and died before its first pass record (a second
+       ``loop_started`` before ``b``) is on the new side.
+    2. ``loop_stopped``: else the last ``loop_stopped`` record from ``a`` to ``b``'s start (a
+       loop writes one as it exits: capture 0.2.x when its pre-pass check fails, 0.3.0 on
+       every clean stop).
+    3. ``old_loop_last_record``: else the last record of ``a``'s release and runner before
+       ``b``'s start, else ``a`` itself. ``b``'s start is exact when its record carries
+       ``started_at`` (:class:`Pass`): the new loop sends nothing before it. For every record
+       of capture 0.1.0 to 0.2.1 it is ``t`` less ``duration_s``, on the monotonic clock, so
+       when the new loop's first pass spanned a sleep its computed start falls after the polls
+       it made before the sleep: a change of version or runner still tells the two loops'
+       records apart, and with neither those polls count as the old loop's.
     """
-    stopped = [s.t for s in stops if a.t <= s.t <= b.start]
+    new = [s for s in starts if a.line.key < s.key < b.line.key]
+    if new:
+        first = min(new, key=lambda s: s.key)
+        before = [line for line in scheduled if a.line.key <= line.key < first.key]
+        return max(before, key=lambda line: line.key, default=a.line), SPLIT_LOOP_STARTED
+    stopped = [s for s in stops if a.t <= s.t <= b.start]
     if stopped:
-        return max(stopped)
+        return max(stopped, key=lambda s: s.key), SPLIT_LOOP_STOPPED
     old = [
-        line.t
+        line
         for line in scheduled
         if a.t <= line.t < b.start
         and capture_release(_version(line)) == capture_release(a.version)
         and _runner(line) == a.runner
     ]
-    return max(old, default=a.t)
+    return max(old, key=lambda line: line.key, default=a.line), SPLIT_OLD_LOOP
+
+
+def _loop_started_evidence(line: Line) -> str:
+    pid = line.record.get("pid")
+    known = isinstance(pid, int) and not isinstance(pid, bool)
+    return f"loop_started at {iso(line.t)}" + (f" (pid {pid})" if known else "")
+
+
+def _loop_stopped_evidence(line: Line) -> str:
+    """``loop_stopped at <t>: <why>``: its ``error`` (every loop_stopped record of capture 0.2.x
+    carries one), else its ``reason`` and ``signal`` (0.3.0 on, which logs every clean stop)."""
+    record = line.record
+    why = record.get("error")
+    if not why:
+        why = " ".join(str(v) for v in (record.get("reason"), record.get("signal")) if v)
+    return f"loop_stopped at {iso(line.t)}: {why or None}"
+
+
+def _camera_list(line: Line) -> frozenset[str] | None:
+    """The cameras a record says its loop polls, or None for a record that names none.
+
+    A ``loop_started`` record's ``viewpoints`` (capture 0.3.0 on), or the cameras a ``pass``
+    record names in ``outcomes``: every capture release so far logs one outcome per camera of
+    the pass, one that was not due or was skipped (``stopping``, ``time_left``) included.
+    """
+    event = line.record.get("event")
+    if event == "loop_started":
+        cameras = line.record.get("viewpoints")
+        if isinstance(cameras, list) and all(isinstance(vp, str) for vp in cameras):
+            return frozenset(cameras)
+    elif event == "pass":
+        outcomes = line.record.get("outcomes")
+        if isinstance(outcomes, Mapping):
+            return frozenset(str(vp) for vp in outcomes)
+    return None
+
+
+def _latest_loop(scheduled: Sequence[Line]) -> tuple[frozenset[str] | None, Line | None]:
+    """The cameras of the latest capture loop in the logs read, and the record that lists them.
+
+    That is the last scheduled record, by place in the logs, that lists its loop's cameras
+    (:func:`_camera_list`): the running loop's latest pass record, or the ``loop_started``
+    record of a loop that has written no pass yet. It is the loop that would poll a camera
+    next, so it decides whether a camera not polled since a restart is waiting for its next
+    poll or was dropped (:func:`restart_excess`), whichever loop's restart it is: a camera an
+    earlier loop listed but the latest one dropped is left out, so it cannot hold the clock
+    open through the earlier restart. ``(None, None)`` when no record lists cameras.
+    """
+    for line in reversed(scheduled):
+        cameras = _camera_list(line)
+        if cameras is not None:
+            return cameras, line
+    return None, None
 
 
 def _restarts(
@@ -468,16 +627,20 @@ def _restarts(
     scheduled: Sequence[Line],
     window: Window,
     options: ReportOptions,
-    polls: Mapping[str, Sequence[tuple[datetime, datetime]]],
+    polls: Mapping[str, Sequence[tuple[LogKey, datetime]]],
+    listed: frozenset[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[Interval]]:
     """Loop stops and starts seen in the log (package docstring), and what their excess lost.
 
-    A restart is listed when its new loop's first pass starts inside the window, or when its
-    excess (:func:`restart_excess`) loses time inside it (a restart just before ``since``).
-    ``scheduled`` are the scheduled runners' capture records of every log read, so a
-    ``loop_stopped`` record or the old loop's last record can be before ``since``.
+    A restart is listed when its new loop's first pass starts inside the window, when its
+    excess (:func:`restart_excess`) loses time inside it (a restart just before ``since``), or
+    when a camera has not been polled since it. ``scheduled`` are the scheduled runners'
+    capture records of every log read, so a ``loop_stopped`` record or the old loop's last
+    record can be before ``since``. ``listed`` are the latest loop's cameras
+    (:func:`_latest_loop`).
     """
     stops = [line for line in scheduled if line.record.get("event") == "loop_stopped"]
+    starts = [line for line in scheduled if line.record.get("event") == "loop_started"]
     shortest = options.capture_interval_s - options.restart_tolerance_s
     rows: list[dict[str, Any]] = []
     lost: list[Interval] = []
@@ -495,25 +658,31 @@ def _restarts(
                 f"pass starts {spacing:.1f} s apart, under the "
                 f"{options.capture_interval_s:g} s interval of one loop"
             )
-        evidence.extend(
-            f"loop_stopped at {iso(s.t)}: {s.record.get('error')}"
-            for s in stops
-            if a.t <= s.t <= b.start
-        )
+        evidence.extend(_loop_stopped_evidence(s) for s in stops if a.t <= s.t <= b.start)
+        new_loops = [s for s in starts if a.line.key < s.key < b.line.key]
+        evidence.extend(_loop_started_evidence(s) for s in new_loops)
         if not evidence:
             continue
-        split = stopped_after(a, b, scheduled, stops)
-        excess, excess_lost = restart_excess(split, polls, window, options)
-        if b.start not in window and not excess_lost:
+        split, split_by = stopped_after(a, b, scheduled, stops, starts)
+        excess, excess_lost = restart_excess(split.key, polls, window, options, listed)
+        if b.start not in window and not excess_lost and not excess["not_polled_since"]:
             continue  # before the window, and its excess loses nothing inside it
         lost.extend(excess_lost)
+        loop_started = (
+            None
+            if not new_loops
+            else timestamp(new_loops[0].record.get("started_at")) or new_loops[0].t
+        )
         rows.append(
             {
                 "job": "capture",
                 "kind": "restart",
-                "stopped_after_utc": iso(split),
+                "stopped_after_utc": iso(split.t),
+                "split_by": split_by,
+                "loop_started_utc": iso(loop_started),
                 "started_utc": iso(b.start),
-                "duration_s": round((b.start - split).total_seconds(), 3),
+                "started_from": "started_at" if b.exact_start else "t - duration_s",
+                "duration_s": round((b.start - split.t).total_seconds(), 3),
                 "from_version": a.version,
                 "to_version": b.version,
                 "last_pass_utc": iso(a.t),
@@ -621,8 +790,9 @@ def _at_nps(requests: Sequence[Request], count: int, limit_s: float) -> dict[str
     down to the ms, with the two bounds it runs between), and ``unproven``: the runs not
     provably at least ``limit_s`` apart at nps.gov. They are the ``under_limit`` runs, whose
     least possible span is under ``limit_s`` (exactly ``limit_s`` is not under), and the
-    ``unbounded`` ones, whose last request's record cannot place its send. An unproven run is
-    not shown to have kept the rule; it is not shown to have broken it either.
+    ``unbounded`` ones, whose last request's record cannot place its send or first request's
+    record cannot bound its answer. An unproven run is not shown to have kept the rule; it is
+    not shown to have broken it either.
     """
     spans = provable_spans(requests, count)
     bounded = [(seconds, first, last) for seconds, first, last in spans if seconds is not None]
@@ -760,13 +930,23 @@ def capture_section(
         for line in logs.lines
         if line.record.get("worker") == "capture" and line.record.get("runner") in runners
     ]
-    polls: dict[str, list[tuple[datetime, datetime]]] = {}
+    polls: dict[str, list[tuple[LogKey, datetime]]] = {}
     for line in scheduled:
         if _poll_request(line, runners):
-            polls.setdefault(str(line.record["viewpoint_id"]), []).append((line.t, send_time(line)))
+            polls.setdefault(str(line.record["viewpoint_id"]), []).append(
+                (line.key, send_time(line))
+            )
     for rows in polls.values():
         rows.sort()
-    restarts, restart_lost = _restarts(passes, scheduled, window, options, polls)
+    listed, listed_by = _latest_loop(scheduled)
+    restarts, restart_lost = _restarts(passes, scheduled, window, options, polls, listed)
+    # D-078: a camera not polled since a restart is flagged on its row (the first such
+    # restart, oldest first), and gets a row even with no record in the window.
+    unpolled: dict[str, dict[str, Any]] = {}
+    for row in restarts:
+        for vp, gap in row["not_polled_since"].items():
+            unpolled.setdefault(vp, {"restart_started_utc": row["started_utc"], **gap})
+            cams.setdefault(vp, _Camera())
     spacing = [(b.t - a.t).total_seconds() for a, b in pairwise(in_window)]
     lock = reader.json("state/locks/nps-fetcher.lock")
     section = {
@@ -785,11 +965,22 @@ def capture_section(
         "records_counted": len(counted),
         "records_without_viewpoint": sorted_counter(without_viewpoint),
         "viewpoints": {
-            vp: _camera_row(reader, vp, cams[vp], window, options, now, later)
+            vp: {
+                **_camera_row(reader, vp, cams[vp], window, options, now, later),
+                "not_polled_since_restart": unpolled.get(vp),
+            }
             for vp in sorted(cams)
         },
         "outages": outages,
         "restarts": restarts,
+        # The latest loop in the logs read, which decides whether a camera not polled since a
+        # restart counts to the window's end or is left out (restart_excess).
+        "latest_loop": {
+            "cameras": sorted(listed) if listed is not None else None,
+            "listed_by": None if listed_by is None else listed_by.record.get("event"),
+            "record_utc": None if listed_by is None else iso(listed_by.t),
+            "capture_version": None if listed_by is None else _version(listed_by),
+        },
         "current_fetcher_lock": (
             {key: lock.get(key) for key in ("pid", "command", "started_at")}
             if isinstance(lock, dict)

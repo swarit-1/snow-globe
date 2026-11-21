@@ -34,14 +34,16 @@ before the window and first written inside it is a catch-up, counted and listed 
 **Polite collection at nps.gov** (PRD §15.3, per viewpoint): nps.gov received each request no
 earlier than its send and no later than its answer, which the record's millisecond stamps
 bound: the earliest receipt is ``sent_at``, else ``t − elapsed_ms`` less 0.05 ms (none when the
-record has neither), and the latest is ``answered_at``, else ``t`` + 1 ms (``t`` is written
-after the answer, truncated). So nps.gov saw two consecutive polls at least
-``earliest(N+1) − latest(N)`` apart (``poll_gap_at_nps``), and 5 consecutive image GETs spread
-over at least ``earliest(5th) − latest(1st)`` (``image_gets_at_nps``; 5 GETs within 3600 s
-would break the cap of 4 in a rolling hour). Each gives the shortest bound and the *unproven*
-pairs or windows: not provably 300 s (3600 s) apart, because the bound is under the limit or a
-send cannot be placed. Unproven is not the same as shown closer. The send-to-send figures stay
-beside them; the report's ``rules.bases`` names each figure's basis.
+record has neither), and the latest is ``answer_bound_at`` (capture 0.2.1's bound for a
+request that failed after it may have left: 300 s after the failure), else ``answered_at``,
+else ``t`` + 1 ms (``t`` is written after the answer, truncated). So nps.gov saw two
+consecutive polls at least ``earliest(N+1) − latest(N)`` apart (``poll_gap_at_nps``), and 5
+consecutive image GETs spread over at least ``earliest(5th) − latest(1st)``
+(``image_gets_at_nps``; 5 GETs within 3600 s would break the cap of 4 in a rolling hour).
+Each gives the shortest bound and the *unproven* pairs or windows: not provably 300 s (3600 s)
+apart, because the bound is under the limit or a send or an answer cannot be placed. Unproven
+is not the same as shown closer. The send-to-send figures stay beside them; the report's
+``rules.bases`` names each figure's basis.
 
 **Outages** (PLAN.md: they extend the 72 h clock, as they extend the sealed window):
 
@@ -63,16 +65,23 @@ beside them; the report's ``rules.bases`` names each figure's basis.
   the whole window. These are lower bounds: there is no per-tick record.
 - *Starts and stops:* a change of capture release (``capture_version``, read the same under
   its old and new names, ``lookout-capture/<v>`` and ``snow-globe-capture/<v>``, D-080) or of
-  runner between consecutive passes, a ``loop_stopped`` record, or two pass starts under 295 s
-  apart (the 300 s interval less a 5 s tolerance; one loop process never starts passes that
-  close) mark a capture restart. A restart's *excess* is the longest any camera went from its
-  last poll before the restart to its first poll after (send to send), less one 300 s
-  interval, when positive; it is lost from
-  that camera's last poll + 300 s to its next poll. A poll is before the restart when its
-  record was written by the old loop's last record: its ``loop_stopped`` record, else its last
-  record (the old version and runner) before the new loop's first pass start. A change in the
-  fields or hours of consecutive live runs marks the forecast stand-in restarting with new
-  settings.
+  runner between consecutive passes, a ``loop_stopped`` or ``loop_started`` record between
+  them, or two pass starts under 295 s apart (the 300 s interval less a 5 s tolerance; one
+  loop process never starts passes that close) mark a capture restart. A pass starts at its
+  ``started_at`` where capture logs it, else at ``t`` less ``duration_s``. A restart's
+  *excess* is the longest any camera went from its last poll before the restart to its first
+  poll after (send to send), less one 300 s interval, when positive; it is lost from that
+  camera's last poll + 300 s to its next poll. A poll is before the restart when the old loop
+  wrote it: at or before the last record before the new loop's ``loop_started`` record, else
+  the old loop's ``loop_stopped`` record, else its last record (the old version and runner)
+  before the new loop's first pass start (``split_by``). A camera with no poll after the
+  restart in the logs read is flagged on its row as not polled since the restart and listed
+  with its own gap to the window's end (the lead's ruling, D-078). While the latest loop in
+  the logs lists it (its latest pass record's ``outcomes``, or its ``loop_started`` record's
+  ``viewpoints``) it is only waiting, not yet due or in a back-off, and that gap counts, to the
+  window's end; when the latest loop does not list it, it is left out of the excess, so one
+  dropped camera cannot keep the clock from closing. A change in the fields or hours of
+  consecutive live runs marks the forecast stand-in restarting with new settings.
 
 **The 72 h clock** (:mod:`.report`): covered = elapsed − lost, and the earliest close is the
 moment covered reaches 72 h if nothing more is lost. The headline is the *gate rule*, the

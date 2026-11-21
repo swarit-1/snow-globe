@@ -34,6 +34,7 @@ __all__ = [
     "Exclusions",
     "Interval",
     "Line",
+    "LogKey",
     "Logs",
     "Reader",
     "ReportOptions",
@@ -81,6 +82,8 @@ REF_LIMIT = 10
 _DAY = timedelta(days=1)
 
 type Interval = tuple[datetime, datetime]
+#: A record's place in the logs (:attr:`Line.key`): ``(t, source, line)``.
+type LogKey = tuple[datetime, str, int]
 
 
 def capture_release(stamp: str) -> str:
@@ -146,6 +149,13 @@ class Line:
     def ref(self) -> str:
         return f"{self.source}:{self.line}"
 
+    @property
+    def key(self) -> LogKey:
+        """The record's place in the logs, ``(t, source, line)``: the order :func:`read_logs`
+        sorts by. Of two records with the same millisecond stamp in one file, the one written
+        later sorts later."""
+        return (self.t, self.source, self.line)
+
 
 @dataclass(slots=True)
 class Logs:
@@ -165,12 +175,13 @@ class Request(NamedTuple):
     no earlier than ``earliest`` and no later than ``latest`` (:func:`.capture.earliest_receipt`,
     :func:`.capture.latest_receipt`), whatever the network did, which is what makes
     :func:`provable_spans` a bound at nps.gov. ``earliest`` is None when the record cannot place
-    the send (no ``sent_at`` and no usable ``elapsed_ms``).
+    the send (no ``sent_at`` and no usable ``elapsed_ms``), ``latest`` when it cannot bound the
+    answer (an ``answer_bound`` with no readable ``answer_bound_at``).
     """
 
     send: datetime
     earliest: datetime | None
-    latest: datetime
+    latest: datetime | None
 
 
 # --- values -----------------------------------------------------------------------------------
@@ -341,15 +352,21 @@ def provable_spans(
     between consecutive polls (the 5-minute rule); ``count`` 5 the span of 5 consecutive image
     GETs (the cap of 4 in any rolling hour holds when no 5 fall within 3600 s). Returns
     ``(seconds, first, last)`` for every run, oldest first, with ``seconds`` None when the last
-    request's send cannot be placed (``last.earliest`` is None): such a run proves nothing.
-    Fewer than ``count`` requests give none.
+    request's send cannot be placed (``last.earliest`` is None) or the first request's answer
+    cannot be bounded (``first.latest`` is None): such a run proves nothing. Fewer than
+    ``count`` requests give none.
     """
     if count < 2:
         raise ValueError("a span needs at least 2 requests")
-    ordered = sorted(requests, key=lambda request: (request.send, request.latest))
+    ordered = sorted(
+        requests,
+        key=lambda r: (r.send, r.latest is None, r.latest if r.latest is not None else r.send),
+    )
     return [
         (
-            None if last.earliest is None else (last.earliest - first.latest).total_seconds(),
+            None
+            if last.earliest is None or first.latest is None
+            else (last.earliest - first.latest).total_seconds(),
             first,
             last,
         )

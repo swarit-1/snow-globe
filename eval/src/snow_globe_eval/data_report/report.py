@@ -9,7 +9,9 @@ more is lost.
 stricter reading of PRD §16's "≥ 72 h of worker and capture logs". Lost = the union of the
 capture loop's outages, the forecast stand-in's outages (:mod:`.forecast`) and each capture
 restart's excess (:func:`.capture.restart_excess`: the longest any camera went from its last
-poll before the restart to its first after, less one 300 s interval), an overlap counted once.
+poll before the restart to its first after, less one 300 s interval; a camera not polled
+since the restart is flagged, D-078, and counts to the window's end while the latest loop
+lists it, or is left out when that loop dropped it), an overlap counted once.
 
 **Beside it, labelled:** PLAN.md's capture-only figure (the capture loop's outages alone, the
 reading behind PLAN.md's 8.2 h for 19 Nov, which counts no restart that is not an outage), and
@@ -52,15 +54,24 @@ __all__ = ["SCHEMA_VERSION", "build_report", "clock"]
 
 #: 2: the clock's headline is the gate rule (it was PLAN.md's capture-only figure, now
 #: ``plan_md_capture_only``); restarts carry their excess; per camera, the bounds at nps.gov.
-SCHEMA_VERSION = 2
+#: 3: a camera not polled since a restart is flagged (restart ``not_polled_since``, viewpoint
+#: ``not_polled_since_restart``; D-078): left out of its excess when the latest loop does not
+#: list it (``left_out``, ``in_latest_loop``; the section's ``latest_loop``), else counted to
+#: the window's end, as in version 2; restarts say how they were split (``split_by``,
+#: ``started_from``, ``loop_started_utc``); the latest receipt at nps.gov reads
+#: ``answer_bound_at``, and ``unbounded`` also counts a first request whose answer cannot be
+#: bounded.
+SCHEMA_VERSION = 3
 
 #: The clock's rules (module docstring).
 GATE_RULE = (
     "gate rule (the lead's decision of 20 Nov, settling D-061; PRD §16's worker and capture "
     "logs): lost = the union of the capture loop's outages, the forecast stand-in's outages "
     "and each capture restart's excess (the longest any camera went from its last poll before "
-    "the restart to its first after, less one {interval:g} s interval), an overlap counted "
-    "once; covered = elapsed - lost; the gate needs {hours:g} h covered"
+    "the restart to its first after, less one {interval:g} s interval; a camera not polled "
+    "since the restart counts to the window's end while the latest loop lists it, and is left "
+    "out when that loop does not, D-078), an overlap counted once; covered = elapsed - lost; "
+    "the gate needs {hours:g} h covered"
 )
 PLAN_RULE = (
     "PLAN.md's capture-only figure, for comparison: lost = the capture loop's outages alone "
@@ -83,8 +94,12 @@ BASES = {
         "clock); a record with neither has none"
     ),
     "latest_receipt": (
-        "the latest nps.gov can have received a request, its answer: answered_at (rounded up "
-        "to the ms), else t + 1 ms (t is written after the answer, truncated to the ms)"
+        "the latest nps.gov can have received a request, its answer: answer_bound_at when "
+        "logged (capture 0.2.1's bound for a request that failed after it may have left, with "
+        "answer_bound failed_after_send: 300 s after the failure, rounded up to the ms), else "
+        "answered_at (rounded up to the ms), else t + 1 ms (t is written after the answer, "
+        "truncated to the ms); a record that names an answer_bound with no answer_bound_at "
+        "has none"
     ),
     "poll_gap_s": "send to send: how capture's scheduler spaced the polls",
     "max_image_gets_in_rolling_hour": "send times, half-open rolling windows",
@@ -92,7 +107,7 @@ BASES = {
         "earliest receipt of the next poll - latest receipt of the previous, over consecutive "
         "polls: the least gap nps.gov can have seen; unproven counts the pairs not provably "
         "min_poll_gap_s apart (under_limit: a least gap under it; unbounded: the next poll's "
-        "send cannot be placed). Unproven is not shown closer"
+        "send or the previous poll's answer cannot be placed). Unproven is not shown closer"
     ),
     "image_gets_at_nps": (
         "earliest receipt of the 5th - latest receipt of the 1st, over every 5 consecutive "
@@ -102,7 +117,18 @@ BASES = {
     "restart_excess": (
         "the longest any camera went from its last poll before the restart to its first after, "
         "send to send, less one capture_interval_s; a poll is before the restart when its "
-        "record was written by the old loop's last record (the row's stopped_after_utc)"
+        "record is at or before the old loop's last record in the logs (the row's "
+        "stopped_after_utc; split_by: the last record before a loop_started record, else the "
+        "loop_stopped record, else the last record of the old version and runner before the "
+        "new loop's first pass start, which is the pass's started_at when logged, else t - "
+        "duration_s: started_from). A camera with no poll after the restart in the logs read "
+        "is flagged and listed with its gap to the window's end (not_polled_since; the lead's "
+        "ruling of 20 Nov, D-078). in_latest_loop says whether the latest capture loop in the "
+        "logs read lists it (the latest pass record's outcomes or loop_started record's "
+        "viewpoints: capture.latest_loop; null when no record lists them). While it does, the "
+        "camera is not yet due or in a back-off, and its gap so far counts, to the window's "
+        "end (ongoing); when it does not (dropped) or no record says, the camera is left out of "
+        "the excess (left_out), so a dropped camera cannot hold the clock open"
     ),
 }
 
@@ -248,6 +274,19 @@ def build_report(
                 end=gap["to_utc"],
                 lost_s=row["lost_s"],
                 viewpoint_id=gap["viewpoint_id"],
+            )
+        for vp, unpolled in row["not_polled_since"].items():
+            if not unpolled["left_out"]:
+                continue  # the latest loop lists it: its gap so far is in the excess above
+            exclusions.add(
+                "outages",
+                "camera not polled since a capture restart and not known to be in the latest "
+                "loop: left out of that restart's excess, so it cannot hold the clock open "
+                "(D-078)",
+                None,
+                viewpoint_id=vp,
+                restart_started_utc=row["started_utc"],
+                **unpolled,
             )
     for row in forecast["outages"]:
         exclusions.add(

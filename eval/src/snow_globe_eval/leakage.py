@@ -503,8 +503,9 @@ class FitView:
     2021–22 3:2 epoch; Grand Canyon from Jul 2024). The split holds these only as notes, so
     this view does not filter by them yet, and a fit can mix epochs. That is not leakage, but
     a fitted asset could be built on the wrong view. The fix is a per-viewpoint
-    ``development_from`` in the split (version 2, with a DECISIONS.md entry), applied here and
-    in the pair's fitted-asset check.
+    ``development_from`` in a new version of the split (the one after
+    :data:`.heldout.CURRENT_SPLIT_VERSION`: version 2 is taken by a text-only correction; with a
+    DECISIONS.md entry), applied here and in the pair's fitted-asset check.
     """
 
     def __init__(
