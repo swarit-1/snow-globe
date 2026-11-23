@@ -144,7 +144,18 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Playwright's Chromium headless shell and its system libraries
         working-directory: renderer
-        run: pnpm exec playwright-core install --with-deps --only-shell chromium
+        # An apt mirror can stop answering mid-update: on 23 Nov run 45167754476 hung here for 29 min
+        # until the job's 30 min limit. Each attempt gets 5 min, three attempts, then the step fails.
+        timeout-minutes: 16
+        run: |
+          for attempt in 1 2 3; do
+            if timeout --kill-after=15 300 pnpm exec playwright-core install --with-deps --only-shell chromium; then
+              exit 0
+            fi
+            echo "attempt $attempt failed or timed out; retrying in 15 s"
+            sleep 15
+          done
+          exit 1
       # Off darwin/arm64 the goldens are not expected to match pixel for pixel; the golden test then
       # applies PRD §13.1's rule, SSIM >= 0.98 (renderer/README.md, "Matching rules").
       - name: make test-renderer
@@ -171,7 +182,18 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Playwright's Chromium headless shell and its system libraries
         working-directory: app/src
-        run: pnpm exec playwright-core install --with-deps --only-shell chromium
+        # An apt mirror can stop answering mid-update: on 23 Nov run 45167754476 hung here for 29 min
+        # until the job's 30 min limit. Each attempt gets 5 min, three attempts, then the step fails.
+        timeout-minutes: 16
+        run: |
+          for attempt in 1 2 3; do
+            if timeout --kill-after=15 300 pnpm exec playwright-core install --with-deps --only-shell chromium; then
+              exit 0
+            fi
+            echo "attempt $attempt failed or timed out; retrying in 15 s"
+            sleep 15
+          done
+          exit 1
       - name: make test-overlay
         run: make test-overlay
 
