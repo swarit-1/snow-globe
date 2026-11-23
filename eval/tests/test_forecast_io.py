@@ -112,7 +112,7 @@ def test_summit_ray_samples(rainier) -> None:
     run = ForecastRun(make_doc(rainier, RUN, [24], low_deck))
     samples, detail = summit_ray(run, rainier, rainier.landmarks[0], RUN + timedelta(hours=24))
     distances = [s.distance_km for s in samples]
-    assert distances == [0.0, 1.5, 3.0, 4.5, 6.0, 7.5, 7.74]
+    assert distances == [0.0, 1.5, 3.0, 4.5, 6.0, 7.44]
     heights = [s.ray_height_m_msl for s in samples]
     assert heights == sorted(heights)
     assert heights[0] == rainier.camera.elevation_m and heights[-1] == pytest.approx(4392.0)

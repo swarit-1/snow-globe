@@ -22,39 +22,51 @@
   "time_zone": "America/Los_Angeles",
   "status": "msv",
   "camera": {
-    "lat": 46.78455,
-    "lon": -121.74065,
-    "elevation_m": 1643,
-    "view_azimuth_deg": 348.8,
-    "view_azimuth_source": "computed: initial great-circle bearing from the camera position to the GNIS Mount Rainier summit point",
-    "position_uncertainty_m": 500,
+    "lat": 46.78783,
+    "lon": -121.73704,
+    "elevation_m": 1688,
+    "view_azimuth_deg": 346.2,
+    "view_azimuth_source": "computed: initial great-circle bearing from the plate v0.1 camera position to the GNIS Mount Rainier summit point",
+    "position_uncertainty_m": 200,
     "sources": [
+      {
+        "url": "https://www.nps.gov/webcams-mora/mountain.jpg",
+        "used_for": "lat/lon: solved jointly with the pose for plate v0.1 (plates/specs/rainier.paradise-mountain.v0.1.json, built to <data dir>/plates/rainier.paradise-mountain/v0.1/plate.json, pose.camera 46.787833, -121.7370365) from the three GNIS landmarks marked on the capture of 2026-11-20 17:16:59Z and 37 BSC5 stars on nine night captures of 20 Nov 2026; applied from plates/specs/rainier.paradise-mountain.manifest-proposal.json",
+        "accessed": "2026-11-20",
+        "note": "457 m NE of the previous, assumed position (365 m north and 275 m east of the Jackson Visitor Center). position_uncertainty_m 200: the solve moves 114 m north between an assumed lens height of 3 m and 40 m (325 and 439 m north of the previous position; plate.json pose_check.agl_sensitivity, plates/README.md), and the near ridge 1.8-3.3 km out fits only from a position about 170 m further south (plates/README.md, 'Near field'), which the stars and far landmarks reject; 200 m covers both. The mount is unidentified."
+      },
+      {
+        "url": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+        "used_for": "elevation_m: USGS 3DEP bare-earth ground (10 m export, metres above NAVD88) under the solved position, from plate v0.1's DEM (plates/specs/rainier.paradise-mountain.v0.1.json, dem); the plate assumes the lens 10 m above it (1697.95 m)",
+        "accessed": "2026-11-23"
+      },
       {
         "url": "https://www.nps.gov/mora/learn/photosmultimedia/webcams.htm",
         "used_for": "camera listed only as 'Paradise' (\"Is the mountain out?\"); building not stated",
         "accessed": "2026-11-19",
-        "note": "The East, West and Visitor Center cams are stated to be at the Henry M. Jackson Memorial Visitor Center; this one is not, so the JVC position is an assumption."
+        "note": "The East, West and Visitor Center cams are stated to be at the Henry M. Jackson Memorial Visitor Center; this one is not. The position was first assumed to be the JVC's (the cross-checks below); since 2026-11-23 it is the one solved for plate v0.1 (first source)."
       },
       {
         "url": "https://topoquest.com/place-detail.php?id=1984586",
-        "used_for": "lat/lon of the Henry M. Jackson Memorial Visitor Center (GNIS feature 1984586, mirror of USGS GNIS; 5,390 ft)",
-        "accessed": "2026-11-19"
+        "used_for": "previous, assumed position (until 2026-11-23): lat/lon of the Henry M. Jackson Memorial Visitor Center (GNIS feature 1984586, mirror of USGS GNIS; 5,390 ft)",
+        "accessed": "2026-11-19",
+        "note": "The previous position (46.78455, -121.74065; ground 1643 m, view azimuth 348.8 deg, uncertainty 500 m) is 457 m SW of the solved one"
       },
       {
         "url": "https://files.airnowtech.org/airnow/today/Monitoring_Site_Locations_V2.dat",
         "used_for": "cross-check: 'Mt Rainier- Jackson Visitor Ctr' monitor at 46.784100, -121.740303, 1615.9 m",
         "accessed": "2026-11-19",
-        "note": "57 m from the chosen position"
+        "note": "483 m from the solved position (57 m from the previous, assumed one)"
       },
       {
         "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
         "used_for": "cross-check: GNIS 1533605 'Paradise' (populated place) at 46.786226, -121.735386",
         "accessed": "2026-11-19",
-        "note": "442 m from the chosen position; the uncertainty radius covers the Paradise developed area"
+        "note": "218 m from the solved position (442 m from the previous, assumed one)"
       },
       {
         "url": "https://epqs.nationalmap.gov/v1/json?x=-121.74065&y=46.78455&wkid=4326&units=Meters",
-        "used_for": "ground elevation 1642.7 m (USGS 3DEP via EPQS); mount height above ground unknown",
+        "used_for": "previous, assumed position (until 2026-11-23): ground elevation 1642.7 m (USGS 3DEP via EPQS); mount height above ground unknown",
         "accessed": "2026-11-19"
       }
     ]
@@ -93,15 +105,16 @@
       "lat": 46.852832,
       "lon": -121.760455,
       "height_m": 4392,
-      "distance_km": 7.74,
-      "azimuth_deg": 348.8,
+      "distance_km": 7.44,
+      "azimuth_deg": 346.2,
       "band": "summit",
       "px": null,
       "sources": [
         {
           "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
           "used_for": "lat/lon: GNIS 1533614 'Mount Rainier' summit (Columbia Crest, GNIS 1517974, is 46.85282, -121.760388)",
-          "accessed": "2026-11-19"
+          "accessed": "2026-11-19",
+          "note": "distance_km 7.44 and azimuth_deg 346.2 are computed from this point and the camera position solved for plate v0.1 (plates/specs/rainier.paradise-mountain.v0.1.json); from the previous camera position they were 7.74 km and 348.8 deg"
         },
         {
           "url": "https://en.wikipedia.org/wiki/Mount_Rainier",
@@ -113,7 +126,100 @@
           "url": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
           "used_for": "visibility from this camera: a ray cast through the USGS 3DEP bare-earth DEM (10 m) toward the highest DEM cell within 40 m of this point (4392.2 m)",
           "accessed": "2026-11-23",
-          "note": "Columbia Crest is not visible from this camera: the summit dome's nearer slope rises above the line of sight from about 0.9 km in front of the crest, by up to 0.47 deg 225 m in front of it, seen from the camera position solved for plate v0.1 (46.78783, -121.73704, lens about 1698 m); from this manifest's camera position it is hidden by 0.43 deg. So px stays null, and P1's summit band is the visible dome above 4,000 m (plates/specs/rainier.paradise-mountain.v0.1.json)."
+          "note": "Columbia Crest is not visible from this camera: the summit dome's nearer slope rises above the line of sight from about 0.9 km in front of the crest, by up to 0.47 deg 225 m in front of it, seen from this manifest's camera position, the one solved for plate v0.1 (46.78783, -121.73704, lens about 1698 m); from the previous position (46.78455, -121.74065) it is hidden by 0.43 deg. So px stays null, and P1's summit band is the visible dome above 4,000 m (plates/specs/rainier.paradise-mountain.v0.1.json)."
+        }
+      ]
+    },
+    {
+      "name": "Gibraltar Rock",
+      "lat": 46.845766,
+      "lon": -121.745427,
+      "height_m": 3863,
+      "distance_km": 6.47,
+      "azimuth_deg": 354.3,
+      "band": "upper",
+      "px": [
+        775.0,
+        329.0
+      ],
+      "sources": [
+        {
+          "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+          "used_for": "lat/lon: GNIS 1533567 'Gibraltar Rock' (Summit), layer 5 Landforms",
+          "accessed": "2026-11-23"
+        },
+        {
+          "url": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+          "used_for": "height: highest USGS 3DEP bare-earth cell within 40 m of the GNIS point (10 m export, metres above NAVD88)",
+          "accessed": "2026-11-23"
+        },
+        {
+          "url": "https://www.nps.gov/webcams-mora/mountain.jpg",
+          "used_for": "px: marked by viewing the capture of 2026-11-20 17:16:59Z (1920x1080); identification checked against the 3DEP skyline and a star-fixed orientation (plates/specs/rainier.paradise-mountain.v0.1.json)",
+          "accessed": "2026-11-20",
+          "note": "distance_km and azimuth_deg are from the camera position solved for plate v0.1, this manifest's since 2026-11-23; from the previous position (46.78455, -121.74065) they were 6.82 km and 356.9 deg"
+        }
+      ]
+    },
+    {
+      "name": "Anvil Rock",
+      "lat": 46.829559,
+      "lon": -121.725943,
+      "height_m": 2919,
+      "distance_km": 4.72,
+      "azimuth_deg": 10.3,
+      "band": "mid",
+      "px": [
+        1159.0,
+        418.0
+      ],
+      "sources": [
+        {
+          "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+          "used_for": "lat/lon: GNIS 1533536 'Anvil Rock' (Pillar), layer 5 Landforms",
+          "accessed": "2026-11-23"
+        },
+        {
+          "url": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+          "used_for": "height: highest USGS 3DEP bare-earth cell within 40 m of the GNIS point (10 m export, metres above NAVD88)",
+          "accessed": "2026-11-23"
+        },
+        {
+          "url": "https://www.nps.gov/webcams-mora/mountain.jpg",
+          "used_for": "px: marked by viewing the capture of 2026-11-20 17:16:59Z (1920x1080); identification checked against the 3DEP skyline and a star-fixed orientation (plates/specs/rainier.paradise-mountain.v0.1.json)",
+          "accessed": "2026-11-20",
+          "note": "distance_km and azimuth_deg are from the camera position solved for plate v0.1, this manifest's since 2026-11-23; from the previous position (46.78455, -121.74065) they were 5.13 km and 12.6 deg"
+        }
+      ]
+    },
+    {
+      "name": "Little Tahoma Peak",
+      "lat": 46.849428,
+      "lon": -121.711405,
+      "height_m": 3384,
+      "distance_km": 7.12,
+      "azimuth_deg": 15.9,
+      "band": "upper",
+      "px": [
+        1283.0,
+        437.0
+      ],
+      "sources": [
+        {
+          "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+          "used_for": "lat/lon: GNIS 1533577 'Little Tahoma Peak' (Summit), layer 5 Landforms",
+          "accessed": "2026-11-23"
+        },
+        {
+          "url": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+          "used_for": "height: highest USGS 3DEP bare-earth cell within 40 m of the GNIS point (10 m export, metres above NAVD88)",
+          "accessed": "2026-11-23"
+        },
+        {
+          "url": "https://www.nps.gov/webcams-mora/mountain.jpg",
+          "used_for": "px: marked by viewing the capture of 2026-11-20 17:16:59Z (1920x1080); identification checked against the 3DEP skyline and a star-fixed orientation (plates/specs/rainier.paradise-mountain.v0.1.json)",
+          "accessed": "2026-11-20",
+          "note": "distance_km and azimuth_deg are from the camera position solved for plate v0.1, this manifest's since 2026-11-23; from the previous position (46.78455, -121.74065) they were 7.55 km and 17.1 deg"
         }
       ]
     }
@@ -125,6 +231,7 @@
     "EXIF carries DateTimeOriginal in local time plus TimeZoneOffset -8 and SubSecTimeOriginal; use snow_globe_common.images.exif_summary.",
     "Update cadence undocumented; the 2026-11-19 stopgap saw a new Last-Modified at every 5-minute poll, so the 4-per-hour cap binds. Measure before filling interval_min_measured.",
     "Faces a busy visitor area: people and vehicles must be blurred before any publication (PRD §15.1).",
-    "Night mode confirmed on the capture loop's live frame of 2026-11-19 10:55Z (Sun 44.0 deg below the horizon): chroma_spread 0.011/255, mean luma 34.7 (capture-loop sidecars ~/lookout-data/frames/rainier.paradise-mountain/2026-11-19/*.json; Sun altitude from the NOAA solar-position equations at the camera position)."
+    "Night mode confirmed on the capture loop's live frame of 2026-11-19 10:55Z (Sun 44.0 deg below the horizon): chroma_spread 0.011/255, mean luma 34.7 (capture-loop sidecars ~/lookout-data/frames/rainier.paradise-mountain/2026-11-19/*.json; Sun altitude from the NOAA solar-position equations at the camera position).",
+    "2026-11-23: camera position, elevation, view azimuth and position uncertainty corrected from plate v0.1's solve (plates/specs/rainier.paradise-mountain.v0.1.json; applied from plates/specs/rainier.paradise-mountain.manifest-proposal.json), and three landmarks added after the summit, which stays landmarks[0] (Gibraltar Rock, Anvil Rock, Little Tahoma Peak, with their marked px). Before: the Jackson Visitor Center assumption, 46.78455, -121.74065, 1643 m, 348.8 deg, 500 m. The proposal's pose and plate blocks are not applied here."
   ]
 }

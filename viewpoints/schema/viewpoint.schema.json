@@ -328,8 +328,8 @@
           "exclusiveMaximum": 360
         },
         "band": {
-          "description": "Which landmark band it belongs to (PRD §8.5 masks); summit is the P1 target at Rainier.",
-          "enum": ["summit", "ridge", "skyline", "far", "mid", "near", "horizon", "shore"]
+          "description": "Which landmark band it belongs to (PRD §8.5 masks); summit is the P1 target at Rainier, whose plate bands are summit, upper, mid and near (PRD §13.3; plates/specs/rainier.paradise-mountain.v0.1.json).",
+          "enum": ["summit", "upper", "ridge", "skyline", "far", "mid", "near", "horizon", "shore"]
         },
         "px": {
           "description": "Pixel position [x, y] in the full-size frame; null until M2.",

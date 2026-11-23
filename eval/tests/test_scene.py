@@ -99,7 +99,7 @@ def test_clear_scene_validates_and_has_expected_fields(renderer_dir) -> None:
         "sha256": PLATE.sha256,
         "has_sky_mask": False,
         "has_depth": False,
-        "nominal_depth_m": pytest.approx(7740.0),
+        "nominal_depth_m": pytest.approx(7440.0),
     }
     assert scene["meta"]["pose_source"].startswith("nominal")
     assert scene["sun"] == {"alt_deg": 20.0, "az_deg": 200.0}

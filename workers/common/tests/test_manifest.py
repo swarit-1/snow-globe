@@ -200,7 +200,7 @@ def _set(path: list[str], value):
         (
             "rainier.paradise-mountain",
             lambda d: d["landmarks"][0].__setitem__("azimuth_deg", 10.0),
-            "initial bearing from the camera is 348.78",
+            "initial bearing from the camera is 346.16",
         ),
         (
             "point-reyes.beach",
@@ -289,7 +289,7 @@ def test_landmark_azimuth_within_half_a_degree_is_accepted(scratch: Path):
     _edit(
         scratch,
         "rainier.paradise-mountain",
-        lambda d: d["landmarks"][0].__setitem__("azimuth_deg", 349.2),  # 0.42 deg off
+        lambda d: d["landmarks"][0].__setitem__("azimuth_deg", 346.58),  # 0.42 deg off
     )
     assert mf.load_manifests(scratch)["rainier.paradise-mountain"].landmarks
 

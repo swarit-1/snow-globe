@@ -23,19 +23,33 @@ def test_destination_round_trip() -> None:
 
 
 def test_rainier_points(manifests) -> None:
+    """Rainier's points from the manifest corrected on 23 Nov 2026 (plate v0.1's camera position,
+    plates/specs/rainier.paradise-mountain.manifest-proposal.json): the summit stays the first
+    landmark, three landmarks follow it, and the view ray runs along the summit bearing."""
     vp = manifests[RAINIER]
     points = sample_points(vp, HRRR_CONUS)
     kinds = [p.kind for p in points]
     assert kinds.count("camera") == 1
     assert kinds.count("ray") == 30
-    assert kinds.count("landmark") == 1
+    assert kinds.count("landmark") == 4
     assert kinds.count("neighborhood") == 25
+    assert len(points) == 60
     rays = [p for p in points if p.kind == "ray"]
     assert [p.distance_km for p in rays] == [pytest.approx(1.5 * k) for k in range(1, 31)]
-    assert all(p.azimuth_deg == pytest.approx(348.8) for p in rays)
-    landmark = next(p for p in points if p.kind == "landmark")
-    assert landmark.id == "landmark:mount-rainier-summit-columbia-crest"
-    assert landmark.distance_km == pytest.approx(7.74, abs=0.05)
+    assert all(p.azimuth_deg == pytest.approx(346.2) for p in rays)
+    landmarks = [p for p in points if p.kind == "landmark"]
+    assert [p.id for p in landmarks] == [
+        "landmark:mount-rainier-summit-columbia-crest",
+        "landmark:gibraltar-rock",
+        "landmark:anvil-rock",
+        "landmark:little-tahoma-peak",
+    ]
+    # Distances and bearings from the camera, as the manifest records them (to its rounding).
+    expected = [(7.44, 346.2), (6.47, 354.3), (4.72, 10.3), (7.12, 15.9)]
+    for point, (distance, azimuth) in zip(landmarks, expected, strict=True):
+        assert point.distance_km == pytest.approx(distance, abs=0.005)
+        assert point.azimuth_deg == pytest.approx(azimuth, abs=0.05)
+    assert [(p.i, p.j) for p in landmarks] == [(285, 921), (285, 921), (285, 920), (286, 921)]
     camera = points[0]
     assert (camera.i, camera.j) == (284, 919)
     centre = next(p for p in points if p.id == "nb:+0,+0")
