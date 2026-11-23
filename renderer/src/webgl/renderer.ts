@@ -5,10 +5,14 @@
  * (PRD §6.1). It is pure in (scene, inputs, renderer version): uniforms are derived by buildFrame() in
  * float64 on the CPU, the cloud-noise lattice is generated from the seed, and nothing reads the clock.
  *
- * Seams: Hillaire 2020 LUT passes replace skyRadiance() (TODO(M1.5), D-013). For M2 (TODO(M2)):
- * oculus-core WASM computes the Sun and Moon inside the module (until then validateScene checks the
- * caller's Sun); shader pre-warm and lost-context restore; dehazed plate, normals and DEM horizon maps
- * feed groundRadiance().
+ * Each render first runs the Hillaire 2020 atmosphere passes (webgl/atmosphere-glsl.ts, D-013): the
+ * transmittance and multiple-scattering tables when the atmosphere changed since the last render (the
+ * haze), then every frame the sky-view tables, the light pass and the aerial-perspective volume, all into
+ * RGBA32F textures (EXT_color_buffer_float is required). The main pass then reads them.
+ *
+ * For M2 (TODO(M2)): oculus-core WASM computes the Sun and Moon inside the module (until then
+ * validateScene checks the caller's Sun); shader pre-warm and lost-context restore; dehazed plate,
+ * normals and DEM horizon maps feed groundRadiance().
  */
 import { buildFrame, type FrameParams } from '../frame.ts';
 import { MAX_LAYERS, MAX_PROFILE_KNOTS } from '../math/constants.ts';
@@ -16,6 +20,20 @@ import { LATTICE_SIZE, NOISE_AMPLITUDES, NOISE_OCTAVES, makeLattice } from '../m
 import { MOON_RADIUS_RAD, SUN_RADIUS_RAD } from '../light.ts';
 import { validateScene, type SceneSpec } from '../scene.ts';
 import type { RawImage } from '../cpu/reference.ts';
+import { LIGHT_TEXELS } from '../cpu/atmosphere.ts';
+import {
+  AP_GRID,
+  AP_SLICES,
+  IRRADIANCE_AZIMUTH_CELLS,
+  MULTI_SCATTERING_LUT_SIZE,
+  SKY_VIEW_LUT_HEIGHT,
+  SKY_VIEW_LUT_WIDTH,
+  TRANSMITTANCE_LUT_HEIGHT,
+  TRANSMITTANCE_LUT_WIDTH,
+  atmosphereParams,
+  type AtmosphereParams,
+} from '../atmosphere/model.ts';
+import { AP_INCREMENT_FS, AP_PREFIX_FS, IRRADIANCE_FS, LIGHT_FS, MULTI_SCATTERING_FS, PASS_VERTEX_SHADER, SHADE_TOP_NONE, SKY_VIEW_FS, TRANSMITTANCE_FS } from './atmosphere-glsl.ts';
 import { DEBUG_MODES, FRAGMENT_SHADER, VERTEX_SHADER, type DebugMode } from './shader.ts';
 
 export type { DebugMode } from './shader.ts';
@@ -40,6 +58,11 @@ export interface RenderOptions {
   debug?: DebugMode;
   /** Accept a Sun that does not match the valid time and place (synthetic geometry tests only). */
   allowSyntheticSun?: boolean;
+  /**
+   * Time each atmosphere pass (benchmarks only): a 1-pixel readPixels barrier after each pass, so the
+   * GPU work of each is measured. The barriers serialise the GPU, so the frame takes longer than without.
+   */
+  profile?: boolean;
 }
 
 /** Throws unless every input hash the caller attested equals the scene's (PRD §9.2: render is pure in the scene). */
@@ -59,6 +82,10 @@ export function checkInputHashes(scene: SceneSpec, inputs: Pick<RenderInputs, 'p
 export interface RenderInfo {
   /** CPU time to validate the scene and build uniforms (ms). */
   setupMs: number;
+  /** Atmosphere passes issued for this frame, in order (the transmittance and multiple-scattering tables only when the atmosphere changed). */
+  atmospherePasses: string[];
+  /** With options.profile: wall time (ms) of each atmosphere pass, measured to a 1-pixel readPixels barrier. */
+  passMs?: Record<string, number>;
   /** CPU time spent issuing texture uploads (ms); 0 when every input was already resident. */
   uploadMs: number;
   /** CPU time to issue the draw (ms). GPU completion is measured by the caller with finish(). */
@@ -75,7 +102,96 @@ export interface GlInfo {
   version: string;
   shadingLanguageVersion: string;
   maxFragmentUniformVectors: number;
+  maxDrawBuffers: number;
   colorBufferFloat: boolean;
+}
+
+/** A float texture read back from the GPU: RGBA, row-major, row 0 = the bottom texel row (GL order). */
+export interface FloatImage {
+  width: number;
+  height: number;
+  data: Float32Array;
+}
+
+/** The atmosphere tables of the last render, read back for tests (renderer.readAtmosphere()). */
+export interface AtmosphereReadback {
+  transmittance: FloatImage;
+  multiScattering: FloatImage;
+  skyView: FloatImage;
+  skyViewBelow: FloatImage;
+  light: FloatImage;
+  apIncScatter: FloatImage;
+  apIncTransmittance: FloatImage;
+  apScatter: FloatImage;
+  apTransmittance: FloatImage;
+}
+
+/** A compiled program and its uniform locations. */
+class Program {
+  readonly program: WebGLProgram;
+  private readonly gl: WebGL2RenderingContext;
+  private readonly locs = new Map<string, WebGLUniformLocation | null>();
+  constructor(gl: WebGL2RenderingContext, program: WebGLProgram) {
+    this.gl = gl;
+    this.program = program;
+  }
+  loc(name: string): WebGLUniformLocation | null {
+    if (!this.locs.has(name)) this.locs.set(name, this.gl.getUniformLocation(this.program, name));
+    return this.locs.get(name)!;
+  }
+}
+
+type LutName = 'trans' | 'ms' | 'sky0' | 'sky1' | 'irr' | 'light' | 'apInc0' | 'apInc1' | 'apS' | 'apT';
+type PassName = 'trans' | 'ms' | 'sky' | 'irr' | 'light' | 'apInc' | 'apPrefix';
+
+const LUT_SIZES: Record<LutName, [number, number]> = {
+  trans: [TRANSMITTANCE_LUT_WIDTH, TRANSMITTANCE_LUT_HEIGHT],
+  ms: [MULTI_SCATTERING_LUT_SIZE, MULTI_SCATTERING_LUT_SIZE],
+  sky0: [SKY_VIEW_LUT_WIDTH, SKY_VIEW_LUT_HEIGHT],
+  sky1: [SKY_VIEW_LUT_WIDTH, SKY_VIEW_LUT_HEIGHT],
+  irr: [IRRADIANCE_AZIMUTH_CELLS, 1],
+  light: [LIGHT_TEXELS.count, 1],
+  apInc0: [AP_GRID * AP_SLICES, AP_GRID],
+  apInc1: [AP_GRID * AP_SLICES, AP_GRID],
+  apS: [AP_GRID * AP_SLICES, AP_GRID],
+  apT: [AP_GRID * AP_SLICES, AP_GRID],
+};
+
+/** Which tables each pass writes (MRT attachment order). */
+const PASS_TARGETS: Record<PassName, LutName[]> = {
+  trans: ['trans'],
+  ms: ['ms'],
+  sky: ['sky0', 'sky1'],
+  irr: ['irr'],
+  light: ['light'],
+  apInc: ['apInc0', 'apInc1'],
+  apPrefix: ['apS', 'apT'],
+};
+
+const PASS_SOURCES: Record<PassName, string> = {
+  trans: TRANSMITTANCE_FS,
+  ms: MULTI_SCATTERING_FS,
+  sky: SKY_VIEW_FS,
+  irr: IRRADIANCE_FS,
+  light: LIGHT_FS,
+  apInc: AP_INCREMENT_FS,
+  apPrefix: AP_PREFIX_FS,
+};
+
+/** Texture units: 0-3 the main pass's inputs, 4-9 the atmosphere tables. */
+const UNIT = { trans: 4, ms: 5, sky0: 5, sky1: 6, apS: 7, apT: 8, light: 9, apInc0: 4, apInc1: 5, irr: 6 } as const;
+
+/**
+ * The GLSL bakes in the reference Earth atmosphere (atmosphere/model.ts); only the haze is a uniform.
+ * Throws if a frame asks for anything else, so the GPU never silently renders another atmosphere.
+ */
+function assertBakedAtmosphere(p: AtmosphereParams): void {
+  const ref = atmosphereParams(0, 0);
+  const skip = new Set(['hazeScattering', 'hazeExtinction', 'hazeTopM']);
+  for (const [k, v] of Object.entries(ref)) {
+    if (skip.has(k)) continue;
+    if (JSON.stringify((p as unknown as Record<string, unknown>)[k]) !== JSON.stringify(v)) throw new Error(`the GPU atmosphere bakes in ${k}; this frame asks for another value`);
+  }
 }
 
 function isRaw(x: ImageInput): x is RawImage {
@@ -99,8 +215,12 @@ export class SnowGlobeRenderer {
   readonly gl: WebGL2RenderingContext;
   readonly canvas: HTMLCanvasElement | OffscreenCanvas;
   private program: WebGLProgram | null = null;
+  private main: Program | null = null;
+  private passes: Record<PassName, Program> | null = null;
+  private luts: Record<LutName, WebGLTexture> | null = null;
+  private lutFbos: Record<PassName, WebGLFramebuffer> | null = null;
+  private baseKey: string | null = null;
   private vao: WebGLVertexArrayObject | null = null;
-  private loc = new Map<string, WebGLUniformLocation | null>();
   private tex = new Map<TexSlot, WebGLTexture>();
   private texSource = new Map<TexSlot, unknown>();
   private latticeSeed: number | null = null;
@@ -140,35 +260,68 @@ export class SnowGlobeRenderer {
       version: String(gl.getParameter(gl.VERSION)),
       shadingLanguageVersion: String(gl.getParameter(gl.SHADING_LANGUAGE_VERSION)),
       maxFragmentUniformVectors: Number(gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS)),
+      maxDrawBuffers: Number(gl.getParameter(gl.MAX_DRAW_BUFFERS)),
       colorBufferFloat: gl.getExtension('EXT_color_buffer_float') !== null,
     };
   }
 
-  /** Compiles and links the program (called lazily by render; call early to pre-warm). */
+  /**
+   * Compiles and links the main program and the atmosphere passes, and allocates the atmosphere's RGBA32F
+   * tables (called lazily by render; call early to pre-warm).
+   */
   compile(): void {
     if (this.program) return;
     const gl = this.gl;
-    const sh = (type: number, src: string): WebGLShader => {
+    if (!gl.getExtension('EXT_color_buffer_float')) throw new Error('SnowGlobeRenderer: the atmosphere needs EXT_color_buffer_float (RGBA32F render targets)');
+    const sh = (type: number, src: string, what: string): WebGLShader => {
       const s = gl.createShader(type)!;
       gl.shaderSource(s, src);
       gl.compileShader(s);
       if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
         const log = gl.getShaderInfoLog(s);
         gl.deleteShader(s);
-        throw new Error(`shader compile failed: ${log}`);
+        throw new Error(`${what} shader compile failed: ${log}`);
       }
       return s;
     };
-    const vs = sh(gl.VERTEX_SHADER, VERTEX_SHADER);
-    const fs = sh(gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
-    const p = gl.createProgram()!;
-    gl.attachShader(p, vs);
-    gl.attachShader(p, fs);
-    gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(`program link failed: ${gl.getProgramInfoLog(p)}`);
-    gl.deleteShader(vs);
-    gl.deleteShader(fs);
-    this.program = p;
+    const link = (fsSrc: string, vsSrc: string, what: string): Program => {
+      const vs = sh(gl.VERTEX_SHADER, vsSrc, what);
+      const fs = sh(gl.FRAGMENT_SHADER, fsSrc, what);
+      const p = gl.createProgram()!;
+      gl.attachShader(p, vs);
+      gl.attachShader(p, fs);
+      gl.linkProgram(p);
+      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(`${what} program link failed: ${gl.getProgramInfoLog(p)}`);
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
+      return new Program(gl, p);
+    };
+    this.main = link(FRAGMENT_SHADER, VERTEX_SHADER, 'main');
+    const passes = {} as Record<PassName, Program>;
+    for (const name of Object.keys(PASS_SOURCES) as PassName[]) passes[name] = link(PASS_SOURCES[name], PASS_VERTEX_SHADER, `atmosphere ${name}`);
+    this.passes = passes;
+    const luts = {} as Record<LutName, WebGLTexture>;
+    for (const name of Object.keys(LUT_SIZES) as LutName[]) {
+      const t = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, LUT_SIZES[name][0], LUT_SIZES[name][1]);
+      this.setSampling(gl.NEAREST, gl.NEAREST);
+      luts[name] = t;
+    }
+    this.luts = luts;
+    const fbos = {} as Record<PassName, WebGLFramebuffer>;
+    for (const name of Object.keys(PASS_TARGETS) as PassName[]) {
+      const fbo = gl.createFramebuffer()!;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      const targets = PASS_TARGETS[name];
+      targets.forEach((lut, i) => gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.TEXTURE_2D, luts[lut], 0));
+      gl.drawBuffers(targets.map((_, i) => gl.COLOR_ATTACHMENT0 + i));
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error(`atmosphere ${name} framebuffer incomplete`);
+      fbos[name] = fbo;
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.lutFbos = fbos;
+    this.program = this.main.program;
     this.vao = gl.createVertexArray();
     this.dummy = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.dummy);
@@ -177,8 +330,7 @@ export class SnowGlobeRenderer {
   }
 
   private u(name: string): WebGLUniformLocation | null {
-    if (!this.loc.has(name)) this.loc.set(name, this.gl.getUniformLocation(this.program!, name));
-    return this.loc.get(name)!;
+    return this.main!.loc(name);
   }
 
   private setSampling(min: number, mag: number): void {
@@ -288,6 +440,12 @@ export class SnowGlobeRenderer {
     this.uploadLattice(frame.seedU32, uploaded);
     const t2 = now();
 
+    gl.disable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
+    gl.bindVertexArray(this.vao);
+    const passMs: Record<string, number> | undefined = opts.profile ? {} : undefined;
+    const atmospherePasses = this.renderAtmosphere(frame, passMs);
+
     const debug = opts.debug ?? 'none';
     if (debug === 'none') {
       if (this.canvas.width !== width) this.canvas.width = width;
@@ -300,8 +458,6 @@ export class SnowGlobeRenderer {
       this.lastTarget = 'float';
     }
     gl.viewport(0, 0, width, height);
-    gl.disable(gl.BLEND);
-    gl.disable(gl.DEPTH_TEST);
     gl.useProgram(this.program);
 
     // Bind textures (dummy for absent inputs; samplers must always be complete).
@@ -314,18 +470,154 @@ export class SnowGlobeRenderer {
     bind(1, 'skyMask', Boolean(inputs.skyMask), 'u_skyMask');
     bind(2, 'depth', Boolean(inputs.depth), 'u_depth');
     bind(3, 'lattice', true, 'u_lattice');
+    this.bindLuts(this.main!, { u_transLut: 'trans', u_skyLut0: 'sky0', u_skyLut1: 'sky1', u_apS: 'apS', u_apT: 'apT', u_lightLut: 'light' });
 
     this.setUniforms(frame, scene, DEBUG_MODES[debug]);
-    gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     const t3 = now();
-    return { setupMs: t1 - t0, uploadMs: t2 - t1, submitMs: t3 - t2, uploaded, frame };
+    return { setupMs: t1 - t0, atmospherePasses, ...(passMs ? { passMs } : {}), uploadMs: t2 - t1, submitMs: t3 - t2, uploaded, frame };
+  }
+
+  /** Binds atmosphere tables to their texture units and points the program's samplers at them. */
+  private bindLuts(p: Program, samplers: Record<string, LutName>): void {
+    const gl = this.gl;
+    for (const [uniform, lut] of Object.entries(samplers)) {
+      const unit = UNIT[lut];
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(gl.TEXTURE_2D, this.luts![lut]);
+      gl.uniform1i(p.loc(uniform), unit);
+    }
+  }
+
+  /** The haze uniforms every atmosphere program shares. */
+  private setHaze(p: Program, fr: FrameParams): void {
+    const gl = this.gl;
+    const a = fr.atmosphere.params;
+    gl.uniform3f(p.loc('u_hazeScat'), a.hazeScattering[0], a.hazeScattering[1], a.hazeScattering[2]);
+    gl.uniform3f(p.loc('u_hazeExt'), a.hazeExtinction[0], a.hazeExtinction[1], a.hazeExtinction[2]);
+    gl.uniform1f(p.loc('u_hazeTop'), a.hazeTopM);
+  }
+
+  /**
+   * Pass 1 (PRD §9.2, D-013): the Hillaire 2020 tables for this frame. The transmittance and
+   * multiple-scattering tables are redrawn only when the atmosphere changed since the last render;
+   * the sky-view tables, the light pass and the aerial perspective are redrawn every frame.
+   */
+  private renderAtmosphere(fr: FrameParams, passMs?: Record<string, number>): string[] {
+    const gl = this.gl;
+    assertBakedAtmosphere(fr.atmosphere.params);
+    const passes: string[] = [];
+    const px = new Float32Array(4);
+    if (passMs) this.finish();
+    const run = (name: PassName, setup: (p: Program) => void): void => {
+      const p = this.passes![name];
+      const [w, h] = LUT_SIZES[PASS_TARGETS[name][0]!];
+      const t = now();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.lutFbos![name]);
+      gl.viewport(0, 0, w, h);
+      gl.useProgram(p.program);
+      setup(p);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      if (passMs) {
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, px);
+        passMs[name] = now() - t;
+      }
+      passes.push(name);
+    };
+    const shadeTop = Number.isFinite(fr.atmosphere.shadeTopM) ? fr.atmosphere.shadeTopM : SHADE_TOP_NONE;
+    const hView = fr.atmosphere.viewHeightM;
+    if (this.baseKey !== fr.atmosphere.key) {
+      run('trans', (p) => this.setHaze(p, fr));
+      run('ms', (p) => {
+        this.setHaze(p, fr);
+        this.bindLuts(p, { u_transLut: 'trans' });
+      });
+      this.baseKey = fr.atmosphere.key;
+    }
+    run('sky', (p) => {
+      this.setHaze(p, fr);
+      this.bindLuts(p, { u_transLut: 'trans', u_msLut: 'ms' });
+      gl.uniform1f(p.loc('u_viewH'), hView);
+      gl.uniform1f(p.loc('u_muS'), fr.sunDir[2]);
+      gl.uniform1f(p.loc('u_shadeTop'), shadeTop);
+    });
+    run('irr', (p) => {
+      this.setHaze(p, fr);
+      this.bindLuts(p, { u_transLut: 'trans', u_skyLut0: 'sky0' });
+      gl.uniform1f(p.loc('u_viewH'), hView);
+    });
+    run('light', (p) => {
+      this.setHaze(p, fr);
+      this.bindLuts(p, { u_transLut: 'trans', u_irrLut: 'irr' });
+      const L = fr.light;
+      gl.uniform1f(p.loc('u_viewH'), hView);
+      gl.uniform3f(p.loc('u_sunDir'), fr.sunDir[0], fr.sunDir[1], fr.sunDir[2]);
+      gl.uniform3f(p.loc('u_moonDir'), fr.moonDir[0], fr.moonDir[1], fr.moonDir[2]);
+      gl.uniform1f(p.loc('u_solarLux'), L.solarLux);
+      gl.uniform1f(p.loc('u_tAmb'), L.tAmb);
+      gl.uniform1f(p.loc('u_tDirExp'), L.tDirExp);
+      gl.uniform1f(p.loc('u_tBeamTot'), L.tBeamTot);
+      gl.uniform1f(p.loc('u_moonLux'), L.moonLux);
+      gl.uniform1i(p.loc('u_layerCount'), L.layers.length);
+      const ll = new Float32Array(MAX_LAYERS * 4);
+      L.layers.forEach((l, i) => ll.set([l.topM, l.tTot, l.wBelow, l.wAbove], i * 4));
+      gl.uniform4fv(p.loc('u_layerLight'), ll);
+    });
+    run('apInc', (p) => {
+      this.setHaze(p, fr);
+      this.bindLuts(p, { u_transLut: 'trans', u_msLut: 'ms', u_lightLut: 'light' });
+      const b = fr.basis;
+      gl.uniform3f(p.loc('u_camF'), b.forward[0], b.forward[1], b.forward[2]);
+      gl.uniform3f(p.loc('u_camR'), b.right[0], b.right[1], b.right[2]);
+      gl.uniform3f(p.loc('u_camU'), b.up[0], b.up[1], b.up[2]);
+      gl.uniform2f(p.loc('u_tanHalf'), b.tanHalfH, b.tanHalfV);
+      gl.uniform1f(p.loc('u_viewH'), hView);
+      gl.uniform3f(p.loc('u_sunDir'), fr.sunDir[0], fr.sunDir[1], fr.sunDir[2]);
+      gl.uniform1f(p.loc('u_shadeTop'), shadeTop);
+    });
+    run('apPrefix', (p) => this.bindLuts(p, { u_apInc0: 'apInc0', u_apInc1: 'apInc1' }));
+    return passes;
+  }
+
+  /**
+   * Reads back every atmosphere table of the last render as float RGBA (GL row order: row 0 is the bottom
+   * texel row). For tests: the GPU-versus-CPU comparison and the determinism checks.
+   */
+  readAtmosphere(): AtmosphereReadback {
+    const gl = this.gl;
+    if (!this.lutFbos) throw new Error('readAtmosphere: nothing rendered yet');
+    const read = (pass: PassName, attachment: number): FloatImage => {
+      const lut = PASS_TARGETS[pass][attachment]!;
+      const [w, h] = LUT_SIZES[lut];
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.lutFbos![pass]);
+      gl.readBuffer(gl.COLOR_ATTACHMENT0 + attachment);
+      const data = new Float32Array(w * h * 4);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.FLOAT, data);
+      gl.readBuffer(gl.COLOR_ATTACHMENT0);
+      return { width: w, height: h, data };
+    };
+    const out: AtmosphereReadback = {
+      transmittance: read('trans', 0),
+      multiScattering: read('ms', 0),
+      skyView: read('sky', 0),
+      skyViewBelow: read('sky', 1),
+      light: read('light', 0),
+      apIncScatter: read('apInc', 0),
+      apIncTransmittance: read('apInc', 1),
+      apScatter: read('apPrefix', 0),
+      apTransmittance: read('apPrefix', 1),
+    };
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return out;
   }
 
   private setUniforms(fr: FrameParams, scene: SceneSpec, debugMode: number): void {
     const gl = this.gl;
     const b = fr.basis;
     const L = fr.light;
+    this.setHaze(this.main!, fr);
+    gl.uniform1f(this.u('u_viewH'), fr.atmosphere.viewHeightM);
+    gl.uniform1f(this.u('u_solarLux'), L.solarLux);
     gl.uniform2f(this.u('u_resolution'), fr.width, fr.height);
     gl.uniform3f(this.u('u_camF'), b.forward[0], b.forward[1], b.forward[2]);
     gl.uniform3f(this.u('u_camR'), b.right[0], b.right[1], b.right[2]);
@@ -341,7 +633,6 @@ export class SnowGlobeRenderer {
 
     const geom = new Float32Array(MAX_LAYERS * 4);
     const step = new Float32Array(MAX_LAYERS).fill(1);
-    const rad = new Float32Array(MAX_LAYERS * 3);
     const counts = new Int32Array(MAX_LAYERS);
     const profile = new Float32Array((MAX_LAYERS * MAX_PROFILE_KNOTS) * 2);
     const noiseM = new Float32Array(MAX_LAYERS * NOISE_OCTAVES * 4);
@@ -349,7 +640,6 @@ export class SnowGlobeRenderer {
     fr.layers.forEach((l, li) => {
       geom.set([l.baseM, l.topM, l.betaPerM, l.solid ? 1 : 0], li * 4);
       step[li] = l.stepM;
-      rad.set(l.radiance, li * 3);
       counts[li] = l.profile.length;
       l.profile.forEach((k, j) => profile.set([k.distance_km, k.cover_0_1], (li * MAX_PROFILE_KNOTS + j) * 2));
       l.transforms.forEach((t, o) => {
@@ -360,34 +650,22 @@ export class SnowGlobeRenderer {
     gl.uniform1i(this.u('u_layerCount'), fr.layers.length);
     gl.uniform4fv(this.u('u_layerGeom'), geom);
     gl.uniform1fv(this.u('u_layerStep'), step);
-    gl.uniform3fv(this.u('u_layerRadiance'), rad);
     gl.uniform1iv(this.u('u_profileCount'), counts);
     gl.uniform4fv(this.u('u_profile'), profile);
     gl.uniform4fv(this.u('u_noiseM'), noiseM);
     gl.uniform4fv(this.u('u_noiseC'), noiseC);
     gl.uniform4f(this.u('u_noiseAmp'), NOISE_AMPLITUDES[0]!, NOISE_AMPLITUDES[1]!, NOISE_AMPLITUDES[2]!, NOISE_AMPLITUDES[3]!);
 
-    gl.uniform1f(this.u('u_hazeBeta'), fr.haze.betaPerM);
-    gl.uniform1f(this.u('u_hazeTop'), fr.haze.topM);
     gl.uniform1f(this.u('u_fogBeta'), fr.fog.betaPerM);
     gl.uniform1f(this.u('u_fogTop'), fr.fog.topM);
     gl.uniform1f(this.u('u_fogDecayH'), fr.fog.decayScaleM);
+    gl.uniform1f(this.u('u_fogAirW'), L.fogAirWeight);
 
-    gl.uniform3fv(this.u('u_eDir'), new Float32Array(L.eDir));
-    gl.uniform3fv(this.u('u_eDif'), new Float32Array(L.eDif));
     gl.uniform3fv(this.u('u_sunDiskL'), new Float32Array(L.sunDiskL));
     gl.uniform3fv(this.u('u_moonDiskL'), new Float32Array(L.moonDiskL));
-    gl.uniform4f(this.u('u_sky'), L.sky.zenithL, L.sky.day, L.sky.twilight, L.sky.night);
-    gl.uniform3fv(this.u('u_skyMoon'), new Float32Array(L.skyMoon));
-    gl.uniform3fv(this.u('u_glow'), new Float32Array(L.glow));
-    gl.uniform1f(this.u('u_cloudDim'), L.cloudDim);
-    gl.uniform3fv(this.u('u_fogAir'), new Float32Array(L.fogAir));
-    gl.uniform1f(this.u('u_fogAirW'), L.fogAirWeight);
-    gl.uniform1f(this.u('u_exposure'), L.exposure);
     gl.uniform1f(this.u('u_sunRadius'), SUN_RADIUS_RAD);
     gl.uniform1f(this.u('u_moonRadius'), MOON_RADIUS_RAD);
     gl.uniform1f(this.u('u_pixelAngle'), fr.pixelAngle);
-    gl.uniform1i(this.u('u_sunUp'), L.sunUp ? 1 : 0);
     gl.uniform1i(this.u('u_debugMode'), debugMode);
   }
 
@@ -444,8 +722,16 @@ export class SnowGlobeRenderer {
       this.floatTarget = null;
     }
     if (this.dummy) gl.deleteTexture(this.dummy);
+    if (this.luts) for (const t of Object.values(this.luts)) gl.deleteTexture(t);
+    if (this.lutFbos) for (const f of Object.values(this.lutFbos)) gl.deleteFramebuffer(f);
+    if (this.passes) for (const p of Object.values(this.passes)) gl.deleteProgram(p.program);
     if (this.program) gl.deleteProgram(this.program);
     if (this.vao) gl.deleteVertexArray(this.vao);
+    this.luts = null;
+    this.lutFbos = null;
+    this.passes = null;
+    this.main = null;
+    this.baseKey = null;
     this.program = null;
   }
 }

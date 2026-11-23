@@ -99,6 +99,10 @@ export interface SceneSpec {
   sun: { alt_deg: number; az_deg: number };
   moon: { alt_deg: number; az_deg: number; illuminated_fraction: number };
   forecast: ForecastSpec;
+  /**
+   * The viewpoint's clear-air aerosol extinction (per km), an aerosol layer of the Hillaire 2020 atmosphere
+   * in addition to its molecules and background aerosol (renderer 0.3.0 onward; PRD §9.3).
+   */
   haze: { beta_per_km: number };
   plate: PlateSpec;
   /** Optional free-form provenance (forecast file, run, issuer). Hashed, never read by the renderer. */

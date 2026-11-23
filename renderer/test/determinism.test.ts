@@ -1,8 +1,9 @@
 /**
  * Determinism (PRD §9.5): the same inputs give byte-identical PNGs, across separate browser launches
- * and through the `pnpm render` CLI; another forecast run changes the clouds; scrubbing is continuous,
- * also across forecast hours with changing winds; and a producer's rounding of the wind does not move
- * them. Outputs go to a temporary directory outside the repo and are removed afterwards.
+ * and through the `pnpm render` CLI; the atmosphere's lookup tables are byte-identical across launches
+ * and when the cached ones are rebuilt; another forecast run changes the clouds; scrubbing is
+ * continuous, also across forecast hours with changing winds; and a producer's rounding of the wind does
+ * not move them. Outputs go to a temporary directory outside the repo and are removed afterwards.
  */
 import { execFile } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -85,6 +86,52 @@ describe('byte-identical renders', () => {
       run(process.execPath, [join(PACKAGE_ROOT, 'scripts/render.ts'), '--scene', scenePath, '--plate', fileArgs.platePath, '--sky-mask', fileArgs.skyMaskPath, '--depth', fileArgs.depthPath, '--out', inside], { cwd: PACKAGE_ROOT }),
     ).rejects.toThrow(/inside the repository/);
     expect(existsSync(inside)).toBe(false);
+  });
+});
+
+describe('atmosphere tables (Hillaire 2020, D-013)', () => {
+  it('are byte-identical across two browser launches', async () => {
+    const scene = readScene(scenePath);
+    const read = async () => {
+      const r = await HeadlessRenderer.launch();
+      try {
+        await r.render(scene, loadSyntheticInputs());
+        return await r.readAtmosphere();
+      } finally {
+        await r.close();
+      }
+    };
+    const a = await read();
+    const b = await read();
+    let tables = 0;
+    for (const k of Object.keys(a) as (keyof typeof a)[]) {
+      expect(Buffer.from(a[k].data.buffer).equals(Buffer.from(b[k].data.buffer)), k).toBe(true);
+      tables++;
+    }
+    expect(tables).toBe(9);
+  });
+
+  it('rebuilding the cached tables after another atmosphere gives the same frame, byte for byte', async () => {
+    const r = await HeadlessRenderer.launch();
+    try {
+      const inputs = loadSyntheticInputs();
+      const base = readScene(scenePath);
+      const hazier = JSON.parse(JSON.stringify(base)) as SceneSpec;
+      hazier.haze.beta_per_km = 0.2;
+      const first = await r.render(base, inputs);
+      const again = await r.render(base, inputs);
+      const other = await r.render(hazier, inputs);
+      const back = await r.render(base, inputs);
+      expect(first.timing.atmospherePasses).toEqual(['trans', 'ms', 'sky', 'irr', 'light', 'apInc', 'apPrefix']);
+      expect(again.timing.atmospherePasses).toEqual(['sky', 'irr', 'light', 'apInc', 'apPrefix']); // cached
+      expect(other.timing.atmospherePasses[0]).toBe('trans');
+      expect(back.timing.atmospherePasses[0]).toBe('trans');
+      expect(Buffer.from(back.rgba).equals(Buffer.from(first.rgba))).toBe(true);
+      expect(Buffer.from(again.rgba).equals(Buffer.from(first.rgba))).toBe(true);
+      expect(Buffer.from(other.rgba).equals(Buffer.from(first.rgba))).toBe(false);
+    } finally {
+      await r.close();
+    }
   });
 });
 

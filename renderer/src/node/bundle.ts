@@ -3,7 +3,7 @@
  * so a render can never use a stale bundle; `pnpm build` writes the same bundles to dist/.
  *
  * Legal comments (slash-star-bang, @license, @preserve) are kept and moved to the end of the bundle:
- * PRD §15.4 and D-013 require third-party notices, such as the Hillaire port's MIT notice (TODO(M1.5)),
+ * PRD §15.4 and D-013 require third-party notices, such as the Hillaire port's MIT notice (atmosphere/model.ts),
  * to survive bundling. bundle.test.ts checks the current notices are present in every build.
  */
 import { fileURLToPath } from 'node:url';

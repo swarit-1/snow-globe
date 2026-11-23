@@ -133,11 +133,17 @@ Jean Meeus, Astronomical Algorithms (2nd ed.)
 
 Astronomical Almanac low-precision Moon formulas
   Cited; used only in the app/core tests (tests/moon_vs_almanac.rs).
+Hillaire 2020 sky and atmosphere, ported from sebh/UnrealEngineSkyAtmosphere
+(S. Hillaire, "A Scalable and Production Ready Sky and Atmosphere Rendering
+Technique", Computer Graphics Forum 39(4), 2020)
+  Licence: MIT, "Copyright (c) 2020 Epic Games, Inc." (checked against the
+  repository's LICENSE file on 23 Nov 2026). Ported in renderer/src/atmosphere/,
+  renderer/src/cpu/atmosphere.ts and renderer/src/webgl/atmosphere-glsl.ts
+  (renderer 0.3.0, D-013). The full notice is a legal comment in
+  renderer/src/atmosphere/model.ts, which the bundle keeps, and a comment in
+  the shader sources.
 
 Planned, not in the code yet
-  - Hillaire 2020 atmosphere, ported from sebh/UnrealEngineSkyAtmosphere
-    (MIT) or Babylon.js (Apache-2.0); the notice stays in the source and the
-    bundle (D-013; TODO(M1.5) in the renderer).
   - Z-Image-Turbo (Apache-2.0), if Tier 2 passes its kill test (M3).
   - Parakeet weights (CC BY 4.0), only if used (D-004).
   - The depth model, embedding model and DEM: named in M2; non-commercial

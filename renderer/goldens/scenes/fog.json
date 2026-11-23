@@ -2,7 +2,7 @@
   "viewpoint_id": "synthetic.test-ridge",
   "valid_time_utc": "2026-11-18T17:00:00Z",
   "run_init_utc": "2026-11-18T12:00:00Z",
-  "renderer_version": "0.2.0",
+  "renderer_version": "0.3.0",
   "seed": "fcb5d5bd95c61d46",
   "camera": {
     "width": 320,

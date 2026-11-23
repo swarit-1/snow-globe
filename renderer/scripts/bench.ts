@@ -11,6 +11,10 @@
  * SwiftShader is a CPU rasteriser: its numbers are NOT representative of WKWebView on the M4 GPU. The
  * PRD targets (<= 8 ms at 1080p steady state, <= 50 ms first frame) are measured later in WKWebView
  * (M2); the 'gpu' backend here is Chromium's ANGLE/Metal path, a closer but still different stack.
+ *
+ * The report records its provenance (RENDERER_VERSION, the git commit and whether the renderer's files
+ * differ from it) and the machine's load average before and after each backend, since other work on a
+ * fanless machine moves these times by up to 2x.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,6 +24,7 @@ import { goldenScenePath, loadSyntheticInputs } from '../src/node/goldens.ts';
 import { HeadlessRenderer, type Backend } from '../src/node/headless.ts';
 import { resample } from '../src/node/images.ts';
 import { platformInfo, rendererCacheDir } from '../src/node/paths.ts';
+import { gitState, loadAverage } from '../src/node/provenance.ts';
 import { readScene } from '../src/node/render-files.ts';
 import { solarPosition } from '../src/ephemeris/sun.ts';
 import { parseUtcSeconds } from '../src/time.ts';
@@ -63,7 +68,15 @@ async function benchBackend(backend: Backend): Promise<Record<string, unknown>> 
   }
   const glRenderer = String(runner.glInfo.unmaskedRenderer ?? runner.glInfo.renderer);
   const software = /swiftshader|llvmpipe|software/i.test(glRenderer);
-  const result: Record<string, unknown> = { backend, available: !(backend === 'gpu' && software), gl_renderer: glRenderer, browser: `chromium ${runner.browserVersion}`, launch_ms: Number(runner.launchMs.toFixed(0)), runs: [] as unknown[] };
+  const result: Record<string, unknown> = {
+    backend,
+    available: !(backend === 'gpu' && software),
+    gl_renderer: glRenderer,
+    browser: `chromium ${runner.browserVersion}`,
+    launch_ms: Number(runner.launchMs.toFixed(0)),
+    load_average_before: loadAverage(),
+    runs: [] as unknown[],
+  };
   if (backend === 'gpu' && software) {
     result.reason = 'Chromium fell back to a software renderer; no GPU numbers';
     await runner.close();
@@ -108,12 +121,14 @@ async function benchBackend(backend: Backend): Promise<Record<string, unknown>> 
   } finally {
     await runner.close();
   }
+  result.load_average_after = loadAverage();
   return result;
 }
 
 async function main(): Promise<void> {
   const report: Record<string, unknown> = {
     renderer_version: RENDERER_VERSION,
+    git: gitState(),
     measured_utc: new Date().toISOString(),
     platform: platformInfo(),
     method:

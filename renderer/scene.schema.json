@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://snow-globe.invalid/schemas/scene.schema.json",
   "title": "SceneSpec",
-  "description": "Everything one Tier 1 frame depends on (PRD section 9.2), renderer 0.2.0. Heights are metres above mean sea level unless a name says _agl; angles are degrees; azimuths are clockwise from true north. Mirrors validateScene() in renderer/src/scene.ts (a test checks they agree). Rules this schema cannot express, which validateScene() also enforces: seed == deriveSeed(viewpoint_id, run_init_utc); timestamps must be real instants (no 30 February; the patterns already exclude month 13, day 32, hour 24, second 60); valid_time_utc lies 0 to 384 h after run_init_utc; cover_profile distances and wind_series lead_h values strictly increase; wind_series read at the valid time is within 0.05 m/s of wind_u_ms / wind_v_ms; sun is within 1 degree of the solar position for valid_time_utc at the camera.",
+  "description": "Everything one Tier 1 frame depends on (PRD section 9.2), renderer 0.3.0. Heights are metres above mean sea level unless a name says _agl; angles are degrees; azimuths are clockwise from true north. Mirrors validateScene() in renderer/src/scene.ts (a test checks they agree). Rules this schema cannot express, which validateScene() also enforces: seed == deriveSeed(viewpoint_id, run_init_utc); timestamps must be real instants (no 30 February; the patterns already exclude month 13, day 32, hour 24, second 60); valid_time_utc lies 0 to 384 h after run_init_utc; cover_profile distances and wind_series lead_h values strictly increase; wind_series read at the valid time is within 0.05 m/s of wind_u_ms / wind_v_ms; sun is within 1 degree of the solar position for valid_time_utc at the camera.",
   "type": "object",
   "additionalProperties": false,
   "required": ["viewpoint_id", "valid_time_utc", "run_init_utc", "renderer_version", "seed", "camera", "sun", "moon", "forecast", "haze", "plate"],
@@ -128,7 +128,7 @@
           "type": ["number", "null"],
           "exclusiveMinimum": 0,
           "maximum": 1000000,
-          "description": "Near-surface visibility diagnostic (HRRR VIS). Applied only below 100 m above ground (PRD 9.3), as the excess over clear-air haze."
+          "description": "Near-surface visibility diagnostic (HRRR VIS). Applied only below 100 m above ground (PRD 9.3), as the excess over the whole clear air at the ground (molecules, background aerosol and the scene's haze, 550 nm; renderer 0.3.0 onward)."
         },
         "precip_rate_mm_h": { "type": "number", "minimum": 0, "maximum": 500, "description": "Accepted and hashed; not rendered in v0 (TODO(M2) pass 7)." },
         "wind_u_ms": { "type": "number", "minimum": -150, "maximum": 150, "description": "Eastward wind at the valid time. Without wind_series, the clouds advect as if it had blown constantly since run_init_utc." },
@@ -160,7 +160,7 @@
       "additionalProperties": false,
       "required": ["beta_per_km"],
       "properties": {
-        "beta_per_km": { "type": "number", "minimum": 0, "maximum": 10, "description": "Clear-air extinction, fitted per viewpoint on clear dev frames (PRD 9.3). v0: uniform below 2 km above the ground." }
+        "beta_per_km": { "type": "number", "minimum": 0, "maximum": 10, "description": "Clear-air aerosol extinction (per km, grey) in addition to the molecular atmosphere and the background aerosol of the Hillaire 2020 Earth atmosphere, fitted per viewpoint on clear dev frames (PRD 9.3; renderer 0.3.0 onward). v0: uniform below 2 km above the ground, single-scattering albedo 0.9." }
       }
     },
     "plate": {

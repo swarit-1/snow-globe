@@ -33,11 +33,12 @@ export function koschmieder(lScene: number, lSky: number, t: number): number {
 }
 
 /**
- * The part of the forecast-visibility extinction that is fog rather than clear-air haze.
- * Visibility already includes clear-air extinction, so only the excess over the haze is applied to
- * the near-surface layer (v0 rule; documented in README).
+ * The part of the forecast-visibility extinction that is fog rather than clear air. Visibility already
+ * includes the clear air's extinction, so only the excess over it is applied to the near-surface layer
+ * (v0 rule; documented in README). Since renderer 0.3.0 the clear air is the whole atmosphere at the
+ * ground (molecules, background aerosol and the scene's haze, at 550 nm), not the haze alone.
  */
-export function fogExcessBeta(visibilityM: number | null, hazeBetaPerM: number, eps = DEFAULT_VISIBILITY_EPSILON): number {
+export function fogExcessBeta(visibilityM: number | null, clearAirBetaPerM: number, eps = DEFAULT_VISIBILITY_EPSILON): number {
   if (visibilityM === null) return 0;
-  return Math.max(0, betaFromVisibility(visibilityM, eps) - hazeBetaPerM);
+  return Math.max(0, betaFromVisibility(visibilityM, eps) - clearAirBetaPerM);
 }

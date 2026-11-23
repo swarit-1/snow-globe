@@ -1,7 +1,13 @@
 /**
- * Derived per-frame parameters: everything the shader receives as uniforms, computed once on the CPU in
- * float64 from a validated SceneSpec. The CPU reference (cpu/reference.ts) reads the same object, so the
- * GPU and the reference share one definition of layers, noise transforms, haze, fog and light.
+ * Derived per-frame parameters: everything the shaders receive as uniforms, computed once on the CPU in
+ * float64 from a validated SceneSpec. The CPU reference (cpu/reference.ts, cpu/atmosphere.ts,
+ * cpu/shade.ts) reads the same object, so the GPU and the reference share one definition of layers,
+ * noise transforms, the atmosphere, fog and the light model's inputs.
+ *
+ * Since renderer 0.3.0 the light itself (direct sunlight, sky irradiance, exposure, cloud-face radiance,
+ * fog airlight) is not computed here: it comes from the Hillaire 2020 atmosphere's lookup tables, on the
+ * GPU in the light pass and on the CPU in cpu/atmosphere.ts (lightFromAtmosphere), from the inputs
+ * gathered in FrameParams.light.
  *
  * PRD sections: §9.2 passes 1-4, 6 and 8; §9.3 haze, fog and ceiling; §9.5 seed and advection (the
  * field drifts by the wind's time integral since the run's initialisation, math/advection.ts).
@@ -22,35 +28,17 @@ import {
 } from './math/constants.ts';
 import { coverAt, type CoverKnot } from './math/cover.ts';
 import { fogExcessBeta } from './math/extinction.ts';
-import { horizonDip, rayPointGroundDistance } from './math/geodesy.ts';
+import { rayPointGroundDistance } from './math/geodesy.ts';
 import { layerNoiseTransforms, seedToUint32, type OctaveTransform } from './math/noise.ts';
 import { intervalLength, slabIntervals } from './math/shell.ts';
 import type { Vec3 } from './math/vec3.ts';
-import {
-  CAMERA_MIN_ADAPT_LUX,
-  FOG_ALBEDO,
-  MOON_RADIUS_RAD,
-  MOON_SKY_FACTOR,
-  SKY_COLORS,
-  SKY_IRRADIANCE_FACTOR,
-  SUN_RADIUS_RAD,
-  addRGB,
-  atmosphereTransmittance,
-  diskSolidAngle,
-  luminanceY,
-  moonNormalIlluminance,
-  normalizeY,
-  scaleRGB,
-  skyDiffuseIlluminance,
-  skyWeights,
-  sunNormalIlluminance,
-  sunVisibility,
-  smoothstep,
-  zenithLuminance,
-  type RGB,
-} from './light.ts';
+import { MOON_RADIUS_RAD, SOLAR_E0_LUX, SUN_RADIUS_RAD, diskSolidAngle, moonTopOfAtmosphereLux } from './light.ts';
+import { ATMOSPHERE_MIN_HEIGHT_M, ATMOSPHERE_THICKNESS_M, atmosphereKey, atmosphereParams, clearAirExtinction, type AtmosphereParams } from './atmosphere/model.ts';
+import type { LightInputs } from './cpu/atmosphere.ts';
 import { LAYER_SLOT, SLAB_TYPES, cloudDirectTransmission, cloudTotalTransmission, type SlabKind } from './clouds.ts';
 import { leadSeconds, sceneAdvection, type SceneSpec } from './scene.ts';
+
+export type { LightInputs } from './cpu/atmosphere.ts';
 
 export interface FrameLayer {
   kind: SlabKind;
@@ -65,35 +53,20 @@ export interface FrameLayer {
   stepM: number;
   profile: CoverKnot[];
   transforms: OctaveTransform[];
-  /** Radiance (rgb cd/m^2) of the face of this slab that the camera sees: base, top, or in-cloud mix. */
-  radiance: RGB;
 }
 
-export interface FrameLight {
-  /** Direct solar illuminance on a horizontal surface under a clear sky (rgb lux). */
-  eDir: RGB;
-  /** Diffuse illuminance, expected over the forecast cover (rgb lux), including moonlight. */
-  eDif: RGB;
-  /** Expected illuminance at the camera (lux, luminance), used for exposure. */
-  eCamY: number;
-  /** Multiplier from radiance to exposure-normalised linear values (1 = a white diffuser under eCam). */
-  exposure: number;
-  sunDiskL: RGB;
-  moonDiskL: RGB;
-  sky: { zenithL: number; day: number; twilight: number; night: number };
-  skyMoon: RGB;
-  /** Circumsolar glow radiance scale (rgb). */
-  glow: RGB;
-  /** Scalar dimming of the clear-sky airlight by cloud (expected illuminance / clear illuminance). */
-  cloudDim: number;
-  /** Multiple-scattering airlight radiance of dense near-surface fog (rgb). */
-  fogAir: RGB;
+/** The frame's atmosphere (PRD §9.2 pass 1): the medium, and where the camera and the cloud shade sit in it. */
+export interface FrameAtmosphere {
+  params: AtmosphereParams;
+  /** atmosphereKey(params): the transmittance and multiple-scattering tables are cached on it. */
+  key: string;
+  /** Camera height used for the sky-view table and the aerial perspective (the camera clamped into the atmosphere). */
+  viewHeightM: number;
   /**
-   * Blend weight from the haze airlight (single scattering, Koschmieder's horizon-sky assumption) to
-   * fogAir for the near-surface layer: 1 - exp(-beta_fog * 1 km). ~0.05 at 50 km visibility, ~0.98 at 1 km.
+   * Top of the highest slab that can shade the camera's ground (a slab whose top is above it); light
+   * scattered by the air below this height is dimmed by the expected cloud dimming. -Infinity: no such slab.
    */
-  fogAirWeight: number;
-  sunUp: boolean;
+  shadeTopM: number;
 }
 
 export interface FrameParams {
@@ -112,10 +85,13 @@ export interface FrameParams {
   sunDir: Vec3;
   moonDir: Vec3;
   layers: FrameLayer[];
+  /** The scene's clear-air haze: an aerosol layer of the atmosphere, uniform below topM (PRD §9.3). */
   haze: { betaPerM: number; topM: number };
   fog: { betaPerM: number; topM: number; decayScaleM: number };
   nominalDepthM: number;
-  light: FrameLight;
+  atmosphere: FrameAtmosphere;
+  /** Inputs of the light model; the light itself comes from the atmosphere passes (cpu/atmosphere.ts lightFromAtmosphere). */
+  light: LightInputs;
   /** Approximate angular size of one pixel at the image centre (rad). */
   pixelAngle: number;
 }
@@ -168,21 +144,21 @@ export function buildFrame(scene: SceneSpec): FrameParams {
   }
   if (raw.length > MAX_LAYERS) throw new Error(`buildFrame: ${raw.length} slabs exceed MAX_LAYERS`);
 
-  // --- Light (passes 1, 2, 4, 8).
+  // --- Atmosphere (pass 1): the reference Earth atmosphere plus the scene's haze as an aerosol layer,
+  // uniform below 2 km above the v0 flat ground (TODO(M2): the per-viewpoint fitted profile, PRD §9.3).
+  const hazeBeta = scene.haze.beta_per_km / 1000;
+  const hazeTop = hGround + HAZE_LAYER_DEPTH_M;
+  const params = atmosphereParams(hazeBeta, hazeTop);
+
+  // --- Light inputs (passes 2, 4, 8): v0 cloud factors from the forecast cover, the Moon's phase, the slabs.
   const sunAlt = scene.sun.alt_deg;
   const sunDir = altAzToDirection(sunAlt, scene.sun.az_deg);
   const moonDir = altAzToDirection(scene.moon.alt_deg, scene.moon.az_deg);
-  const eSunN = sunNormalIlluminance(sunAlt);
   const muS = Math.sin(sunAlt * DEG);
-  const eDir = scaleRGB(eSunN, Math.max(muS, 0));
-  const eMoonN = moonNormalIlluminance(scene.moon.alt_deg, scene.moon.illuminated_fraction);
-  const eMoonH = scaleRGB(eMoonN, Math.max(Math.sin(scene.moon.alt_deg * DEG), 0));
-  const skyMoon = scaleRGB(SKY_COLORS.night, MOON_SKY_FACTOR * luminanceY(eMoonH));
-  const eSkyClear = addRGB(addRGB(skyDiffuseIlluminance(sunAlt), scaleRGB(skyMoon, Math.PI * SKY_IRRADIANCE_FACTOR)), eMoonH);
-
   let tAmb = 1;
   let tDirExp = 1;
   let tBeamTot = 1;
+  let shadeTopM = -Infinity;
   for (const l of raw) {
     if (l.topM <= hGround) continue; // a deck below the camera's ground does not shade the camera
     const tau = SLAB_TYPES[l.kind].betaPerM * (l.topM - l.baseM);
@@ -193,31 +169,12 @@ export function buildFrame(scene: SceneSpec): FrameParams {
     tAmb *= 1 - cZen * (1 - tTot);
     tDirExp *= 1 - cSun * (1 - tDir);
     tBeamTot *= 1 - cSun * (1 - tTot);
+    shadeTopM = Math.max(shadeTopM, l.topM);
   }
-  const eDif = addRGB(scaleRGB(eSkyClear, tAmb), scaleRGB(eDir, Math.max(tBeamTot - tDirExp, 0)));
-  const eCam = addRGB(scaleRGB(eDir, tDirExp), eDif);
-  const eCamY = luminanceY(eCam);
-  const eClearY = luminanceY(addRGB(eDir, eSkyClear));
-  const cloudDim = eClearY > 0 ? Math.min(1, eCamY / eClearY) : 1;
+  const moonLux = moonTopOfAtmosphereLux(scene.moon.illuminated_fraction);
 
   const layers: FrameLayer[] = raw.map((l) => {
     const type = SLAB_TYPES[l.kind];
-    const tau = type.betaPerM * (l.topM - l.baseM);
-    const tTot = cloudTotalTransmission(tau);
-    // v0 cloud lighting: the slab sees the Sun above its own horizon (altitude + dip), with a 30 %
-    // isotropic "volume" term so low Sun still lights cloud sides; sky light from above. Heuristic.
-    const altL = sunAlt + horizonDip(Math.max(l.topM - hGround, 0)) / DEG;
-    const eSunL = scaleRGB(sunNormalIlluminance(altL), 0.7 * Math.max(Math.sin(altL * DEG), 0) + 0.3 * sunVisibility(altL));
-    const eAbove = addRGB(eSunL, eSkyClear);
-    const below = scaleRGB(eAbove, tTot / Math.PI);
-    const above = scaleRGB(eAbove, (1 - tTot) / Math.PI);
-    let radiance: RGB;
-    if (hCam <= l.baseM) radiance = below;
-    else if (hCam >= l.topM) radiance = above;
-    else {
-      const a = (hCam - l.baseM) / (l.topM - l.baseM);
-      radiance = addRGB(scaleRGB(below, 1 - a), scaleRGB(above, a));
-    }
     const slot = LAYER_SLOT[l.kind];
     return {
       kind: l.kind,
@@ -229,36 +186,41 @@ export function buildFrame(scene: SceneSpec): FrameParams {
       stepM: type.cellSizeM * CLOUD_STEP_CELL_FRACTION,
       profile: l.profile,
       transforms: layerNoiseTransforms(seedU32, slot, type.cellSizeM, advectionM[0], advectionM[1]),
-      radiance,
     };
   });
+  // Cloud faces (v0): the camera sees a slab's base from below, its top from above, and a mix from inside.
+  const lightLayers = raw.map((l) => {
+    const tTot = cloudTotalTransmission(SLAB_TYPES[l.kind].betaPerM * (l.topM - l.baseM));
+    let wAbove: number;
+    if (hCam <= l.baseM) wAbove = 0;
+    else if (hCam >= l.topM) wAbove = 1;
+    else wAbove = (hCam - l.baseM) / (l.topM - l.baseM);
+    return { topM: l.topM, tTot, wBelow: 1 - wAbove, wAbove };
+  });
 
-  // --- Haze and fog (pass 6, PRD §9.3).
-  const hazeBeta = scene.haze.beta_per_km / 1000;
+  // --- Fog (pass 6, PRD §9.3). Visibility includes the clear air, so only the excess over the atmosphere's
+  // extinction at the ground (green channel, 550 nm) is fog. v0 flat ground (no DEM): the ground under
+  // every ray is the shell at hGround, so near-surface fog fills every height below hGround + 100 m.
+  // TODO(M2): DEM ground height along the ray.
   const eps = f.visibility_epsilon ?? DEFAULT_VISIBILITY_EPSILON;
-  // v0 flat ground (no DEM): the ground under every ray is the shell at hGround, so near-surface fog fills
-  // every height below hGround + 100 m. TODO(M2): DEM ground height along the ray.
+  const clearAirGreen = clearAirExtinction(params, Math.max(hGround, 0))[1];
+  const fogBeta = fogExcessBeta(f.visibility_m, clearAirGreen, eps);
   let fogTop = hGround + NEAR_SURFACE_FOG_DEPTH_M;
   // A ceiling inside the near-surface layer is a surface-based deck: the fog fills it up to its top.
   if (f.ceiling_m_msl !== null && f.ceiling_m_msl <= fogTop && ceilingDeckTop !== null) fogTop = Math.max(fogTop, ceilingDeckTop);
 
-  const sunColorNorm = normalizeY(atmosphereTransmittance(sunAlt));
-  const zenithL = zenithLuminance(sunAlt);
-  const w = skyWeights(sunAlt);
-  const light: FrameLight = {
-    eDir,
-    eDif,
-    eCamY,
-    exposure: Math.PI / Math.max(eCamY, CAMERA_MIN_ADAPT_LUX),
-    sunDiskL: scaleRGB(eSunN, 1 / diskSolidAngle(SUN_RADIUS_RAD)),
-    moonDiskL: scaleRGB(eMoonN, 1 / diskSolidAngle(MOON_RADIUS_RAD)),
-    sky: { zenithL, day: w.day, twilight: w.twilight, night: w.night },
-    skyMoon,
-    glow: scaleRGB(sunColorNorm, 2.0 * zenithL * smoothstep(-6, 2, sunAlt)),
-    cloudDim,
-    fogAir: scaleRGB(eCam, FOG_ALBEDO / Math.PI),
-    fogAirWeight: 1 - Math.exp(-fogExcessBeta(f.visibility_m, hazeBeta, eps) * 1000),
-    sunUp: luminanceY(eDir) > 0,
+  const light: LightInputs = {
+    solarLux: SOLAR_E0_LUX,
+    tAmb,
+    tDirExp,
+    tBeamTot,
+    moonLux,
+    layers: lightLayers,
+    // Blend weight from the haze-like airlight (Koschmieder's horizon sky) to the dense-fog airlight:
+    // 1 - exp(-beta_fog * 1 km). ~0.035 at 50 km visibility (haze 0.03 per km, ground at 1,640 m), ~0.98 at 1 km.
+    fogAirWeight: 1 - Math.exp(-fogBeta * 1000),
+    sunDiskL: [SOLAR_E0_LUX / diskSolidAngle(SUN_RADIUS_RAD), SOLAR_E0_LUX / diskSolidAngle(SUN_RADIUS_RAD), SOLAR_E0_LUX / diskSolidAngle(SUN_RADIUS_RAD)],
+    moonDiskL: [moonLux / diskSolidAngle(MOON_RADIUS_RAD), moonLux / diskSolidAngle(MOON_RADIUS_RAD), moonLux / diskSolidAngle(MOON_RADIUS_RAD)],
   };
 
   return {
@@ -273,9 +235,15 @@ export function buildFrame(scene: SceneSpec): FrameParams {
     sunDir,
     moonDir,
     layers,
-    haze: { betaPerM: hazeBeta, topM: hGround + HAZE_LAYER_DEPTH_M },
-    fog: { betaPerM: fogExcessBeta(f.visibility_m, hazeBeta, eps), topM: fogTop, decayScaleM: FOG_DECAY_SCALE_M },
+    haze: { betaPerM: hazeBeta, topM: hazeTop },
+    fog: { betaPerM: fogBeta, topM: fogTop, decayScaleM: FOG_DECAY_SCALE_M },
     nominalDepthM: scene.plate.nominal_depth_m ?? DEFAULT_NOMINAL_DEPTH_M,
+    atmosphere: {
+      params,
+      key: atmosphereKey(params),
+      viewHeightM: Math.min(Math.max(hCam, ATMOSPHERE_MIN_HEIGHT_M), ATMOSPHERE_THICKNESS_M - ATMOSPHERE_MIN_HEIGHT_M),
+      shadeTopM,
+    },
     light,
     pixelAngle: (2 * basis.tanHalfH) / cam.width,
   };

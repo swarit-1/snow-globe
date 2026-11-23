@@ -1,5 +1,5 @@
 {
-  "renderer_version": "0.2.0",
+  "renderer_version": "0.3.0",
   "backend": "swiftshader",
   "gl_renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
   "browser": "chromium 158.0.8127.18",
@@ -27,21 +27,21 @@
   "goldens": {
     "clear": {
       "file": "clear.png",
-      "sha256": "81584c56b6ef961ed7c832fd7d599fbe1f730e4ecc243faa0ffed694949dc193",
-      "bytes": 34188,
-      "scene_hash": "787b75e8811e6e18c822b0a30e2deacca5dbc48a23b215b6b596c75a3928fe49"
+      "sha256": "04d23173baab32e7992802faa1d93f4d814d99253fada1b7944d92eba1eed28b",
+      "bytes": 35267,
+      "scene_hash": "de784a22f63f5666c68fb69986b8aeb0bcd4210c6352cade6d1fd8fdce8cb527"
     },
     "low-deck": {
       "file": "low-deck.png",
-      "sha256": "d3d3f5502c03578af8fc90ee52f57de2cd47bd9e38a9fa743eaa63a2a42d143f",
-      "bytes": 34730,
-      "scene_hash": "ca9c64c2c49589266d488d8ba6e789fb0996f447314302e2627bbd1198cc132b"
+      "sha256": "aa12a354d128f19969506f4b6fd7c0514038861f67d7f3177dbf3ba9f2a2cc43",
+      "bytes": 35356,
+      "scene_hash": "eb1a0778a62618e957a6e52a21e2e4d0faec0f5ab43e69d266bd36c9a33bbd9f"
     },
     "fog": {
       "file": "fog.png",
-      "sha256": "3c250d19bacf87cc059fe89591fa26ccbe5e0bf989afc43f35c6fb3a56c432c9",
-      "bytes": 7037,
-      "scene_hash": "00398e530a706b2c5904052a5e4fa40308c2287deb3b38a4b8a8b3d7c6ecfcc3"
+      "sha256": "d833d36d2b69deaa2f08c66fe3b2a132bea576e9ca33c3cd0eac0467f6a0d404",
+      "bytes": 6996,
+      "scene_hash": "0d23282ffb91139d78f43bb09c5b615a3fd0b3f216f7910ef28467cb092a66f5"
     }
   }
 }

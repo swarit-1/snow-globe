@@ -1,31 +1,32 @@
 /**
- * GLSL ES 3.00 sources for renderer v0 (PRD §9.2). One full-screen fragment program runs the passes in
- * order; each pass is a function below, named after the PRD table:
+ * GLSL ES 3.00 source of the main pass of renderer v0 (PRD §9.2). One full-screen fragment program runs the
+ * per-pixel passes in order; the Hillaire 2020 atmosphere's lookup tables are built by the passes in
+ * atmosphere-glsl.ts first. Each pass is a function below, named after the PRD table:
  *
- *   (1) sky v0          skyRadiance()      analytic placeholder; TODO(M1.5) Hillaire 2020 LUTs (D-013).
- *                                          The port's MIT notice goes in a legal comment (slash-star-bang)
- *                                          here and in the shader string; esbuild keeps legal comments in
- *                                          the bundle (legalComments 'eof', tested).
- *   (2) Sun and Moon    diskRadiance()     geometric disks; TODO(M2) Moon phase shape, stars
+ *   (1) atmosphere      skyInScatter()     Hillaire 2020 sky-view table (D-013), dimmed below the shade top
+ *                       apLookup()         Hillaire 2020 aerial perspective between the camera and any point
+ *   (2) Sun and Moon    diskRadiance()     geometric disks times the atmosphere's transmittance along the view;
+ *                                          TODO(M2) Moon phase shape, stars
  *   (3) cloud slabs     layerAlongRay()    slabs with Earth curvature, cover read at the intersection,
  *                                          noise thresholded BEFORE averaging, sample count from the path
  *                                          length (step = 1/16 of the noise cell, 4-128 samples)
- *   (4) scene light v0  groundRadiance()   plate x (direct Sun x cloud transmittance + diffuse);
+ *   (4) scene light v0  groundRadiance()   plate x (direct Sun through the atmosphere to the terrain point
+ *                                          x cloud transmittance + diffuse sky light from the light pass);
  *                                          TODO(M2) dehazed plate, normals, DEM horizon shadows
- *   (6) haze and fog    mediaTau()         clear-air haze + near-surface fog (flat-ground v0) with a soft top
+ *   (6) haze and fog    the scene's haze is part of the atmosphere (pass 1); near-surface fog (flat-ground
+ *                       v0) with a soft top is fogTau(), composited with the aerial perspective by addSegment()
  *   (8) camera v0       toneCurve()        exposure + soft-knee tone curve + sRGB; TODO(M2) Kim & Pollefeys
  *
  * Passes 5 (night lights) and 7 (precipitation) are not in v0: TODO(M2).
  *
- * Every constant shared with the CPU reference is injected from TypeScript, and the geometry functions
- * mirror math/shell.ts, math/cover.ts, math/noise.ts and math/coverage.ts line for line.
+ * Every constant shared with the CPU reference is injected from TypeScript, and the functions mirror
+ * math/shell.ts, math/cover.ts, math/noise.ts, math/coverage.ts and cpu/shade.ts line for line.
  */
 import {
   CLOUD_MAX_SAMPLES,
   CLOUD_MIN_SAMPLES,
   CLOUD_SKIP_TRANSMITTANCE,
   CLOUD_TAU_OPAQUE,
-  EARTH_RADIUS_M,
   FOG_DECAY_BANDS,
   MAX_LAYERS,
   MAX_PROFILE_KNOTS,
@@ -33,36 +34,17 @@ import {
 } from '../math/constants.ts';
 import { ACKLAM_A, ACKLAM_B, ACKLAM_C, ACKLAM_D, ACKLAM_P_LOW } from '../math/normal.ts';
 import { LATTICE_MASK, NOISE_OCTAVES } from '../math/noise.ts';
-import { SKY_COLORS, type RGB } from '../light.ts';
+import { LIGHT_TEXELS } from '../cpu/atmosphere.ts';
+import { ATMOSPHERE_NOTICE_GLSL, GLSL_ATMOSPHERE_COMMON, GLSL_GEOMETRY, GLSL_HEADER, GLSL_MAIN_ATMOSPHERE, PASS_VERTEX_SHADER } from './atmosphere-glsl.ts';
+import { glslFloat as f } from './glsl-format.ts';
 
-const f = (x: number): string => {
-  const s = x.toPrecision(10);
-  return /[.e]/.test(s) ? s : `${s}.0`;
-};
-const v3 = (c: RGB): string => `vec3(${f(c[0])}, ${f(c[1])}, ${f(c[2])})`;
-
-/**
- * Debug outputs (rendered to a float target), per slab in rgba: coverage = mask coverage kappa over the
- * whole path, target = mean forecast cover at the sample points, alpha = drawn slab opacity. hdr = the
- * exposed linear radiance before any clamp (so NaN and negative values stay visible); ray = direction and
- * ray end.
- */
 export const DEBUG_MODES = { none: 0, coverage: 1, hdr: 2, ray: 3, target: 4, alpha: 5 } as const;
 export type DebugMode = keyof typeof DEBUG_MODES;
 
-export const VERTEX_SHADER = `#version 300 es
-// Full-screen triangle from gl_VertexID; no vertex buffers.
-void main() {
-  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
-  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}
-`;
+/** Full-screen triangle from gl_VertexID; no vertex buffers (shared with the atmosphere passes). */
+export const VERTEX_SHADER = PASS_VERTEX_SHADER;
 
-export const FRAGMENT_SHADER = `#version 300 es
-precision highp float;
-precision highp int;
-precision highp sampler2D;
-
+export const FRAGMENT_SHADER = `${GLSL_HEADER}${ATMOSPHERE_NOTICE_GLSL}
 #define MAX_LAYERS ${MAX_LAYERS}
 #define MAX_KNOTS ${MAX_PROFILE_KNOTS}
 #define OCTAVES ${NOISE_OCTAVES}
@@ -70,9 +52,7 @@ precision highp sampler2D;
 #define CLOUD_MAX_SAMPLES ${CLOUD_MAX_SAMPLES}
 #define LATTICE_MASK ${LATTICE_MASK}
 #define FOG_DECAY_BANDS ${FOG_DECAY_BANDS}
-
-const float R_EARTH = ${f(EARTH_RADIUS_M)};
-const float PI = 3.141592653589793;
+${GLSL_GEOMETRY}${GLSL_ATMOSPHERE_COMMON}
 const float T_INF = ${f(T_INFINITE_M)};
 const float TAU_OPAQUE = ${f(CLOUD_TAU_OPAQUE)};
 // The colour path skips slabs behind nearer slabs whose combined transmittance is below this: they could
@@ -99,71 +79,31 @@ uniform int u_hasSkyMask;
 uniform int u_hasDepth;
 uniform float u_nominalDepth;
 
-// Slabs.
+// Slabs (their face radiance comes from the light pass's texture, texel ${LIGHT_TEXELS.layer0} + slab).
 uniform int u_layerCount;
 uniform vec4 u_layerGeom[MAX_LAYERS];       // base_m, top_m, beta_per_m, solid
 uniform float u_layerStep[MAX_LAYERS];      // cloud-mask sample step along view rays (m)
-uniform vec3 u_layerRadiance[MAX_LAYERS];   // face radiance seen by this camera
 uniform int u_profileCount[MAX_LAYERS];
 uniform vec4 u_profile[MAX_LAYERS * MAX_KNOTS / 2]; // (km, cover) pairs, two per vec4
 uniform vec4 u_noiseM[MAX_LAYERS * OCTAVES];        // per octave: m00 m01 m10 m11
 uniform vec4 u_noiseC[MAX_LAYERS * OCTAVES / 2];    // per octave: c0 c1, two per vec4
 uniform vec4 u_noiseAmp;
 
-// Haze and fog.
-uniform float u_hazeBeta;
-uniform float u_hazeTop;
+// Fog (the scene's haze is part of the atmosphere).
 uniform float u_fogBeta;
 uniform float u_fogTop;
 uniform float u_fogDecayH;
+uniform float u_fogAirW;
 
-// Light and camera.
-uniform vec3 u_eDir;
-uniform vec3 u_eDif;
+// Disks and camera (the rest of the light is in the light pass's texture, u_lightLut).
 uniform vec3 u_sunDiskL;
 uniform vec3 u_moonDiskL;
-uniform vec4 u_sky;        // zenith luminance, day, twilight, night weights
-uniform vec3 u_skyMoon;
-uniform vec3 u_glow;
-uniform float u_cloudDim;
-uniform vec3 u_fogAir;
-uniform float u_fogAirW;
-uniform float u_exposure;
 uniform float u_sunRadius;
 uniform float u_moonRadius;
 uniform float u_pixelAngle;
-uniform int u_sunUp;
 uniform int u_debugMode;
-
+${GLSL_MAIN_ATMOSPHERE}
 out vec4 o_color;
-
-// ---------------------------------------------------------------- geometry (mirrors math/shell.ts)
-vec2 sphereInside(float h0, float mu, float h) {
-  float B = (R_EARTH + h0) * mu;
-  float C = (h0 - h) * (2.0 * R_EARTH + h0 + h);
-  float disc = B * B - C;
-  if (disc < 0.0) return vec2(1.0, -1.0);
-  float sq = sqrt(disc);
-  float q = -(B + (B >= 0.0 ? sq : -sq));
-  if (q == 0.0) return vec2(0.0);
-  float t2 = C / q;
-  return vec2(min(q, t2), max(q, t2));
-}
-
-vec2 clipIv(vec2 iv, float t0, float t1) { return vec2(max(iv.x, t0), min(iv.y, t1)); }
-float ivLen(vec2 iv) { return max(iv.y - iv.x, 0.0); }
-float overlapLen(vec2 iv, float ta, float tb) { return max(min(iv.y, tb) - max(iv.x, ta), 0.0); }
-
-void slabIntervals(float h0, float mu, float base, float top, float t0, float t1, out vec2 nearIv, out vec2 farIv) {
-  nearIv = vec2(1.0, -1.0);
-  farIv = vec2(1.0, -1.0);
-  vec2 outer = sphereInside(h0, mu, top);
-  if (outer.x > outer.y) return;
-  vec2 inner = sphereInside(h0, mu, base);
-  if (inner.x > inner.y) { nearIv = clipIv(outer, t0, t1); return; }
-  nearIv = clipIv(vec2(outer.x, inner.x), t0, t1);
-  farIv = clipIv(vec2(inner.y, outer.y), t0, t1);
-}
 
 // Great-circle distance (km) from the camera's foot point to a local point (mirrors math/geodesy.ts).
 float groundDistKm(vec3 P) { return R_EARTH * atan(length(P.xy), R_EARTH + P.z) * 0.001; }
@@ -328,29 +268,6 @@ float sunTransmittance(vec3 Pg) {
   return T;
 }
 
-// ---------------------------------------------------------------- pass 1: sky v0 (placeholder)
-// Zenith luminance and day/twilight/night weights come from light.ts per frame; this function only
-// shapes them over the dome. All terms are clamped so no input gives NaN, and every term is
-// continuous in Sun altitude. TODO(M1.5): Hillaire 2020 transmittance / multiple-scattering / sky-view /
-// aerial-perspective LUTs (D-013, PLAN M1.5).
-vec3 skyRadiance(vec3 v) {
-  float e = max(v.z, 0.0);
-  float g = exp(-6.0 * e);
-  float a = 0.5;
-  float lv = length(v.xy);
-  float ls = length(u_sunDir.xy);
-  if (lv > 1e-5 && ls > 1e-5) a = 0.5 + 0.5 * dot(v.xy / lv, u_sunDir.xy / ls);
-  float a2 = a * a;
-  vec3 cDay = mix(${v3(SKY_COLORS.dayZenith)}, ${v3(SKY_COLORS.dayHorizon)}, g) * (1.0 + 1.5 * g);
-  vec3 cTw = mix(${v3(SKY_COLORS.twilightZenith)}, mix(${v3(SKY_COLORS.twilightAway)}, ${v3(SKY_COLORS.twilightToward)}, a2), g) * (1.0 + g * (0.5 + 2.5 * a2));
-  vec3 cNight = ${v3(SKY_COLORS.night)} * (1.0 + 0.5 * g);
-  vec3 L = u_sky.x * (u_sky.y * cDay + u_sky.z * cTw + u_sky.w * cNight);
-  float ang = 2.0 * asin(clamp(0.5 * length(v - u_sunDir), 0.0, 1.0));
-  L += u_glow * exp(-ang / 0.15);
-  L += u_skyMoon * (1.0 + 0.5 * g);
-  return L;
-}
-
 // ---------------------------------------------------------------- pass 2: Sun and Moon disks
 vec3 diskRadiance(vec3 v) {
   float angS = 2.0 * asin(clamp(0.5 * length(v - u_sunDir), 0.0, 1.0));
@@ -361,60 +278,81 @@ vec3 diskRadiance(vec3 v) {
 }
 
 // ---------------------------------------------------------------- pass 4: scene light v0
+// The plate as a horizontal Lambertian albedo proxy at the terrain point P: direct sunlight through the
+// atmosphere to P (transmittance table at P's height, Earth's shadow from P), times the cloud shadow,
+// plus the expected diffuse light at the camera from the light pass (cpu/shade.ts groundRadiance).
 vec3 groundRadiance(vec2 uv, vec3 dir, float tGround) {
   vec3 plate = texture(u_plate, uv).rgb;
   vec3 Pg = vec3(0.0, 0.0, u_hCam) + tGround * dir;
-  float Ts = (u_sunUp == 1) ? sunTransmittance(Pg) : 1.0;
-  vec3 E = u_eDir * Ts + u_eDif;
+  vec3 Q = vec3(Pg.xy, R_EARTH + Pg.z);
+  float qlen = length(Q);
+  float hP = (dot(Pg.xy, Pg.xy) + Pg.z * Pg.z + 2.0 * R_EARTH * Pg.z) / (qlen + R_EARTH);
+  float muP = dot(Q, u_sunDir) / qlen;
+  float hA = clamp(hP, ATM_MIN_H, ATM_TOP_H);
+  vec3 eDir = u_solarLux * transmittanceAt(hA, muP) * diskVisibility(hA, muP, SUN_RADIUS) * max(muP, 0.0);
+  float Ts = (eDir.r > 0.0 || eDir.g > 0.0 || eDir.b > 0.0) ? sunTransmittance(Pg) : 1.0;
+  vec3 E = eDir * Ts + lightTexel(${LIGHT_TEXELS.eDif}).rgb;
   return plate * E / PI;
 }
 
-// ---------------------------------------------------------------- pass 6: haze and fog
-vec2 g_hazeIv;
+// ---------------------------------------------------------------- pass 6: fog, composited with the aerial perspective
 vec2 g_fogIv;
 vec2 g_decayNear[FOG_DECAY_BANDS];
 vec2 g_decayFar[FOG_DECAY_BANDS];
+vec2 g_fogEnv;   // the ray inside the fog or its soft top (empty without fog)
+vec3 g_fogSrc;   // the fog's airlight for this pixel
 
-void setupMedia(vec3 dir, float tEnd) {
-  g_hazeIv = clipIv(sphereInside(u_hCam, dir.z, u_hazeTop), 0.0, tEnd);
+void setupFog(vec3 dir) {
   g_fogIv = vec2(1.0, -1.0);
+  g_fogEnv = vec2(1.0, -1.0);
   for (int k = 0; k < FOG_DECAY_BANDS; ++k) { g_decayNear[k] = vec2(1.0, -1.0); g_decayFar[k] = vec2(1.0, -1.0); }
   if (u_fogBeta > 0.0) {
-    g_fogIv = clipIv(sphereInside(u_hCam, dir.z, u_fogTop), 0.0, tEnd);
+    g_fogIv = clipIv(sphereInside(u_hCam, dir.z, u_fogTop), 0.0, T_INF);
     for (int k = 0; k < FOG_DECAY_BANDS; ++k) {
       float lo = u_fogTop + float(k) * u_fogDecayH;
-      slabIntervals(u_hCam, dir.z, lo, lo + u_fogDecayH, 0.0, tEnd, g_decayNear[k], g_decayFar[k]);
+      slabIntervals(u_hCam, dir.z, lo, lo + u_fogDecayH, 0.0, T_INF, g_decayNear[k], g_decayFar[k]);
     }
+    g_fogEnv = clipIv(sphereInside(u_hCam, dir.z, u_fogTop + float(FOG_DECAY_BANDS) * u_fogDecayH), 0.0, T_INF);
   }
 }
 
-// Optical depth (haze, fog) over [ta, tb]: uniform haze in the boundary layer; fog below its top and
-// exp(-(k + 0.5)) * beta in band k above it.
-vec2 mediaTau(float ta, float tb) {
-  float th = u_hazeBeta * overlapLen(g_hazeIv, ta, tb);
-  float tf = 0.0;
-  if (u_fogBeta > 0.0) {
-    tf = overlapLen(g_fogIv, ta, tb);
-    for (int k = 0; k < FOG_DECAY_BANDS; ++k) {
-      tf += exp(-(float(k) + 0.5)) * (overlapLen(g_decayNear[k], ta, tb) + overlapLen(g_decayFar[k], ta, tb));
-    }
-    tf *= u_fogBeta;
+// Fog optical depth over [ta, tb]: beta below the fog top, exp(-(k + 0.5)) * beta in soft-top band k.
+float fogTau(float ta, float tb) {
+  if (u_fogBeta <= 0.0) return 0.0;
+  float tf = overlapLen(g_fogIv, ta, tb);
+  for (int k = 0; k < FOG_DECAY_BANDS; ++k) {
+    tf += exp(-(float(k) + 0.5)) * (overlapLen(g_decayNear[k], ta, tb) + overlapLen(g_decayFar[k], ta, tb));
   }
-  return vec2(th, tf);
+  return tf * u_fogBeta;
 }
 
-// L = Ls * T + Lair * (1 - T), front to back, with haze and fog airlight mixed by optical depth. Thin
-// near-surface extinction scatters like haze (horizon-sky airlight); dense fog gets the multiple-
-// scattering airlight (PRD §9.3 "thick fog uses a multiple-scattering airlight approximation").
-void composeMedia(float ta, float tb, vec3 lHaze, inout vec3 L, inout float T) {
-  vec2 tau = mediaTau(ta, tb);
-  float tt = tau.x + tau.y;
-  if (tt > 0.0) {
-    vec3 air = (tau.x * lHaze + tau.y * mix(lHaze, u_fogAir, u_fogAirW)) / tt;
-    float Ts = exp(-tt);
-    L += T * (1.0 - Ts) * air;
-    T *= Ts;
+// [ta, tb] with the atmosphere at A (ta) and B (tb), and the fog mixed through it: the atmosphere's
+// in-scatter is dimmed by the fog's mean transmittance over the piece, the fog's airlight by the
+// atmosphere in front of it. L and Tf exclude the clouds in front (the caller multiplies by them).
+void addPiece(float ta, float tb, Ap A, Ap B, inout vec3 L, inout float Tf) {
+  vec3 dS = max(B.S - A.S, vec3(0.0)) * u_solarLux;
+  float tauF = fogTau(ta, tb);
+  if (tauF <= 0.0) { L += Tf * dS; return; }
+  float Ts = exp(-tauF);
+  float avg = tauF < 1.0e-3 ? 1.0 - 0.5 * tauF : (1.0 - Ts) / tauF;
+  L += Tf * (dS * avg + A.T * g_fogSrc * (1.0 - Ts));
+  Tf *= Ts;
+}
+
+// [ta, tb], split where the ray enters or leaves the fog, so fog never mixes with clear air beyond it.
+void addSegment(float ta, float tb, Ap A, Ap B, vec2 fuv, inout vec3 L, inout float Tf) {
+  if (u_fogBeta > 0.0 && g_fogEnv.x <= g_fogEnv.y) {
+    for (int q = 0; q < 2; ++q) {
+      float sp = q == 0 ? g_fogEnv.x : g_fogEnv.y;
+      if (sp > ta && sp < tb) {
+        Ap M = apLookup(fuv, sp);
+        addPiece(ta, sp, A, M, L, Tf);
+        ta = sp;
+        A = M;
+      }
+    }
   }
+  addPiece(ta, tb, A, B, L, Tf);
 }
 
 // ---------------------------------------------------------------- pass 8: camera v0
@@ -439,13 +377,14 @@ void main() {
   float skyV = 0.0;
   if (u_hasSkyMask == 1) skyV = texture(u_skyMask, uv).r;
   bool isSky = u_hasSkyMask == 1 && skyV >= 0.5;
+  float tSkyEnd = T_INF;
+  if (u_hCam > 0.0) {
+    vec2 sea = sphereInside(u_hCam, dir.z, 0.0);
+    if (sea.x <= sea.y && sea.x > 0.0) tSkyEnd = sea.x;
+  }
   float tEnd;
   if (isSky) {
-    tEnd = T_INF;
-    if (u_hCam > 0.0) {
-      vec2 sea = sphereInside(u_hCam, dir.z, 0.0);
-      if (sea.x <= sea.y && sea.x > 0.0) tEnd = sea.x;
-    }
+    tEnd = tSkyEnd;
   } else {
     tEnd = u_nominalDepth;
     bool haveDepth = false;
@@ -505,7 +444,7 @@ void main() {
     if (h.alpha <= 0.0) continue;
     evT[nEv] = h.tMid;
     evA[nEv] = h.alpha;
-    evL[nEv] = u_layerRadiance[li];
+    evL[nEv] = lightTexel(${LIGHT_TEXELS.layer0} + li).rgb;
     nEv++;
     tSlabs *= 1.0 - h.alpha;
   }
@@ -513,36 +452,65 @@ void main() {
   if (u_debugMode == 4) { o_color = vec4(tgt[0], tgt[1], tgt[2], tgt[3]); return; }
   if (u_debugMode == 5) { o_color = vec4(alp[0], alp[1], alp[2], alp[3]); return; }
 
-  // Passes 1, 2, 4: background radiance (sky, disks, relit plate), blended at mask edges.
-  vec3 lSky = skyRadiance(dir) + diskRadiance(dir);
-  vec3 lBg = lSky;
-  if (!(u_hasSkyMask == 1 && skyV >= 1.0)) {
-    vec3 lGround = groundRadiance(uv, dir, isSky ? u_nominalDepth : tEnd);
-    lBg = mix(lGround, lSky, skyV);
+  // Passes 1, 2, 4 and 6, front to back: the atmosphere's in-scatter (aerial perspective) and the fog between
+  // the camera, the slabs and the background; Tc is the slabs' transmittance, Tf the fog's.
+  vec2 fuv = frag / u_resolution;
+  setupFog(dir);
+  g_fogSrc = vec3(0.0);
+  if (u_fogBeta > 0.0) {
+    // Thin fog scatters like haze (Koschmieder: the horizon sky in the view's azimuth); dense fog gets the
+    // multiple-scattering airlight (PRD §9.3).
+    float lxy = length(dir.xy);
+    vec3 hz = lxy > 1e-4 ? vec3(dir.xy / lxy, 0.0) : vec3(0.0, 1.0, 0.0);
+    g_fogSrc = mix(u_solarLux * skyInScatter(hz), lightTexel(${LIGHT_TEXELS.fogAir}).rgb, u_fogAirW);
   }
-
-  // Pass 6 composited with pass 3, front to back.
-  setupMedia(dir, tEnd);
-  float lxy = length(dir.xy);
-  vec3 hz = lxy > 1e-4 ? vec3(dir.xy / lxy, 0.0) : vec3(0.0, 1.0, 0.0);
-  vec3 lHaze = skyRadiance(hz) * u_cloudDim;
+  // The slab events, then the background tails written out (not folded into one loop with the events:
+  // that compiled 0.7 s faster on SwiftShader but drew 0.4-2 ms slower on the M4 GPU, measured 2026-11-23).
   vec3 L = vec3(0.0);
-  float T = 1.0;
+  float Tc = 1.0;
+  float Tf = 1.0;
+  Ap prev = Ap(vec3(0.0), vec3(1.0));
   float tPrev = 0.0;
   for (int e = 0; e < MAX_LAYERS; ++e) {
     if (e >= nEv) break;
-    composeMedia(tPrev, evT[e], lHaze, L, T);
-    L += T * evA[e] * evL[e];
-    T *= 1.0 - evA[e];
+    Ap cur = apLookup(fuv, evT[e]);
+    vec3 seg = vec3(0.0);
+    addSegment(tPrev, evT[e], prev, cur, fuv, seg, Tf);
+    L += Tc * seg;
+    L += Tc * Tf * cur.T * evA[e] * evL[e];
+    Tc *= 1.0 - evA[e];
+    prev = cur;
     tPrev = evT[e];
   }
-  composeMedia(tPrev, tEnd, lHaze, L, T);
-  L += T * lBg;
+  // The background, blended at sky-mask edges: the sky (in-scatter to the end of the atmosphere, the
+  // disks through the atmosphere, the night and moonlit sky) and the relit plate at its depth.
+  float wSky = u_hasSkyMask == 1 ? skyV : 0.0;
+  vec3 tail = vec3(0.0);
+  if (wSky > 0.0) {
+    vec3 lt = vec3(0.0);
+    float Tft = Tf;
+    addSegment(tPrev, max(tSkyEnd, tPrev), prev, Ap(skyInScatter(dir), vec3(0.0)), fuv, lt, Tft);
+    if (!(groundHit(u_viewH, dir.z) < BIG)) {
+      lt += Tft * (transmittanceAt(u_viewH, dir.z) * diskRadiance(dir) + lightTexel(${LIGHT_TEXELS.skyBackground}).rgb);
+    }
+    tail += wSky * lt;
+  }
+  if (wSky < 1.0) {
+    float tT = isSky ? u_nominalDepth : tEnd;
+    vec3 lt = vec3(0.0);
+    float Tft = Tf;
+    Ap endT = apLookup(fuv, tT);
+    addSegment(tPrev, max(tT, tPrev), prev, endT, fuv, lt, Tft);
+    lt += Tft * endT.T * groundRadiance(uv, dir, tT);
+    tail += (1.0 - wSky) * lt;
+  }
+  L += Tc * tail;
+  float exposure = lightTexel(${LIGHT_TEXELS.eDir}).a;
 
   // Pass 8: camera v0. The hdr debug output is taken before the clamp, so a NaN or a negative radiance
   // reaches the test instead of being hidden by max() (SwiftShader's max(NaN, 0.0) returns 0).
-  if (u_debugMode == 2) { o_color = vec4(L * u_exposure, 1.0); return; }
-  vec3 x = max(L, vec3(0.0)) * u_exposure;
+  if (u_debugMode == 2) { o_color = vec4(L * exposure, 1.0); return; }
+  vec3 x = max(L, vec3(0.0)) * exposure;
   o_color = vec4(srgbOetf(clamp(toneCurve(x), 0.0, 1.0)), 1.0);
 }
 `;

@@ -1,8 +1,9 @@
 /**
- * Sky v0 on the GPU: no NaNs, infinities or negative radiances at any Sun altitude (including below the
- * horizon) or for random valid scenes, no jumps through sunset and twilight, and the Sun disk where the
- * camera model puts it (PRD §9.2 passes 1-2). The Sun is placed freely (allowSyntheticSun): these tests
- * are about the sky model's numerics and geometry, not the ephemeris.
+ * The Hillaire 2020 sky on the GPU (PRD §9.2 passes 1-2, D-013): no NaNs, infinities or negative
+ * radiances at any Sun altitude (including below the horizon) or for random valid scenes (random haze
+ * too, so the cached tables are rebuilt for each), no jumps through sunset and twilight, and the Sun disk
+ * where the camera model puts it. The Sun is placed freely (allowSyntheticSun): these tests are about the
+ * sky's numerics and geometry, not the ephemeris.
  *
  * The hdr debug output is the exposed radiance before any clamp. Renderer 0.1.0 emitted max(L, 0), which
  * made negative values impossible and, on SwiftShader (max(NaN, 0.0) = 0), hid NaN as well.
@@ -31,7 +32,7 @@ function sweepScene(alt: number): SceneSpec {
   return s;
 }
 
-describe('sky v0 on SwiftShader', () => {
+describe('Hillaire 2020 sky on SwiftShader', () => {
   let runner: HeadlessRenderer;
   const inputs = loadSyntheticInputs();
   beforeAll(async () => {
@@ -78,8 +79,13 @@ describe('sky v0 on SwiftShader', () => {
   }
 
   it('has no jumps through sunset and twilight (largest step shrinks when the step does)', async () => {
-    // around each transition of the v0 model: disk set (-0.9, 0.4), twilight weights (-4, 6), knots (0, -6, -10, -18)
-    for (const centre of [0.4, -0.9, -4, -6, -10, -18, 6]) {
+    // Around the model's transitions: the Sun's disk setting below the camera's horizon (1,650 m: the
+    // horizon dips 1.30 deg; the +-0.25 deg window spans the disk's +-0.27 deg), the Sun on the
+    // astronomical horizon, the end of civil, nautical and astronomical twilight, and the low Sun. A
+    // 5x smaller step shrinks the largest step ~5x where the sky is continuous; at a jump it would not
+    // shrink (ratio ~1). (Renderer 0.2.0 compared 0.05 and 0.005 deg; each render now rebuilds the
+    // sky-view tables, so the fine step is 0.01 deg.)
+    for (const centre of [-1.3, 0, -6, -12, -18, 6]) {
       const steps = async (h: number) => {
         let worst = 0;
         let prev = await meanSkyHdr(centre - 0.25);
@@ -91,9 +97,9 @@ describe('sky v0 on SwiftShader', () => {
         return worst;
       };
       const coarse = await steps(0.05);
-      const fine = await steps(0.005);
-      console.log(`continuity around ${centre} deg: max |dlog| ${coarse.toExponential(2)} per 0.05 deg, ${fine.toExponential(2)} per 0.005 deg`);
-      expect(coarse / Math.max(fine, 1e-12)).toBeGreaterThan(4);
+      const fine = await steps(0.01);
+      console.log(`continuity around ${centre} deg: max |dlog| ${coarse.toExponential(2)} per 0.05 deg, ${fine.toExponential(2)} per 0.01 deg`);
+      expect(coarse / Math.max(fine, 1e-12)).toBeGreaterThan(2.5);
     }
   });
 
@@ -126,6 +132,7 @@ describe('sky v0 on SwiftShader', () => {
   });
 
   it('renders finite, non-negative radiance for 300 random valid scenes (seeded fuzz)', async () => {
+    // Each scene has its own haze and ground height, so each rebuilds the cached atmosphere tables too.
     const base = readScene(goldenScenePath('low-deck'));
     const u = (k: number, i: number) => unitFromHash(hashWords(0x5eed, k, i));
     let bad = 0;

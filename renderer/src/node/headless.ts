@@ -9,7 +9,7 @@
 import { createHash } from 'node:crypto';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
 import type { RawImage } from '../cpu/reference.ts';
-import type { GlInfo } from '../webgl/renderer.ts';
+import type { AtmosphereReadback, FloatImage, GlInfo } from '../webgl/renderer.ts';
 import type { DebugMode } from '../webgl/shader.ts';
 import type { SceneSpec } from '../scene.ts';
 import { buildIifeBundle } from './bundle.ts';
@@ -34,11 +34,17 @@ export interface HeadlessInputs {
 export interface HeadlessRenderOptions {
   /** Accept a Sun that does not match the valid time and place (synthetic geometry tests only). */
   allowSyntheticSun?: boolean;
+  /** Time each atmosphere pass to a readPixels barrier (benchmarks only; RenderOptions.profile). */
+  profile?: boolean;
 }
 
 export interface PageTiming {
   /** Page-side wall time of render() + the 1-pixel readPixels barrier: CPU setup, uploads and GPU execution (ms). */
   renderMs: number;
+  /** Atmosphere passes the render issued (the transmittance and multiple-scattering tables only when the atmosphere changed). */
+  atmospherePasses: string[];
+  /** With profile: each atmosphere pass's time to a readPixels barrier (ms). */
+  passMs?: Record<string, number>;
   setupMs: number;
   uploadMs: number;
   submitMs: number;
@@ -101,12 +107,14 @@ export class HeadlessRenderer {
     const backend = opts.backend ?? 'swiftshader';
     const t0 = performance.now();
     const bundle = await buildIifeBundle();
-    const browser = await chromium.launch({
-      headless: true,
-      // the GPU comparison needs full Chromium (new headless); SwiftShader runs in the headless shell
-      ...(backend === 'gpu' ? { channel: 'chromium' } : {}),
-      args: backend === 'swiftshader' ? SWIFTSHADER_ARGS : GPU_ARGS,
-    });
+    const args = backend === 'swiftshader' ? SWIFTSHADER_ARGS : GPU_ARGS;
+    // The GPU comparison prefers full Chromium (new headless); where only Playwright's headless shell is
+    // installed it uses that, which also reaches Metal ("ANGLE Metal Renderer: Apple M4", 2026-11-23).
+    // SwiftShader runs in the headless shell. The bench refuses software renderers on the GPU path.
+    const browser =
+      backend === 'gpu'
+        ? await chromium.launch({ headless: true, channel: 'chromium', args }).catch(() => chromium.launch({ headless: true, args }))
+        : await chromium.launch({ headless: true, args });
     try {
       const context = await browser.newContext({ viewport: { width: 64, height: 64 }, deviceScaleFactor: 1, serviceWorkers: 'block' });
       const page = await context.newPage();
@@ -165,6 +173,7 @@ export class HeadlessRenderer {
       debug,
       read,
       allowSyntheticSun: opts.allowSyntheticSun === true,
+      profile: opts.profile === true,
       sha: inputs.sha256 ?? {},
       plate: this.spec(inputs.plate),
       skyMask: this.spec(inputs.skyMask),
@@ -175,7 +184,7 @@ export class HeadlessRenderer {
       const g = globalThis as unknown as {
         __snowGlobe: {
           renderer: {
-            render(s: unknown, i: unknown, o: unknown): { setupMs: number; uploadMs: number; submitMs: number; uploaded: string[] };
+            render(s: unknown, i: unknown, o: unknown): { setupMs: number; uploadMs: number; submitMs: number; uploaded: string[]; atmospherePasses: string[]; passMs?: Record<string, number> };
             finish(): void;
             readRGBA(): Uint8Array;
             readFloat(): { width: number; height: number; data: Float32Array };
@@ -201,7 +210,7 @@ export class HeadlessRenderer {
       const info = st.renderer.render(
         a.scene,
         { plate, skyMask, depth, plateSha256: a.sha.plate, skyMaskSha256: a.sha.skyMask, depthSha256: a.sha.depth },
-        { debug: a.debug, allowSyntheticSun: a.allowSyntheticSun },
+        { debug: a.debug, allowSyntheticSun: a.allowSyntheticSun, profile: a.profile },
       );
       st.renderer.finish();
       const t1 = performance.now();
@@ -231,6 +240,8 @@ export class HeadlessRenderer {
       return {
         timing: {
           renderMs: t1 - t0,
+          atmospherePasses: info.atmospherePasses,
+          ...(info.passMs ? { passMs: info.passMs } : {}),
           setupMs: info.setupMs,
           uploadMs: info.uploadMs,
           submitMs: info.submitMs,
@@ -268,6 +279,33 @@ export class HeadlessRenderer {
   /** Renders without reading pixels back (for timing). */
   async renderTimed(scene: SceneSpec, inputs: HeadlessInputs, opts: HeadlessRenderOptions = {}): Promise<PageTiming> {
     return (await this.run(scene, inputs, 'none', false, opts)).timing;
+  }
+
+  /**
+   * Reads back the atmosphere tables of the last render (float RGBA, GL row order: row 0 at the bottom),
+   * for the GPU-versus-CPU and determinism tests.
+   */
+  async readAtmosphere(): Promise<AtmosphereReadback> {
+    const raw = await this.page.evaluate(() => {
+      const g = globalThis as unknown as { __snowGlobe: { renderer: { readAtmosphere(): Record<string, { width: number; height: number; data: Float32Array }> } } };
+      const all = g.__snowGlobe.renderer.readAtmosphere();
+      const out: Record<string, { width: number; height: number; b64: string }> = {};
+      for (const [k, v] of Object.entries(all)) {
+        const bytes = new Uint8Array(v.data.buffer, v.data.byteOffset, v.data.byteLength);
+        let s = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        out[k] = { width: v.width, height: v.height, b64: btoa(s) };
+      }
+      return out;
+    });
+    const out = {} as Record<string, FloatImage>;
+    for (const [k, v] of Object.entries(raw)) {
+      const bytes = fromBase64(v.b64);
+      const copy = new Uint8Array(bytes.length);
+      copy.set(bytes);
+      out[k] = { width: v.width, height: v.height, data: new Float32Array(copy.buffer) };
+    }
+    return out as unknown as AtmosphereReadback;
   }
 
   /** Drops the page's input cache and the runner's served inputs. */
