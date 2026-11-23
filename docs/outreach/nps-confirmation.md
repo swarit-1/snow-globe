@@ -2,7 +2,7 @@
 
 **For you to send.** Fill the brackets and send it from the project's own contact address, not a personal one (PRD §15.5). I haven't sent anything.
 
-**The name:** the project is Snow Globe since 21 Nov 2026 (D-080). The capture loop keeps sending the old User-Agent, `Lookout/0.1 (…)`, until the lead's switch after the M0.5 gate (PLAN.md), so the email names both.
+**The name:** the project is Snow Globe since 21 Nov 2026 (D-080). The capture loop sent the old User-Agent, `Lookout/0.1 (…)`, until the lead's switch after the M0.5 gate, at 00:02 UTC on 23 Nov 2026, and `SnowGlobe/0.1 (…)` since (D-090), so the email names both.
 
 Send it to two places:
 1. **NPS Air Resources Division (air-quality webcams).** Use the contact form linked from the archive site: <https://www.nps.gov/airwebcams/Contact>.

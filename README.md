@@ -67,11 +67,11 @@ Day by day in [PLAN.md](PLAN.md); every measured number so far, with how it was 
 
   Both jobs run on the development laptop until the AWS deployment, which waits for the owner
   (D-014, D-030).
-- **The 72 h log clock is still running.** It started at 12:24:23 UTC on 19 Nov for all eight
-  cameras, and outages extend it. With 10.80 h lost to sleep and restarts by 06:06 UTC on 21 Nov,
-  it closes at 23:12:07 UTC on Sun 22 Nov at the earliest (the data report; every new outage moves
-  it later). The jobs keep their old Lookout names until the lead's switch after that
-  (`infra/ops/migrate-to-snow-globe.sh`, D-080).
+- **The 72 h log clock closed** at 23:46:10.754 UTC on Sun 22 Nov (the data report, D-089). It
+  started at 12:24:23 UTC on 19 Nov for all eight cameras, and outages extended it: 72.01 h were
+  covered of 83.37 h elapsed, with 11.36 h lost to sleep and restarts. Right after it, the lead's
+  switch moved the jobs to the Snow Globe names, at 23:53–00:03 UTC
+  (`infra/ops/migrate-to-snow-globe.sh`, D-090). M0.5 now waits only on the owner's emails.
 - **M1, voice to first pixel**, runs from Mon 23 Nov to Mon 7 Dec 2026:
   - a platform spike, built but not yet run;
   - on-device speech, the parser, the overlay with Tier 0, and the replay harness;

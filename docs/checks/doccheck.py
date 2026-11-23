@@ -1959,9 +1959,11 @@ def scanned_files(repo: Repo) -> list[str]:
     return out
 
 
-#: The new data folder hard-coded in shell or Make form. Run before the rename's live switch, such a
-#: command creates ~/snow-globe-data beside ~/lookout-data, and renamed code then refuses to pick a
-#: data dir. The docs name ~/lookout-data instead, which the switch leaves as a symlink (D-080).
+#: The new data folder hard-coded in shell or Make form. Before the rename's live switch such a
+#: command would have created ~/snow-globe-data beside ~/lookout-data, and renamed code would then
+#: have refused to pick a data dir (D-080). Since the switch ~/snow-globe-data is the real folder and
+#: ~/lookout-data a symlink to it (D-090); the docs keep naming ~/lookout-data, so records and
+#: commands share one spelling.
 NEW_DATA_SHELL_RE = re.compile(r'(?:\$\{?HOME\}?|\$\(HOME\)|"\$HOME")/snow-globe-data(?![\w-])')
 NEW_DATA_TILDE_RE = re.compile(r"~/snow-globe-data(?![\w-])")
 #: Where the new folder may be hard-coded: (a path, an fnmatch pattern, or "" for every file; a
@@ -2022,9 +2024,8 @@ def check_data_dir_commands(repo: Repo) -> list[Problem]:
                     Problem(
                         "data-dir-commands",
                         f"{path}:{n}",
-                        "hard-codes $HOME/snow-globe-data, which a command run before the rename's live switch "
-                        "creates: name $HOME/lookout-data (the switch leaves it as a symlink) or the resolved "
-                        "data dir (D-080)",
+                        "hard-codes $HOME/snow-globe-data: name $HOME/lookout-data, a symlink to it since the "
+                        "switch (D-090), or the resolved data dir, so the docs' commands keep one spelling (D-080)",
                     )
                 )
         if path.endswith(".md"):
@@ -2038,9 +2039,9 @@ def check_data_dir_commands(repo: Repo) -> list[Problem]:
                         Problem(
                             "data-dir-commands",
                             f"{path}:{n}",
-                            f"the command {command.strip()[:90]!r} names ~/snow-globe-data, which run before the "
-                            "rename's live switch would create it: name ~/lookout-data or the resolved data dir "
-                            "(D-080)",
+                            f"the command {command.strip()[:90]!r} names ~/snow-globe-data: name ~/lookout-data, "
+                            "a symlink to it since the switch (D-090), or the resolved data dir, so the docs' "
+                            "commands keep one spelling (D-080)",
                         )
                     )
     return problems

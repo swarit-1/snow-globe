@@ -13,28 +13,28 @@
   },
   "counts": {
     "CLAUDE.md": {
-      "lines": 17,
-      "why": "the running jobs' names and ~/lookout-data until the switch, and the old variables still read"
+      "lines": 15,
+      "why": "the old variables still read, ~/lookout-data in paths and commands (a symlink to ~/snow-globe-data since the switch, D-090), and the names the jobs ran under before it"
     },
     "Makefile": {
       "lines": 9,
       "why": "the deprecated LOOKOUT_* variables read as fallbacks, and the old default folder in the resolver"
     },
     "PLAN.md": {
-      "lines": 12,
-      "why": "records of what ran and the names the running jobs keep until the switch; 'the Lookout draft'"
+      "lines": 14,
+      "why": "records of what ran (the old loops' names, the switch's *.lookout.bak backups), ~/lookout-data (a symlink since the switch, D-090), and 'the Lookout draft'"
     },
     "PRD.md": {
       "lines": 14,
       "why": "'the Lookout draft' of 18 Nov, and row 9's default as accepted (D-080)"
     },
     "PRD_PROGRESS.md": {
-      "lines": 51,
-      "why": "measured rows keep the names their runs used, and the running jobs' names until the switch"
+      "lines": 53,
+      "why": "measured rows keep the names their runs used, and ~/lookout-data in commands and paths (a symlink to ~/snow-globe-data since the switch, D-090)"
     },
     "README.md": {
-      "lines": 3,
-      "why": "the running jobs' names until the switch, and the fallbacks still read"
+      "lines": 2,
+      "why": "the former name, and the fallbacks still read (the jobs' old names ended at the switch, D-090)"
     },
     "THIRD_PARTY_NOTICES": {
       "lines": 7,

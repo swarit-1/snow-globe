@@ -37,7 +37,7 @@ Only the lead session commits. Subagents never commit.
 **Privacy:**
 - Never put the owner's name, email or GitHub handle in requests to external services, including the User-Agent.
 - The default UA is `SnowGlobe/0.1 (webcam research capture; fetch-on-change)`. It can be overridden with `SNOW_GLOBE_USER_AGENT` (the old `LOOKOUT_USER_AGENT` is still read).
-  - The running capture loop sends the old `Lookout/0.1 (webcam research capture; fetch-on-change)` until the post-gate switch (D-080).
+  - The live capture loop has sent that default since the post-gate switch at 00:02 UTC on 23 Nov: the snapshot's code sets it, and its script unsets every override. The request log does not record the UA, so this is checked in the code, not on the wire (D-090). Before the switch, nps.gov saw the old `Lookout/0.1 (webcam research capture; fetch-on-change)` (D-080).
 
 **Audio:** never record audio. Voice fixtures come only from the owner.
 
@@ -55,10 +55,11 @@ Only the lead session commits. Subagents never commit.
 **General:**
 - Back off on errors.
 - Never run two NPS fetchers at once.
-  - The lead runs `snow-globe-capture loop --archive-queue` for all 8 cameras (until the post-gate switch, the snapshot's `lookout-capture loop`, D-080); the Rainier stopgap was retired (D-023). Archive backfill runs only inside that loop, from `state/archive/queue.json`.
+  - The lead runs `snow-globe-capture loop --archive-queue` for all 8 cameras (since the post-gate switch; before it, the snapshot's `lookout-capture loop`, D-080, D-090); the Rainier stopgap was retired (D-023). Archive backfill runs only inside that loop, from `state/archive/queue.json`.
   - The loop and a local forecast stand-in run from a frozen snapshot of committed code, with their own venvs, under `~/lookout-data/cache/runtime/<sha>/`. They never use the repo's venvs, so `uv sync` in the repo is safe. Never edit, stop or signal anything under `cache/runtime/`.
-  - Until the post-gate switch the loops stay where they are: the capture loop on snapshot `3cd2ca7`, the forecast stand-in on `034c46b` (where it started on 20 Nov). There is no re-snapshot between the rename commit and the switch: the live scripts start `lookout-capture` and import `lookout_forecast`, which renamed code no longer has, so the usual re-snapshot (flip `current`, SIGTERM the loops) would leave both jobs down. The switch, `infra/ops/migrate-to-snow-globe.sh`, is the only re-snapshot path until then (D-080).
-  - Commands that fetch from nps.gov (`once`, `loop`, `archive days|day|sample`, `archive-check`) take a host-wide lock and exit with status 3 if another fetcher is active. The lock is taken in the data dir and in each of `~/lookout-data` and `~/snow-globe-data` that exists, so it holds whichever data dir a process resolved, and the running 0.2.1 loop's lock is always respected; another `snow-globe-capture` or `lookout-capture` fetcher process also refuses it (D-080). The offline commands (`status`, `cadence`, `storage-report`, `archive queue add|list|remove|resume`) take no lock.
+  - Since the post-gate switch (23:53 UTC on 22 Nov to 00:03 on 23 Nov, D-090), both loops run from snapshot `aee6f92` (capture 0.3.0 and forecast 0.3.0), and `current` points at it. The switch, `infra/ops/migrate-to-snow-globe.sh`, was a one-time move and refuses to run again.
+  - A re-snapshot is the lead's alone, and the one exception to the rule above (D-049, D-090); no other session or agent does any of it. The lead runs it on AC power or, on battery, with the lid open and `caffeinate -i` held across it, because the supervisor's own `caffeinate -s` holds on AC only (D-079, D-089). It follows the procedure in the header of `cache/runtime/bin/supervise.sh`: flip `current`, touch `cache/runtime/graceful-stop.capture`, then SIGTERM the capture loop's python and the forecast loop's bash; the supervisor restarts each from `current`. It needs the supervisor running: without it, a stopped loop stays down. The snapshot's venvs are built offline (`uv sync --locked --no-dev --offline`), so the lead first checks that the build works in a scratch folder, because uv's cache can be emptied (D-090).
+  - Commands that fetch from nps.gov (`once`, `loop`, `archive days|day|sample`, `archive-check`) take a host-wide lock and exit with status 3 if another fetcher is active. The lock is taken in the data dir and in each of `~/lookout-data` and `~/snow-globe-data` that exists, each lock file once, matched by device and inode (since the switch both paths reach one file), so it holds whichever data dir a process resolved; another `snow-globe-capture` or `lookout-capture` fetcher process also refuses it (D-080). The offline commands (`status`, `cadence`, `storage-report`, `archive queue add|list|remove|resume`) take no lock.
   - Don't start fetching commands yourself; report what you need fetched (the lead queues archive days).
 
 **NOAA:** use anonymous HTTPS to `noaa-hrrr-bdp-pds.s3.amazonaws.com` (us-east-1) with byte-range GETs. Keep local downloads small: subsets only, and delete GRIB files after extraction.
@@ -66,10 +67,9 @@ Only the lead session commits. Subagents never commit.
 ### Data
 - Data lives **outside the repo**. `~/Documents` is iCloud-synced (the `com.apple.file-provider-domain-id` xattr is set).
 - Use `$SNOW_GLOBE_DATA_DIR` (the old `$LOOKOUT_DATA_DIR` is still read).
-  - Until the post-gate switch (D-080), the data dir is `~/lookout-data`.
-  - From the switch on, it is `~/snow-globe-data`, and `~/lookout-data` stays as a symlink to it, so paths under `~/lookout-data` keep working.
+  - The data dir is `~/snow-globe-data`. The post-gate switch moved it there from `~/lookout-data` at 23:58:09 UTC on 22 Nov (D-080, D-090), and `~/lookout-data` is now a symlink to it, so paths under `~/lookout-data` keep working.
   - With neither variable set, the code uses `~/snow-globe-data` if it exists, else `~/lookout-data` if it exists, else `~/snow-globe-data`. While both exist as different folders, every resolver (Python, Rust, TypeScript, the shell scripts and the Makefile) refuses until a variable names the folder meant.
-- Never create `~/snow-globe-data` before the switch: no `mkdir`, no build cache, no copied command. Renamed code would then refuse to pick a data dir (or, with a variable naming the new folder, keep its rate-limit state and logs apart from the running loop's), and the switch refuses to run while it exists. Commands in the docs therefore name `~/lookout-data`, which stays valid after the switch through the symlink; docs/checks fails on a command that hard-codes the new folder (`data-dir-commands`).
+- Never replace the `~/lookout-data` symlink with a real folder, and never remove it: no `rm`, no `mkdir` or copied command that recreates it, no restore into its place. A real folder there would make every resolver refuse to pick a data dir (or, with a variable naming one folder, keep its rate-limit state, logs and forecast lock apart from the running loops'; the NPS fetcher lock still holds, since every fetcher takes it in each default folder that exists); a missing symlink breaks every command and record that names `~/lookout-data`. Commands in the docs keep naming `~/lookout-data`, which works through the symlink; docs/checks fails on a command that hard-codes the new folder (`data-dir-commands`).
 - Never write frames, audio, plates, renders, traces or GRIB files inside the repo.
 - Never delete anything under `~/lookout-data` or `~/snow-globe-data` except your own temp or cache files.
 
@@ -97,7 +97,7 @@ Metadata may be read for any date.
 **Node:** Node 24 with `pnpm`, TypeScript `strict`, and `vitest`. Headless rendering uses Playwright Chromium with SwiftShader.
 
 **Rust:** stable 1.98. `oculus-core` is a git dependency (`https://github.com/swarit-1/oculus`, rev `1b5410b`, public `main`, MIT; re-pinned from the unpushed `06809e6` on 19 Nov, `ephem.rs` identical). A local copy for reading is at `~/Documents/Oculus/oculus/core`.
-- Build with `CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target`. That keeps gigabytes of build output out of iCloud. After the post-gate switch it is the same folder as `~/snow-globe-data/cache/cargo-target`, through the symlink.
+- Build with `CARGO_TARGET_DIR=$HOME/lookout-data/cache/cargo-target`. That keeps gigabytes of build output out of iCloud. Since the post-gate switch it is the same folder as `~/snow-globe-data/cache/cargo-target`, through the symlink.
 
 **Other:** Terraform 1.16, Docker 29, Xcode 26.2 / Swift 6.2. There is no AWS CLI and no AWS credentials on this machine.
 
@@ -159,8 +159,9 @@ forecast_log/<YYYY-MM-DD>.jsonl                                                 
 forecast_log/lag_survey/<YYYY-MM-DD>.jsonl                                                 S3 lag-survey events, "method": "survey" (written only by snow-globe-forecast lag-survey --log, D-053)
 scores/pairs/, renders/pairs/                                                              backtest pair records and renders
 spikes/m1/<run-id>.jsonl                                                                   M1 1a spike results (run by the owner)
-cache/                                                                                     deletable caches (GRIB subsets, cache/staging/ capture staging, cache/runtime/ snapshots, etc.)
+cache/                                                                                     deletable caches (GRIB subsets, cache/staging/ capture staging, etc.); not cache/runtime/, which holds the live snapshot that `current` names, the loops' scripts, their logs and supervisor.pid (only the lead removes an old snapshot there)
 samples/                                                                                   hand-picked sample frames and API responses
+reports/                                                                                   saved evidence, kept: reports/m0.5-gate/ holds the gate's data reports and the switch's logs (D-089, D-090)
 quarantine/                                                                                never opened (D-022)
 ```
 

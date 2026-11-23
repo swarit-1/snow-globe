@@ -27,11 +27,13 @@ names. The speech tool is `snow-globe-transcribe`, signed as `dev.snowglobe.tran
 data folder is `~/snow-globe-data`. The commands below reach it as `~/lookout-data`, the symlink the
 switch leaves, so they are right after the switch and never create a second data folder if run
 early by mistake (D-080).
-- **Start the steps below only after the lead's switch.** It comes right after the M0.5 gate
-  closes, at the earliest close the latest `make data-report` gives (it said 23:12 UTC on Sun
-  22 Nov when read at 01:50 UTC on 21 Nov, and every new outage moves it later; PLAN.md, M0.5). The switch moves the data
-  folder to `~/snow-globe-data`, and the lead then rebuilds the speech tool and the spike under
-  the new names. Before the switch, the new builds these steps need do not exist yet.
+- **The switch ran at 23:53 UTC on 22 Nov to 00:03 UTC on 23 Nov** (D-090), after the M0.5 gate
+  closed at 23:46:10.754 UTC (D-089). The data folder is now `~/snow-globe-data`.
+- **Start the steps below only once the lead says the rebuild is done.** The lead confirms or
+  replaces the renamed speech tool (a `snow-globe-transcribe` signed `dev.snowglobe.transcribe`
+  has existed since 11:05 UTC on 21 Nov) and rebuilds the spike, whose cargo target folder was
+  removed on 22 Nov (PRD_PROGRESS.md, owner action 6). Until then, the builds these steps need
+  are not ready.
 - The 20 Nov builds above carry the old names (`lookout-transcribe`, `dev.lookout.transcribe`).
   Don't use them for step 3: permissions and model reservations may follow the identifier
   (D-055).
