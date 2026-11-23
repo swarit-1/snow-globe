@@ -307,6 +307,42 @@ fn label_place(label: &str) -> Option<String> {
     (!core.is_empty()).then(|| core.to_string())
 }
 
+/// `(file stem, JSON text)` of every manifest compiled into the crate from
+/// `viewpoints/manifests/`, sorted by file name. Tier 0 reads the camera fields the alias table
+/// does not keep (view azimuth, attribution, archive code; [`crate::tier0::camera`]).
+pub fn embedded_manifest_texts() -> &'static [(&'static str, &'static str)] {
+    embedded::EMBEDDED_MANIFESTS
+}
+
+/// `(file stem, JSON text)` of every `*.json` manifest in a directory, sorted by file name.
+pub fn manifest_texts_from_dir(dir: &Path) -> Result<Vec<(String, String)>, PlaceTableError> {
+    let io = |source| PlaceTableError::Io {
+        path: dir.display().to_string(),
+        source,
+    };
+    let mut files: Vec<_> = std::fs::read_dir(dir)
+        .map_err(io)?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "json"))
+        .collect();
+    files.sort();
+    let mut texts = Vec::with_capacity(files.len());
+    for path in files {
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_string();
+        let text = std::fs::read_to_string(&path).map_err(|source| PlaceTableError::Io {
+            path: path.display().to_string(),
+            source,
+        })?;
+        texts.push((stem, text));
+    }
+    Ok(texts)
+}
+
 impl PlaceTable {
     /// The table compiled into the crate from `viewpoints/manifests/` at build time.
     pub fn embedded() -> &'static PlaceTable {
@@ -319,30 +355,7 @@ impl PlaceTable {
 
     /// Load every `*.json` manifest in a directory at run time.
     pub fn from_dir(dir: &Path) -> Result<PlaceTable, PlaceTableError> {
-        let io = |source| PlaceTableError::Io {
-            path: dir.display().to_string(),
-            source,
-        };
-        let mut files: Vec<_> = std::fs::read_dir(dir)
-            .map_err(io)?
-            .filter_map(Result::ok)
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|x| x == "json"))
-            .collect();
-        files.sort();
-        let mut texts = Vec::with_capacity(files.len());
-        for path in files {
-            let stem = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or_default()
-                .to_string();
-            let text = std::fs::read_to_string(&path).map_err(|source| PlaceTableError::Io {
-                path: path.display().to_string(),
-                source,
-            })?;
-            texts.push((stem, text));
-        }
+        let texts = manifest_texts_from_dir(dir)?;
         PlaceTable::from_manifest_texts(texts.iter().map(|(a, b)| (a.as_str(), b.as_str())))
     }
 

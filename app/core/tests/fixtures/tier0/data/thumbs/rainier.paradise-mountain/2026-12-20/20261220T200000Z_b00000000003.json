@@ -1,0 +1,87 @@
+{
+  "viewpoint_id": "rainier.paradise-mountain",
+  "source": "live",
+  "source_url": "https://www.nps.gov/webcams-mora/mountain.jpg",
+  "fetched_at_utc": "2026-12-20T20:15:30.384Z",
+  "http_status": 200,
+  "http_last_modified": "Sun, 20 Dec 2026 20:15:00 GMT",
+  "etag": null,
+  "content_length": null,
+  "content_type": "image/jpeg",
+  "head_last_modified": "Sun, 20 Dec 2026 20:15:00 GMT",
+  "head_etag": "\"50cdb9e5be816fae31a12785824c7643\"",
+  "head_content_length": "1669068",
+  "exif": {
+    "DateTime": "2026:12:20 12:00:00",
+    "DateTimeOriginal": "2026:12:20 12:00:00",
+    "SubSecTimeOriginal": "268",
+    "OffsetTimeOriginal": "-08:00",
+    "Make": "AXIS",
+    "Model": "P1387",
+    "Artist": null,
+    "Copyright": null,
+    "Software": "12.5.68",
+    "ImageDescription": null
+  },
+  "image_time_utc": "2026-12-20T20:00:00Z",
+  "image_time_source": "exif_offset",
+  "image_time_candidates_utc": {
+    "exif": "2026-12-20T20:00:00Z",
+    "json_imagedate": null,
+    "http_last_modified": "2026-12-20T20:15:00Z"
+  },
+  "image_time_disagreement_min": {
+    "exif_minus_json_imagedate": null,
+    "http_last_modified_minus_exif": 15.0,
+    "http_last_modified_minus_json_imagedate": null,
+    "max_abs_between_image_time_claims": null
+  },
+  "image_time_flags": [
+    "exif:offset-from-exif"
+  ],
+  "original_width": 1920,
+  "original_height": 1080,
+  "original_bytes": null,
+  "sha256": null,
+  "stored": "thumb-640",
+  "stored_width": 640,
+  "stored_height": 360,
+  "stored_bytes": null,
+  "stored_sha256": null,
+  "jpeg_quality": 85,
+  "dhash64": null,
+  "dhash_bits_to_previous": null,
+  "luma_mean": null,
+  "chroma_spread": null,
+  "sharpness_lapvar": null,
+  "sun": {
+    "elevation_deg": 1.806,
+    "apparent_elevation_deg": 2.103,
+    "daylight": false,
+    "daylight_min_deg": 3.0,
+    "model": "NOAA solar calculator (lookout_capture.sun)"
+  },
+  "decode_error": null,
+  "flags": [
+    "exif:offset-from-exif",
+    "sun_below_3deg"
+  ],
+  "previous_key": "frames/rainier.paradise-mountain/2026-11-21/20261121T235201Z_a67640b4733a.jpg",
+  "gets_last_hour": 4,
+  "frame_policy": "every",
+  "user_agent": "Lookout/0.1 (webcam research capture; fetch-on-change)",
+  "capture_version": "lookout-capture/0.2.1",
+  "sidecar_schema": 2,
+  "variant": "thumb",
+  "full_frame": {
+    "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T000859Z_49c9b6ffe52c.jpg",
+    "policy": "every",
+    "stored": "original",
+    "stored_width": 1920,
+    "stored_height": 1080,
+    "stored_bytes": 1669068,
+    "stored_sha256": "49c9b6ffe52c8d5541d8389186aab53c1832f0b1a391692143e1b382da9e12ea",
+    "jpeg_quality": null
+  },
+  "fixture_note": "synthetic: inside the sealed window, refused; image statistics null (a synthetic held-out frame)"
+}

@@ -1,0 +1,15 @@
+{
+  "viewpoint_id": "rainier.paradise-mountain",
+  "source": "live",
+  "source_url": "https://www.nps.gov/webcams-mora/mountain.jpg",
+  "fetched_at_utc": "2026-11-19T06:30:13.139884+00:00",
+  "http_last_modified": "Thu, 19 Nov 2026 06:30:13 GMT",
+  "etag": "\"d0c10ec6017cd67e69f25d49e2cee21b\"",
+  "content_length": 749490,
+  "sha256": "edf5e91d5e3f6197a256e285f89d80de6a8aeb7003c97b36281426d8e249270e",
+  "image_time_utc": "2026-11-19T06:30:13+00:00",
+  "image_time_source": "http_last_modified",
+  "stored": "original",
+  "user_agent": "Lookout/0.1 (webcam research capture; fetch-on-change)",
+  "capture_version": "stopgap-0"
+}

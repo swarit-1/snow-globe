@@ -147,7 +147,7 @@ Planned, not in the code yet
 3. RUST
 -------------------------------------------------------------------------------
 
-3a. app/core: crate snow-globe-core 0.2.0 (ships in the app from M1)
+3a. app/core: crate snow-globe-core 0.3.0 (ships in the app from M1)
     Direct dependencies, from app/Cargo.lock:
 
     Crate          Version   Kind     Licence
@@ -159,16 +159,20 @@ Planned, not in the code yet
     serde_json     1.0.154   normal   MIT OR Apache-2.0
     strsim         0.11.1    normal   MIT
     thiserror      2.0.21    normal   MIT OR Apache-2.0
+    zune-jpeg      0.5.15    normal   MIT OR Apache-2.0 OR Zlib (Tier 0 decode)
     proptest       1.12.0    dev      MIT OR Apache-2.0 (tests only)
     tempfile       3.27.0    dev      MIT OR Apache-2.0 (tests only)
 
-    Without the dev dependencies, 40 third-party crates are reachable (build
+    Without the dev dependencies, 42 third-party crates are reachable (build
     scripts included): 23 MIT OR Apache-2.0, 8 MIT, 2 BSD-2-Clause OR
     Apache-2.0 OR MIT (zerocopy, zerocopy-derive), 2 Unlicense OR MIT
     (aho-corasick, memchr), 2 0BSD (enum-iterator, enum-iterator-derive),
-    1 Apache-2.0 (rphonetic), 1 (MIT OR Apache-2.0) AND Unicode-3.0
-    (unicode-ident) and 1 Apache-2.0 OR MIT (autocfg). The whole lock file,
-    dev dependencies included, holds 78 third-party crates.
+    2 MIT OR Apache-2.0 OR Zlib (zune-jpeg 0.5.15 and its dependency
+    zune-core 0.5.3), 1 Apache-2.0 (rphonetic), 1 (MIT OR Apache-2.0) AND
+    Unicode-3.0 (unicode-ident) and 1 Apache-2.0 OR MIT (autocfg). The whole
+    lock file, dev dependencies included, holds 80 third-party crates. Counted
+    on 23 Nov 2026 from `cargo metadata --offline` (normal and build edges
+    from snow-globe-core) and app/Cargo.lock.
 
 3b. spikes/m1-platform: the throwaway M1 1a platform spike. NOT SHIPPED.
     Direct dependencies, from spikes/m1-platform/Cargo.lock:

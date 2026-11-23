@@ -1,0 +1,84 @@
+{
+  "viewpoint_id": "rainier.paradise-mountain",
+  "source": "live",
+  "source_url": "https://www.nps.gov/webcams-mora/mountain.jpg",
+  "fetched_at_utc": "2026-11-22T00:09:14.463Z",
+  "http_status": 200,
+  "http_last_modified": "Sun, 22 Nov 2026 00:09:13 GMT",
+  "etag": "\"50cdb9e5be816fae31a12785824c7643\"",
+  "content_length": 1669068,
+  "content_type": "image/jpeg",
+  "head_last_modified": "Sun, 22 Nov 2026 00:09:13 GMT",
+  "head_etag": "\"50cdb9e5be816fae31a12785824c7643\"",
+  "head_content_length": "1669068",
+  "exif": {
+    "DateTime": "2026:11:21 16:08:59",
+    "DateTimeOriginal": "2026:11:21 16:08:59",
+    "SubSecTimeOriginal": "268",
+    "OffsetTimeOriginal": "-08:00",
+    "Make": "AXIS",
+    "Model": "P1387",
+    "Artist": null,
+    "Copyright": null,
+    "Software": "12.5.68",
+    "ImageDescription": null
+  },
+  "image_time_utc": "2026-11-22T00:08:59.268000Z",
+  "image_time_source": "exif_offset",
+  "image_time_candidates_utc": {
+    "exif": "2026-11-22T00:08:59.268000Z",
+    "json_imagedate": null,
+    "http_last_modified": "2026-11-22T00:09:13Z"
+  },
+  "image_time_disagreement_min": {
+    "exif_minus_json_imagedate": null,
+    "http_last_modified_minus_exif": 0.229,
+    "http_last_modified_minus_json_imagedate": null,
+    "max_abs_between_image_time_claims": null
+  },
+  "image_time_flags": [
+    "exif:offset-from-exif"
+  ],
+  "original_width": 1920,
+  "original_height": 1080,
+  "original_bytes": 1669068,
+  "sha256": "49c9b6ffe52c8d5541d8389186aab53c1832f0b1a391692143e1b382da9e12ea",
+  "stored": "original",
+  "stored_width": 1920,
+  "stored_height": 1080,
+  "stored_bytes": 1669068,
+  "stored_sha256": "49c9b6ffe52c8d5541d8389186aab53c1832f0b1a391692143e1b382da9e12ea",
+  "jpeg_quality": null,
+  "dhash64": "1f9f871703498230",
+  "dhash_bits_to_previous": 4,
+  "luma_mean": 128.868,
+  "chroma_spread": 4.2174,
+  "sharpness_lapvar": 8086.79,
+  "sun": {
+    "elevation_deg": 1.806,
+    "apparent_elevation_deg": 2.103,
+    "daylight": false,
+    "daylight_min_deg": 3.0,
+    "model": "NOAA solar calculator (lookout_capture.sun)"
+  },
+  "decode_error": null,
+  "flags": [
+    "exif:offset-from-exif",
+    "sun_below_3deg"
+  ],
+  "previous_key": "frames/rainier.paradise-mountain/2026-11-21/20261121T235201Z_a67640b4733a.jpg",
+  "gets_last_hour": 4,
+  "frame_policy": "every",
+  "thumb": {
+    "key": "thumbs/rainier.paradise-mountain/2026-11-22/20261122T000859Z_49c9b6ffe52c.jpg",
+    "stored": "thumb-640",
+    "stored_width": 640,
+    "stored_height": 360,
+    "stored_bytes": 73958,
+    "stored_sha256": "d606646daf00c87f8c202ecd47f057aa1d4867ae1332713d17fca567f77cfeca",
+    "jpeg_quality": 85
+  },
+  "user_agent": "Lookout/0.1 (webcam research capture; fetch-on-change)",
+  "capture_version": "lookout-capture/0.2.1",
+  "sidecar_schema": 2
+}

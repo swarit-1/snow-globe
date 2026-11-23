@@ -1,0 +1,13 @@
+{
+  "viewpoint_id": "point-reyes.beach",
+  "source": "live",
+  "image_time_utc": "2026-07-15T20:15:00Z",
+  "ImageCreateDateTime": "07/15/2026 12:15:00 PM",
+  "LocalTimeString": "7/15/2026 1:15 PM Pacific Daylight Time",
+  "AssetID": "d0000000-0000-4000-8000-00000000000d",
+  "stored_width": 1920,
+  "stored_height": 1080,
+  "flags": [],
+  "capture_version": "snow-globe-capture/0.3.0",
+  "fixture_note": "synthetic: under frames/ with source live, but carrying NPS's own archive field names (ImageCreateDateTime, LocalTimeString, AssetID), so archived (D-038) and held out by the archive edge; no image statistics"
+}

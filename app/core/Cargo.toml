@@ -1,7 +1,7 @@
 [package]
 name = "snow-globe-core"
-version = "0.2.0"
-description = "Snow Globe core: utterance parser, time rules, ephemeris wrapper, solar events, trace and query lifecycle (PRD §7, §8.4, §10)."
+version = "0.3.0"
+description = "Snow Globe core: utterance parser, time rules, ephemeris wrapper, solar events, Tier 0 closest real frame, trace and query lifecycle (PRD §7, §8.4, §9.1, §10)."
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
@@ -15,15 +15,31 @@ path = "src/lib.rs"
 name = "snow-globe-parse"
 path = "src/bin/snow-globe-parse.rs"
 
+[[bin]]
+name = "snow-globe-ask"
+path = "src/bin/snow-globe-ask.rs"
+
+[[bin]]
+name = "snow-globe-tier0"
+path = "src/bin/snow-globe-tier0.rs"
+
 [dependencies]
 oculus-core = { git = "https://github.com/swarit-1/oculus", rev = "1b5410b01f127514fa37656eff2b7d73be7ea8da" }
 chrono = { version = "0.4.42", default-features = false, features = ["std", "now"] }
 chrono-tz = "0.10.4"
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
+# float_roundtrip: the Tier 0 cache must give back the exact f64 it stored (no new crate).
+serde_json = { version = "1.0.140", features = ["float_roundtrip"] }
 thiserror = "2.0.12"
 strsim = "0.11.1"
 rphonetic = { version = "4.0.0", default-features = false }
+# Tier 0 thumbnail decode (PRD §9.1). MIT OR Apache-2.0 OR Zlib. Chosen over jpeg-decoder 0.3.2
+# (MIT OR Apache-2.0): about twice as fast on this M4 at every size. Saved run of 23 Nov 2026,
+# 04:23 UTC (the data dir's reports/tier0/decoder-choice-20261123T042308Z.txt, with its source
+# and file lists), decode p50, zune-jpeg vs jpeg-decoder: 1.15 vs 2.25 ms on 100 live 640 px
+# thumbnails, 2.94 vs 5.91 ms on 40 archive 999 px frames, 10.4 vs 20.3 ms on 30 live 1920 px
+# frames (11.8 ms with jpeg-decoder's own scaling to 640 px).
+zune-jpeg = "0.5.15"
 
 [dev-dependencies]
 proptest = "1.7.0"

@@ -18,6 +18,7 @@
 //! | [`lifecycle`] | query generations, cancellation, the paint gate, Esc | §5.2, §10.2, §10.3 |
 //! | [`datadir`] | `$SNOW_GLOBE_DATA_DIR` with the repo and iCloud safety checks | CLAUDE.md |
 //! | [`cli`] | the `snow-globe-parse` command | §7.3 |
+//! | [`tier0`] | Tier 0, the closest real frame: library index, match, decode, caption, `snow-globe-ask` | §9.1, §5.3 |
 
 pub mod cli;
 pub mod datadir;
@@ -29,6 +30,7 @@ pub mod places;
 pub mod query;
 pub mod resolve;
 pub mod solar;
+pub mod tier0;
 pub mod timeparse;
 pub mod trace;
 pub mod tzutil;

@@ -1,0 +1,104 @@
+{
+  "viewpoint_id": "grand-canyon.yavapai",
+  "source": "live",
+  "source_url": "https://www.nps.gov/featurecontent/ard/webcams/images/grcalarge.jpg",
+  "fetched_at_utc": "2026-11-22T00:19:34.200Z",
+  "http_status": 200,
+  "http_last_modified": "Sun, 22 Nov 2026 00:15:10 GMT",
+  "etag": "\"11eb00000000d05b-166199-660d25eca9f80-gzip\"",
+  "content_length": 1466777,
+  "content_type": "image/jpeg",
+  "json_url": "https://www.nps.gov/featurecontent/ard/webcams/json/grcajson.txt",
+  "json_imagedate_raw": "Updated 11/21/2026 05:00 PM MST",
+  "json_imagedate_utc": "2026-11-22T00:00:00Z",
+  "json_last_modified": "Sun, 22 Nov 2026 00:15:31 GMT",
+  "json_etag": "\"16e400000000eabc-1022-660d2600b0ec0-gzip\"",
+  "json_imagefilelarge": "grcalarge.jpg",
+  "exif": {
+    "DateTime": "2026:11:21 17:00:00",
+    "DateTimeOriginal": "2026:11:21 17:00:00",
+    "SubSecTimeOriginal": null,
+    "OffsetTimeOriginal": null,
+    "Make": null,
+    "Model": null,
+    "Artist": "National Park Service",
+    "Copyright": "National Park Service",
+    "Software": "ARS_Digicam",
+    "ImageDescription": "National Park Service Webcam Image"
+  },
+  "image_time_utc": "2026-11-22T00:00:00Z",
+  "image_time_source": "exif_local",
+  "image_time_candidates_utc": {
+    "exif": "2026-11-22T00:00:00Z",
+    "json_imagedate": "2026-11-22T00:00:00Z",
+    "http_last_modified": "2026-11-22T00:15:10Z"
+  },
+  "image_time_disagreement_min": {
+    "exif_minus_json_imagedate": 0.0,
+    "http_last_modified_minus_exif": 15.167,
+    "http_last_modified_minus_json_imagedate": 15.167,
+    "max_abs_between_image_time_claims": 0.0
+  },
+  "image_time_flags": [],
+  "original_width": 3840,
+  "original_height": 2160,
+  "original_bytes": 1466777,
+  "sha256": "a31f9602e1620176b592865838228fa7a78c6286d684db03b9ca39c6596d7d94",
+  "stored": "downscaled-1920",
+  "stored_width": 1920,
+  "stored_height": 1080,
+  "stored_bytes": 263882,
+  "stored_sha256": "169182f92f2e0888bdc6e9a9195a8c5f4b6627b9f0e1fb1ca56265b200344ee5",
+  "jpeg_quality": 90,
+  "dhash64": "ffffffff1f8494cb",
+  "dhash_bits_to_previous": 8,
+  "luma_mean": 133.277,
+  "chroma_spread": 62.3865,
+  "sharpness_lapvar": 80.72,
+  "sun": {
+    "elevation_deg": 2.3,
+    "apparent_elevation_deg": 2.565,
+    "daylight": false,
+    "daylight_min_deg": 3.0,
+    "model": "NOAA solar calculator (lookout_capture.sun)"
+  },
+  "decode_error": null,
+  "flags": [
+    "sun_below_3deg"
+  ],
+  "previous_key": "thumbs/grand-canyon.yavapai/2026-11-21/20261121T234500Z_6fb12ea4900b.jpg",
+  "gets_last_hour": 4,
+  "frame_policy": "hourly-nearest",
+  "thumb": {
+    "key": "thumbs/grand-canyon.yavapai/2026-11-22/20261122T000000Z_a31f9602e162.jpg",
+    "stored": "thumb-640",
+    "stored_width": 640,
+    "stored_height": 360,
+    "stored_bytes": 19391,
+    "stored_sha256": "fb88928accecad8436b7a444667057f76a24fee0457982d3aa0f94dc7554ac98",
+    "jpeg_quality": 85
+  },
+  "user_agent": "Lookout/0.1 (webcam research capture; fetch-on-change)",
+  "capture_version": "lookout-capture/0.2.1",
+  "sidecar_schema": 2,
+  "hourly_selection": {
+    "policy": "hourly-nearest",
+    "rule": "frame nearest the UTC hour; decided 30 min after its +-30 min window closed",
+    "hour_utc": "2026-11-22T00:00:00Z",
+    "window_utc": [
+      "2026-11-21T23:30:00Z",
+      "2026-11-22T00:30:00Z"
+    ],
+    "candidates": 4,
+    "candidate_names": [
+      "20261121T233000Z_4d44555c54db.jpg",
+      "20261121T234500Z_6fb12ea4900b.jpg",
+      "20261122T000000Z_a31f9602e162.jpg",
+      "20261122T001500Z_98bc567c62d1.jpg"
+    ],
+    "settle_s": 1800.0,
+    "decided_at": "2026-11-22T01:01:22Z",
+    "distance_s": 0.0,
+    "staged_key": "cache/staging/frames/grand-canyon.yavapai/2026-11-22/20261122T000000Z_a31f9602e162.jpg"
+  }
+}
