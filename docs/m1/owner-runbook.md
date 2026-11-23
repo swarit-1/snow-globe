@@ -17,8 +17,8 @@ in the documents it links to; this page only sequences them.
   README's Build block, which you run first, replaces that build with one without speech, so
   step 2.1 rebuilds `m1-spike` with the speech feature right after it. Spike checks 6 and 7 then
   run on Mon 23 Nov with the others.
-- The replay harness and the recording tool (M1-09) are not started, so steps 4 and 6 wait for
-  code; each says what it waits for.
+- The replay scorer exists since 23 Nov (D-096), but the harness and the recording tool (M1-09)
+  are not built yet, so steps 4 and 6 wait for code; each says what it waits for.
 - If M0.5 or M1 runs late, the plan puts the freeze-critical work first (PLAN.md, Calendar).
   The speech and harness steps may then wait; the lead will tell you.
 

@@ -4,6 +4,20 @@ Companion to [PRD.md](PRD.md) v0.4.2 (§16 milestones, §19 cut list). Per-ticke
 
 Each milestone ends at a gate and stops for review. **A gate passes when its evidence exists: the measured value and, for a miss, the bottleneck.** Compiling code is not evidence. A missed target triggers the cut-order rule. It never triggers a stall or a retune.
 
+**Update, about 10:40 UTC on Mon 23 Nov 2026 (with the docs review's corrections at about 11:34 UTC): wave 1 built, committed and pushed, and a night on battery** (D-092 to D-104):
+- **Wave 1** ran at about 02:00–06:10 UTC: five work packages, each built, reviewed through two independent lenses, fixed and verified (25 agents; all five verifiers passed). The lead committed them one per package at 09:56–09:57 UTC (`3029929` to `22930cc`). They were pushed to `origin` `main` at 11:13:14 UTC (`git reflog`); CI's run on that push was not read for these docs (D-092).
+  - **Tier 0** (core 0.3.0, M1-08): the closest real frame, matched on Sun position and time of year by a provisional distance; the sealed window read by local or UTC date; only frames taken and fetched before the ask, in the product too (D-097).
+  - **The overlay's web layer** (`app/src`, M1-07, M1-13): its protocol v1 is the M1 shell's IPC contract (D-093). 0 stale paints in 3 × 10,240 cycles in headless Chromium, with a simulated core. Its 120 ms linear fade reaches 50 % at 66.7–83.3 ms, so PRD §10.1's 60 ms allocation is the owner's call (D-094).
+  - **The replay scorer** and trace schema 2 (M1-09), tested on synthetic runs only, with the lead's scoring readings (D-095, D-096).
+  - **Renderer 0.3.0,** with the Hillaire 2020 sky (M1.5-01): on the M4's GPU (Chromium/Metal), heavy 1080p p50 6.7–7.0 ms, under the 8 ms budget, and p95 8.3–8.7 ms, over it; the first frame 54–74 ms of page time, against ≤ 50 ms of GPU time, which is not measured. Both budgets are set for WKWebView and measured in M2 (D-098).
+  - **Rainier plate v0.1** (M1.5-02), from our own captures: the camera stands 457 m from the manifest's position, and Columbia Crest is hidden from it, so P1's summit band is the visible dome above 4,000 m (D-099).
+  - **Extractor v0** (M1.5-03) misses PRD §13.8's bar on the summit, F1 0.50 against 0.85, so it cannot score P1. M1.5's P1 table and the 14 Dec freeze's τ wait for a better extractor, which makes extractor v0.2 freeze-critical (D-100; Calendar).
+- **`make test`** runs 12 suites, with plates and overlay; all passed in 652 s on the committed tree (D-092).
+- **The night on battery** (D-104): the supervisor's keep-awake ended at 05:00 UTC, and the Mac ran on battery from 05:25 to 09:36 UTC. With the lid closed it slept at 07:12–07:49 and 08:49–09:36 UTC, so capture lost its 5-minute cadence for 41 and 49 min, and run 2026112308 came 38 min late. That was after the gate, so no clock moved.
+- **Found for the sealed window:** the laptop's forecast stand-in keeps f00–f02, so it serves design P's 1 h lead at most. The AWS deployment is set to extract every hour, so it would serve the 1, 3, 6, 12 and 24 h leads; no file of its profile has been written yet (D-101). With lead = valid − availability, HRRR's f48 gives about 46.1 h of lead at p95, so the 48 h lead's reading is the owner's (D-102).
+- **Next, the lead's plan** (wave 2, under way; no dates promised): the Rainier manifest's correction (D-099's proposal, with the schema's `upper` band and the forecast tests) and the P1 development pipeline (24 h hindcast renders of Rainier's daytime frames and the three baselines; its table means nothing until an extractor passes, D-100); extractor v0.2 (D-100); the ephemeris validation (M2-02); Point Reyes's plate v0 (M2-03); and the data-flow inventory and licence ledger (PRD §15.2, §15.4).
+- **Waiting on the owner:** the NPS emails (gate item 4); AC power, or on battery a keep-awake with the lid open (owner action 1); AWS, with D-035's choices before the first deploy, and live before 15 Dec for capture and for design P's forecasts (owner action 2, D-101); D-041; Deepgram and fal keys; by 14 Dec, owner action 9's confirmations, now with the fade (D-094), the scorer's readings (D-096), the 48 h lead (D-102) and the star catalogue's terms (D-103); and labelling for extractor v0.2, if the owner can (owner action 13).
+
 **Update, about 00:40 UTC on Mon 23 Nov 2026: gate item 1 closed, and the rename's live switch ran** (D-089, D-090):
 - **The 72 h clock closed at 23:46:10.754 UTC on Sun 22 Nov** (`make data-report`, read-only): 72.01 h covered of 83.37 h elapsed, and 11.36 h lost. Gate item 1 is done; the table and its evidence are in [docs/evidence/m05-gate.md](docs/evidence/m05-gate.md) (D-089).
 - **Why it closed 34 min later than 23:12:07:** on 22 Nov the Mac ran on battery from 04:16 to 09:46 UTC. `caffeinate -s` holds only on AC power, so the Mac idle-slept, and three capture outages at 05:39–06:51 UTC lost 2,043.8 s. The lead's `caffeinate -i` kept it awake from 06:53 UTC (D-089).
@@ -74,11 +88,11 @@ Go-ahead day is **G = Thu 19 Nov 2026**. The owner gave no hours per week, so ~2
 | v1 growth | after M5 | from about 24 Jan 2027 | — | — |
 
 - **Slack** is the 25 % rule in days. A milestone that overruns its length by more than that loses the next item on the cut list.
-- **The freeze limits the slack before it.** The 14 Dec freeze doesn't move, and it needs extractor v0 and development truth from M1.5, which ends on Thu 10 Dec.
+- **The freeze limits the slack before it.** The 14 Dec freeze doesn't move, and it needs an extractor that works (v0 missed its bar, D-100) and development truth from M1.5, which ends on Thu 10 Dec.
   - The 4 days from 10 to 14 Dec are planned for the freeze work itself, so any overrun in M0.5, M1 or M1.5 comes out of them.
   - Together, those three may overrun by 4 days at most, not the 5¼ their slack columns add up to (1 + 3½ + ¾).
   - **Rule:** the running overrun is tracked in PRD_PROGRESS.md.
-    - From the first day of overrun, the freeze-critical work comes first: capture, the forecast worker, extractor v0, development truth, and the inputs to τ, S_mos, the analog weights and the MDE.
+    - From the first day of overrun, the freeze-critical work comes first: capture, the forecast worker, the extractor (v0.2 since v0 missed its bar, D-100), development truth, and the inputs to τ, S_mos, the analog weights and the MDE.
     - M1 work the freeze doesn't need (the overlay, speech and the harness) waits.
     - If the running overrun reaches 4 days, the next item on the cut list goes at once.
 - M4 and M5 move later if outages extend the sealed window.
@@ -90,7 +104,7 @@ Go-ahead day is **G = Thu 19 Nov 2026**. The owner gave no hours per week, so ~2
 | Mon 30 Nov 2026 (G+11) | Open-Meteo stops serving HRRR | None for the worker, which reads HRRR from NOAA's bucket (D-008). Open-Meteo stays only for pinned GFS beyond 48 h. |
 | Fri 4 Dec 2026 (G+15) | Golden Gate permission cut-off | With written permission by then, Golden Gate can carry the demo. Without it, Rainier does and Golden Gate moves to v2. |
 | Mon 14 Dec 2026 (G+25) | Pre-registration freeze (design P) | τ, S_mos, the analog weights and the MDE come from development data and are committed, with the hash in DECISIONS.md. This lands at the front of M2, and it caps the slack before it (see the calendar notes). |
-| Tue 15 Dec 2026 → Thu 14 Jan 2027 (G+26 → G+56) | Sealed window (design P) | 31 days (≥ 28), extended by any outage. Capture must run unattended through the holidays, so AWS (D-014) has to be live before it opens. Until then, capture runs only while this laptop is awake. |
+| Tue 15 Dec 2026 → Thu 14 Jan 2027 (G+26 → G+56) | Sealed window (design P) | 31 days (≥ 28), extended by any outage. Capture must run unattended through the holidays, so AWS (D-014) has to be live before it opens. Until then, capture runs only while this laptop is awake. The laptop's forecast stand-in, which keeps f00–f02, serves a 1 h lead at most, so design P's 3, 6, 12 and 24 h leads need the AWS deployment, or a design-P stand-in profile (D-101); no run gives the 48 h lead, which waits on the owner's reading (D-102). |
 
 ---
 
@@ -227,7 +241,14 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
 - 00:04:35: the 0.3.0 loop's queue heartbeat recorded `auto_resume_max` 3 (the lead's listing; again at 00:15:49), so the lead's manual daily resume ended (D-083, D-090).
 - 00:06:29: the data report on `~/snow-globe-data` gave the same close and outage totals (met at 23:46:10.754Z; capture outages 11.001 h, forecast outages 6.039 h); the switch's 4.797 s of excess, after the close, raised the restart excess to 0.265 h and the lost total to 11.37 h (D-090).
 - 00:36:33: the owner started the supervisor again (pid 26187, in its own session). It adopted both loops and keeps the Mac awake until 05:00:00 UTC, on battery too, with the lid open (D-089, D-090).
-- These docs (D-089, D-090), uncommitted.
+- 01:39–01:47: D-089 to D-091's docs and the spike's offline rebuild committed (`53d5d4f`, `455dcdc`, `479d4d8`). In between, at 01:40, the lead queued T3pr ahead of T1b (D-091).
+- About 02:00–06:10: wave 1's five work packages built, reviewed, fixed and verified (D-092).
+- 05:00:00: the supervisor's keep-awake ended. 05:25:29: the Mac on battery (D-104).
+- 07:12:46–07:49:03 and 08:49:12–09:36:07: the Mac asleep with its lid closed. Capture lost its 5-minute cadence for 41.0 and 49.1 min, and run 2026112308 was written at 09:36:50, 37.9 min after it fell due (D-104).
+- 09:36:50: on AC again (D-104).
+- 09:43–09:54: `make test` on the tree to commit: all 12 suites passed in 652 s (D-092).
+- 09:56:36–09:57:33: wave 1 committed, one commit per package, `3029929` to `22930cc` (D-092).
+- These docs (D-092 to D-104), uncommitted.
 
 **Optional, not scheduled:** a council round on the parts taken from the Lookout draft, adding a forecast-verification judge (PRD §18.2, Appendix B).
 
@@ -293,13 +314,19 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
 - A re-snapshot is again the procedure in the supervisor's header: flip `current`, touch `cache/runtime/graceful-stop.capture`, then SIGTERM the capture loop's python and the stand-in's bash, and each restarts from `current`. It needs the supervisor running, and it is the lead's, on AC power or, on battery, with the lid open and `caffeinate -i` held across it (D-079, D-089). First check, in a scratch folder, that the snapshot's offline venv build works (D-090).
 
 **Risks** (updated 23 Nov: the gate's own ended with its close, D-089):
-- **Gaps in the logs.** Until AWS is live, capture and the forecast worker run only while this laptop is awake. The loops hold only `caffeinate -s`, which keeps the Mac awake on AC power alone. On battery the Mac slept on each of 19–22 Nov (PRD_PROGRESS.md, "Outages"; D-051, D-081, D-089); on 22 Nov it idle-slept twice, and 2,043.8 s were lost. Gaps no longer move the gate, but they lose frames (Rainier's can never be backfilled, because that camera has no archive), cut the backfill's daily loop time, and from 15 Dec extend the sealed window. On battery a keep-awake needs an idle-sleep assertion, `caffeinate -i` or the supervisor's opt-in `SNOW_GLOBE_AWAKE_UNTIL_UTC`, and the lid open.
+- **Gaps in the logs.** Until AWS is live, capture and the forecast worker run only while this laptop is awake. The loops hold only `caffeinate -s`, which keeps the Mac awake on AC power alone. On battery the Mac slept on each of 19–23 Nov (PRD_PROGRESS.md, "Outages"; D-051, D-081, D-089, D-104); on 22 Nov it idle-slept twice, and 2,043.8 s were lost; on 23 Nov a closed lid slept it twice, for 36 and 47 min, and capture lost its 5-minute cadence for 41 and 49 min (D-104). Gaps no longer move the gate, but they lose frames (Rainier's can never be backfilled, because that camera has no archive), cut the backfill's daily loop time, and from 15 Dec extend the sealed window. On battery a keep-awake needs an idle-sleep assertion, `caffeinate -i` or the supervisor's opt-in `SNOW_GLOBE_AWAKE_UNTIL_UTC`, and the lid open.
 - **The jobs depend on the lead's session** (D-076, D-090). The new loops are children of the switch's process, and through it of the lead's session, so ending that session can stop both. The supervisor, stopped by the switch and started again by the owner at 00:36:33 UTC on 23 Nov, adopted them without detaching them. It restarts a loop that exits, in its own session: capture 330 s after an exit nobody announced, which loses frames.
 - **The frozen snapshots** (updated 23 Nov, D-090). Both jobs run `aee6f92` (capture 0.3.0 and forecast 0.3.0) since 00:02–00:03 UTC on 23 Nov. The 20 Nov reasons to re-snapshot (D-054, D-065, D-070) are all met. A re-snapshot uses the supervisor's procedure (above), with the supervisor running. Every snapshot build runs `uv sync --locked --no-dev --offline`, which needs every locked wheel in uv's cache; on 22 Nov that cache had been emptied, and the rehearsal caught it before anything stopped (D-090).
 - **The archive limiter's margin: retired.** Fixed in `3cd2ca7` (D-079). Every end-to-start pair of 21 Nov was at least 5.0503 s apart and every pair of 22 Nov at least 5.0507 s (D-081, D-089).
 - **Disk.** 91 GiB free of 460 GiB at 00:16 UTC on 23 Nov (`df`), against 35 GiB at about 10:00 UTC on 21 Nov; in between came the lead's cleanup and the emptying of caches on 22 Nov (D-090). The data dir holds 2.7 GiB (about 2.9 GB; `du -sh` at 00:17 UTC). The live policy adds about 262 MB a day (D-028), and the backfill through T1c about 1.3 GB (D-072).
 
-## M1: Voice to first pixel · Mon 23 Nov → Mon 7 Dec · not started (core logic started early)
+## M1: Voice to first pixel · Mon 23 Nov → Mon 7 Dec · in progress
+
+**Built in wave 1, committed on 23 Nov, with no M1 gate claim yet** (D-092). None of it has run with the owner or in the real app:
+- **Tier 0** in `snow-globe-core` 0.3.0 (M1-08): the library index, the match, the 48 h background decode and `snow-globe-ask`. Its distance is provisional; the sealed window is read by local or UTC date; only frames taken and fetched before the ask qualify, in the product too (D-097).
+- **The overlay's web layer** (`app/src`, the pnpm package `@snow-globe/overlay` 0.1.0; M1-07): states, caption, chips, the destination chip and the webview paint gate. Its core-to-webview protocol v1 is the IPC contract the shell implements (D-093). The fade misses PRD §10.1's 60 ms allocation; that is the owner's call (D-094).
+- **The stale-paint stress test** for the webview gate (M1-13): 0 stale paints in 3 runs of 10,240 cycles in headless Chromium, with a simulated core; all 10 broken overlays caught (D-093).
+- **The replay scorer** (`bench/replay/`, M1-09) with trace schema 2, the Rust–Python contract (D-095); the lead's scoring readings, which the owner may overrule (D-096). Tested on synthetic runs only.
 
 **Started early, code only, with no M1 gate claim (D-032).** None of it has run with the owner:
 - **The 1a spike app** (`spikes/m1-platform/`, never shipped): built on 19 Nov, 105 unit tests pass, and its criteria are fixed in code before any run (D-033). None of the 11 checks has run; they need the owner at the keyboard, and the steps are in its README.
@@ -344,7 +371,8 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
   - library index, Sun-position match, and background `decode()`.
   - Skip painting Tier 0 when Tier 1 is ready within ~100 ms, but still run and measure it (D-012 row 11).
   - Rainier's library is our own captures only (D-019).
-- **Stale-paint stress test:** ≥ 10,000 randomised cycles with injected delays.
+  - **Built in the core** (D-097) and in the overlay's skip rule (D-093). Still to come: the shell's frame transport and prefetch on partials (TODO(M1)), and the weather class (TODO(M1.5)).
+- **Stale-paint stress test:** ≥ 10,000 randomised cycles with injected delays. **Done in headless Chromium** for the webview gate, 3 × 10,240 cycles with 0 stale paints (D-093); to run again inside the real panel once the shell exists.
 
 **1c. Harness** (§10.4, §10.6).
 - A recording tool through the live path, with a REC indicator that switches itself off.
@@ -358,8 +386,9 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
   - ≥ 100 idle trials for the shipped engine and ≥ 60 for the comparison engine;
   - spread over ≥ 3 days, with engines interleaved.
   - **Decided by the lead** (D-068): idle trials keep the system awake (`caffeinate -i`, never `-d`) and let the display sleep as the Mac's settings do (off after 10 min on AC). Each trial logs the display state, and display-asleep trials are reported apart as well as in the totals. Follow-up rows may be idle trials, reported as idle follow-ups.
-- A cluster-bootstrap report.
-- **Scoring, proposed** (D-057): "exact place and time" without the owner-pending rows, with the denominator named. The scorer re-parses at the place the app actually used as context. Normalised WER spells numbers the same way on both sides.
+- A cluster-bootstrap report. **Built** (`bench/replay/`, D-096), not yet run on recordings: the recording tool, the harness, the transcript writer and the run manifest are TODO(M1).
+- **Scoring, decided by the lead** (D-057, D-096; the owner may overrule): "exact place and time" without the owner-pending rows, with the denominator named. The scorer re-parses at the place the app actually used as context. Normalised WER reads numbers and place aliases alike on both sides (D-096). The wrong-paint gate is the one-sided 95 % Wilson upper bound per trial that painted from a partial. The headline is idle trials on the test split; the dev split is never used for claims.
+- **For the lead:** PRD §10.4's pixel tag carries only (query_gen, tier), so two Tier 0 composites in one query cannot be told apart in the capture (D-096); fades that cross 50 % after a scrub meet the same gap (D-094).
 
 **1d. README skeleton,** with the headline sentence and blanks. Written on 20 Nov (`README.md`); its blanks fill only from measured exports.
 
@@ -380,10 +409,15 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
   - the share of utterances still in speech at key-up.
 - [ ] ≥ 150 parser cases green, counted by category.
 - [ ] The STT decision in DECISIONS.md, with the Parakeet gate evaluated idle.
-- [ ] 0 stale paints in ≥ 10,000 cycles.
+- [ ] 0 stale paints in ≥ 10,000 cycles. Met in headless Chromium with a simulated core, and by the Rust model (D-093); the real panel's run is still to come.
 - [ ] A screen recording of the overlay over another app that keeps focus.
 
-## M1.5: Walking skeleton · by Thu 10 Dec · not started
+## M1.5: Walking skeleton · by Thu 10 Dec · in progress (early)
+
+**Built in wave 1, committed on 23 Nov** (D-092):
+- **The sky:** renderer 0.3.0 has the Hillaire 2020 atmosphere (M1.5-01, D-098). On the M4's GPU, heavy 1080p p50 is 6.7–7.0 ms and p95 8.3–8.7 ms, against an 8 ms budget defined for WKWebView (M2). The ceiling's overlap rule against HRRR TCDC is still TODO(M1.5).
+- **The plate dependency is met** from our own captures: Rainier plate v0.1, with the bright-overcast base frames of 21 Nov (M1.5-02, D-099). Its near band is not valid, and the manifest's camera correction is wave 2's.
+- **Extractor v0 misses its bar** (M1.5-03, D-100): summit F1 0.50 on 28 judged frames, against PRD §13.8's 0.85. So it cannot score P1, and the P1 table below waits for extractor v0.2: references conditioned on the sky state, labels from two independent labellers, and a leave-one-day-out check.
 
 - **Renderer v0, headless:**
   - the sky (Hillaire 2020, D-013);
@@ -395,6 +429,7 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
 - **Dependency:** a first Rainier plate (base frame, pose, summit band), pulled forward from M2.
   - Its base frame has to come from our own captures, because the summit camera has no archive.
   - PRD §8.5 asks for a bright-overcast midday frame with every landmark visible, which is hard at Rainier. If none is captured in time, M1.5 slips.
+  - **Met on 23 Nov, as far as this camera allows:** three bright-overcast frames of 21 Nov, 76–123 min before solar noon, show every band, and plate v0.1 is built from them. Columbia Crest, the committed manifest's one landmark, is hidden from the camera (a DEM ray cast), so the summit band is the visible dome above 4,000 m (D-099).
 - **Design-H archive backfill** (D-052; the plan is [docs/research/archive-backfill-plan.md](docs/research/archive-backfill-plan.md)). It runs inside the capture loop from 20 Nov, at most 1,000 requests a UTC day, and the lead queues each tranche.
   - **Not an M1.5 gate dependency:** M1.5's gate is P1 at Rainier, on our own captures, and Rainier has no archive.
   - **What it feeds:** extractor v0 at the design-H cameras, a first τ, persistence, a first S_mos, the block length and a first MDE, all from T1a's summer weeks (due Tue 24 Nov).
@@ -408,13 +443,14 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
     - **The finish days also assume** at least 2.2 h of loop time every UTC day and a daily resume of failed entries (D-071, D-072). Since the switch, capture 0.3.0's loop resumes them itself, once a UTC day and 3 times in all, and the lead's manual resume has ended (D-083, D-090).
     - **21 Nov's budget** of 1,000 requests was spent by 01:52:22 UTC, every pair at least 5.0503 s apart. At about 03:10 UTC the queue held 808 entries: 246 done, 561 pending, 1 active and 0 failed (D-081).
     - **22 Nov's budget** was spent by 01:45:45 UTC, every pair at least 5.0507 s apart (D-089). At 00:15:49 UTC on 23 Nov, under capture 0.3.0, the queue held 808 entries: 318 done, 489 pending, 1 active and 0 failed (D-090).
+    - **23 Nov's budget** was spent by 01:45:27 UTC, all 1,000 answered 200 and every pair at least 5.0506 s apart end to start (`capture_log/2026-11-23.jsonl`), before the night's sleeps (D-104).
   - **For the owner:** TQ, 232 entries and 3,253 requests between T0's first 16:9 frames and D-024's spans, queued only with the owner's yes. Point Reyes's TQ block (857 requests), if approved, goes before T2 and lands on Mon 30 Nov (Tue 1 Dec at 3.7 % errors), before the freeze. T2 then lands on Fri 11 Dec (Sat 12 Dec) and T1c on Wed 16 Dec (Thu 17 Dec), so T1c misses its 15 Dec target at both error rates (D-072).
   - **Still open:** the clear-sky share per camera and Sun bin, from extractor v0 on T1a (the plan's TODO(M1.5)), and re-aims too small for the thumbnails, from the Same view registration in M2 (D-042).
   - **Archived HRRR** for these dates is the forecast worker's job: 360 development dates through T2 (423 with T1c; D-072).
 
 **Gate evidence:**
-- [ ] A dev-only P1 table, with nothing held out touched.
-- [ ] Cloud Monte Carlo test output: ≥ 1,000 seeds × cover from 0.1 to 0.9, within 5 points of the view-ray target fraction, by elevation band.
+- [ ] A dev-only P1 table, with nothing held out touched. Blocked until an extractor passes PRD §13.8's bar (D-100). For the lead: say whether that means F1 ≥ 0.85 on the labels at hand (validation.json's `meets_f1_bar`) or the full §13.8 sample (`publishable`: ~150 frames per metric, stratified, re-labelled a week later, a second labeller), which M4 schedules. The second would hold this gate until M4's validation.
+- [ ] Cloud Monte Carlo test output: ≥ 1,000 seeds × cover from 0.1 to 0.9, within 5 points of the view-ray target fraction, by elevation band. Renderer 0.3.0 gives 0.2.0's maxima, at most 1.54 points, since the code the test runs is unchanged (D-098); to run again on the renderer the gate uses.
 
 ## M2: Relit frame · Thu 10 → Sun 27 Dec · not started
 
@@ -441,6 +477,7 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
   - 1,000 random samples against Skyfield;
   - sunrise and sunset against NOAA to ±1 min;
   - targets: Sun ≤ 0.05°, Moon ≤ 0.3°.
+  - Under way in wave 2, uncommitted (no date promised).
 - **Plates for Rainier and Point Reyes** (§8.5):
   - dehazed overcast base frame and night frame;
   - pose from ≥ 3 landmarks (reprojection ≤ 1°), plus the sunset-shadow check;
@@ -448,6 +485,7 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
   - world height and normals;
   - DEM horizon maps;
   - sky, lights and landmark-band masks.
+  - **So far:** Rainier's plate v0.1 has the base frame, the pose and the band masks, not yet the dehazing, the night frame, depth or the sunset-shadow check (D-099). Its near band is not valid until the camera position or model is fixed, which Rainier's K2 band needs (TODO(M2)). Point Reyes's plate v0 is wave 2's work.
 - **Haze and camera response:**
   - haze profiles: clear-air extinction per viewpoint and season, fitted on clear development frames;
   - the camera response (Kim & Pollefeys), fitted on development frames across all weather.

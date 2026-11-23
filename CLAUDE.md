@@ -90,6 +90,7 @@ Metadata may be read for any date.
 - iCloud sets the `hidden` flag on the venvs' `.pth` files, and Python 3.13 skips hidden `.pth` files. Imports then fail outside pytest.
   - Prefix commands with `PYTHONPATH=src:../common/src`.
   - From `eval/`, use `src:../workers/common/src`.
+  - From `plates/`, use `src:../workers/common/src:../eval/src`.
   - The runtime snapshots under `~/lookout-data/cache/runtime/` are outside iCloud, so their venvs need no `PYTHONPATH`.
 - Lint and test with `ruff` + `pytest`.
 - Mark tests that touch the network `@pytest.mark.network`; they are excluded by default (`-m "not network"`).
@@ -108,11 +109,12 @@ Metadata may be read for any date.
 | `workers/common/` | uv project `snow-globe-common`: data paths, manifest loader and schema validation, storage (local/S3), polite HTTP client, time helpers, JSONL logs | Shared; change only with care and keep its tests green |
 | `workers/capture/` | uv project `snow-globe-capture`: NPS live capture, archive backfill, archive check | |
 | `workers/forecast/` | uv project `snow-globe-forecast`: HRRR extraction, availability-lag log | |
-| `eval/` | uv project `snow-globe-eval`: extractor, scores, baselines, leakage tests, backtest pair | |
-| `renderer/` | pnpm package `@snow-globe/renderer`: WebGL2 Tier 1 renderer and headless runner | |
-| `app/core/` | Rust crate `snow-globe-core`: parser, time rules, ephemeris wrapper, solar events, trace, lifecycle | Cargo workspace at `app/Cargo.toml` |
-| `app/src-tauri/`, `app/src/`, `app/speech-macos/` | Tauri shell, overlay UI, Swift static library | M1 |
-| `bench/` | Replay and paint-capture harness, utterance scripts and reports | Voice recordings stay outside git, under `$SNOW_GLOBE_DATA_DIR/fixtures/voice/` |
+| `eval/` | uv project `snow-globe-eval`: extractor (v−1 and v0, with its Rainier frame labels: one AI labeller's, made by viewing, D-100), scores, baselines, leakage tests, backtest pair | |
+| `plates/` | uv project `snow-globe-plates`: the offline plate builder (base frame, pose from landmarks and stars, DEM ray cast, band masks), with its specs in `plates/specs/` | Plates are data: written to the data dir, never the repo (D-099). Depends on eval for the held-out guard, so outside pytest use `PYTHONPATH=src:../workers/common/src:../eval/src` |
+| `renderer/` | pnpm package `@snow-globe/renderer`: WebGL2 Tier 1 renderer, with the Hillaire 2020 atmosphere, and headless runner | |
+| `app/core/` | Rust crate `snow-globe-core`: parser, time rules, ephemeris wrapper, solar events, trace, lifecycle, Tier 0 (`snow-globe-ask`, `snow-globe-tier0`) | Cargo workspace at `app/Cargo.toml` |
+| `app/src-tauri/`, `app/src/`, `app/speech-macos/` | Tauri shell (not built yet); the overlay's web layer, the pnpm package `@snow-globe/overlay` in `app/src/`, with the core-to-webview protocol (`app/src/protocol.schema.json`, D-093) and the webview paint gate; Swift static library | M1 |
+| `bench/` | Replay and paint-capture harness, utterance scripts and reports; the replay scorer in `bench/replay/` | Voice recordings stay outside git, under `$SNOW_GLOBE_DATA_DIR/fixtures/voice/` |
 | `spikes/` | Throwaway platform spikes, such as the M1 1a checks | Never shipped; the lead decides what moves into `app/` |
 | `viewpoints/` | `schema/viewpoint.schema.json` and `manifests/<viewpoint_id>.json` | Factual corrections allowed; say so in your report |
 | `infra/terraform/`, `infra/lambda/` | AWS serverless Terraform, and the Lambda container image | Never applied without the owner |
@@ -158,10 +160,13 @@ forecast/hrrr/<viewpoint_id>/<YYYYMMDDHH>z.json                                 
 forecast_log/<YYYY-MM-DD>.jsonl                                                            availability lag and fetch events (written only by the forecast stand-in)
 forecast_log/lag_survey/<YYYY-MM-DD>.jsonl                                                 S3 lag-survey events, "method": "survey" (written only by snow-globe-forecast lag-survey --log, D-053)
 scores/pairs/, renders/pairs/                                                              backtest pair records and renders
+scores/extractor-v0/<viewpoint_id>/<YYYYMMDDTHHMMSSZ>/ (+ <viewpoint_id>/runs.jsonl)       extractor v0 runs: results, ratio series, summary, validation; runs.jsonl logs every run; the CLI never reuses a default stamped folder, but an explicit --out is not protected (eval's cli.py)
+plates/<viewpoint_id>/<plate_version>/                                                     plate sets: base, sky, band and occluder masks, plate.json naming every input and its SHA-256; a version is never rebuilt in place (plates/README.md)
+plates/<viewpoint_id>/sources/                                                             the plate's DEM subset, GNIS response, star match files and provenance.json; superseded/ keeps older specs
 spikes/m1/<run-id>.jsonl                                                                   M1 1a spike results (run by the owner)
-cache/                                                                                     deletable caches (GRIB subsets, cache/staging/ capture staging, etc.); not cache/runtime/, which holds the live snapshot that `current` names, the loops' scripts, their logs and supervisor.pid (only the lead removes an old snapshot there)
+cache/                                                                                     deletable caches (GRIB subsets, cache/staging/ capture staging, cache/tier0/library-v2.json Tier 0's index, rebuilt when missing, etc.); not cache/runtime/, which holds the live snapshot that `current` names, the loops' scripts, their logs and supervisor.pid (only the lead removes an old snapshot there); the renderer writes its benchmark and Monte Carlo runs to cache/renderer/, and the runs renderer/README.md cites as raw data are copied to reports/renderer/, so emptying cache/ deletes no cited evidence
 samples/                                                                                   hand-picked sample frames and API responses
-reports/                                                                                   saved evidence, kept: reports/m0.5-gate/ holds the gate's data reports and the switch's logs (D-089, D-090)
+reports/                                                                                   saved evidence, kept: reports/m0.5-gate/ holds the gate's data reports and the switch's logs (D-089, D-090); reports/t3pr/ T3pr's choice and queue copies (D-091); reports/tier0/ Tier 0's bench, ask and decoder runs (D-097); reports/wave1/ wave 1's agent results and the lead's make test log (D-092); reports/renderer/ the renderer runs that renderer/README.md cites (D-098)
 quarantine/                                                                                never opened (D-022)
 ```
 
@@ -169,8 +174,9 @@ quarantine/                                                                     
 - Python, per project: `cd <project> && uv sync && uv run pytest -q && uv run ruff check .`
 - Rust: `cd app && cargo test --workspace`
 - Renderer: `cd renderer && pnpm install && pnpm test`
+- Overlay: `cd app/src && pnpm install && pnpm test`
 - Terraform: `terraform -chdir=infra/terraform init -backend=false && terraform -chdir=infra/terraform validate`
-- `make test` runs everything that needs no network, microphone or credentials.
+- `make test` runs everything that needs no network, microphone or credentials: 12 suites (`TEST_SUITES` in the Makefile), and CI runs all but `speech`.
 
 ## Style
 - Small modules, with tests beside the code. Type hints in Python; `strict` in TypeScript.
