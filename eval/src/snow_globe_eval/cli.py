@@ -16,9 +16,16 @@
   :mod:`.extractor_v0_2_run`); refuses to score without the pre-registration; offline,
   resumable, writes under ``<data dir>/scores/extractor-v0.2/``, never over a finished run.
   ``--merge-labels DIR --labels OUT`` writes a new merged labels file instead.
+- ``snow-globe-eval ephem-validate``: PLAN M2's ephemeris validation (PRD §8.4;
+  :mod:`.ephem_validate`): oculus-core and eval's refraction against JPL Horizons (8 viewpoints,
+  hourly for 12 months), 1,000 Skyfield samples and NOAA sunrise/sunset, and the camera-frame
+  transform; writes under ``<data dir>/reports/ephem/``.
 
 None touches the network, except ``backtest-pair --forecast auto``, which backfills one
-HRRR run from NOAA's public bucket through snow-globe-forecast.
+HRRR run from NOAA's public bucket through snow-globe-forecast, and the first
+``ephem-validate``, which fetches the Horizons tables and the DE421 kernel once into
+``<data dir>/cache/ephem/`` and builds Skyfield's isolated environment with uv (``--offline``
+then re-runs from the cache).
 """
 
 from __future__ import annotations
@@ -225,6 +232,10 @@ def _parser() -> argparse.ArgumentParser:
         type=float,
         help="hidden threshold (v0's fixed 0.35); any other value marks the run as overridden",
     )
+
+    from .ephem_validate.cli import register as register_ephem_validate
+
+    register_ephem_validate(sub)
 
     from .extractor_v0_2_run import register as register_extractor_v0_2
 
@@ -491,6 +502,8 @@ def main(argv: list[str] | None = None) -> int:
             return _data_report(args)
         if args.command == "extractor-v0":
             return _extractor_v0(args)
+        if args.command == "ephem-validate":
+            return args.handler(args)
         if args.command == "extractor-v0.2":
             return args.handler(args)
         return _ephem_check(args)

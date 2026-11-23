@@ -15,6 +15,7 @@ uv run snow-globe-eval heldout --check FRAME  # may this frame be used for devel
 uv run snow-globe-eval data-report            # the M0.5 gate's 72 h log evidence (offline, read-only); --json
 uv run snow-globe-eval extractor-v0           # extractor v0 over every Rainier capture (plate v0.1) + validation on the hand labels
 uv run snow-globe-eval extractor-v0.2 --run-id ID  # extractor v0.2's pre-registered leave-one-day-out check on labels v0.2, v0 beside it
+uv run snow-globe-eval ephem-validate         # M2 ephemeris validation: Horizons, Skyfield, NOAA, camera frames; --offline re-runs from the cache
 ```
 
 Outside pytest, iCloud's hidden `.pth` files mean the commands need `PYTHONPATH=src:../workers/common/src`
@@ -67,6 +68,7 @@ the run it was made with.
 | `ephemeris.py` | §8.4 | oculus-core Sun/Moon (geometric) plus refraction (Sæmundsson, or NOAA's for comparison); explicit backend choice |
 | `noaa_solar.py` | §8.4 | Independent NOAA GML solar algorithm (Meeus ch. 25/28): fallback and cross-check |
 | `ephem_check.py` | §8.4 | NPS `SolarElevationAngle` cross-check (`snow-globe-eval ephem-check`) |
+| `ephem_validate/` | §8.4 | `snow-globe-eval ephem-validate` (PLAN.md M2): oculus-core and eval's refraction against JPL Horizons observer tables (8 viewpoints, hourly, 1 Jul 2026 – 30 Jun 2027; fetched once, cached), 1,000 random samples against Skyfield/DE421 in an isolated `uv run --no-project` environment (Skyfield is not a dependency), sunrise/sunset against NOAA for every local day, and the renderer's camera transform (`camera.ts` under Node) against an independent implementation; report under `<data dir>/reports/ephem/<UTC stamp>/` |
 | `daylight.py` | §8.6 | Day from the ephemeris Sun altitude only; thresholds are parameters (P1 3°, cloud fraction 10°) |
 | `gates.py` | §8.6 | The frame quality gates: Fresh, Daylight and Usable frame applied; Same view applied when the caller passes a registration shift against the plate and a tolerance (extractor v0 does), else "not checked"; Clear lens and the Colour-mode cut-off not yet (reported as "not checked"); exclusion mask and counts |
 | `extractor.py` | §13.3 | v−1 landmark visibility from normalised Sobel energy against a Sun-binned clear-day reference; camera-in-cloud flag; camera-fault class (dark, saturated, blank) |
@@ -270,6 +272,67 @@ in full in `data_report/__init__.py`:
   and `answer_bound_at`; the figures of every record so far are those of version 2).
 - **State files** (`state/capture/<id>.json`, the fetcher lock) are read as they are when the report runs
   (`state_now`), not as of `--until`. The home directory is printed as `~`.
+
+## The ephemeris validation (PLAN.md M2; `ephem-validate`)
+
+- **Network, once.** The first run fetches 32 Horizons observer tables (8 sites × Sun, Moon × airless,
+  refracted; 8,760 hourly rows each) one request at a time, ≥ 2 s apart, through the shared
+  `jpl-ssd` limiter and the project's generic User-Agent, and DE421 (16.8 MB) the same way; every
+  response goes to `<data dir>/cache/ephem/` before it is used and is never fetched again. The planned
+  sites are frozen in `cache/ephem/plan.json` (`--replan` reads the manifests again).
+- **Skyfield** runs as `uv run --no-project --python 3.13 --with skyfield==1.55 --with jplephem==2.24
+  --with sgp4==2.27 --with numpy==2.5.4 --with certifi==2026.10.23 python -I skyfield_ref.py`, from an
+  empty folder; its output is cached by the job's SHA-256. Proposed for the lead: an optional dependency
+  group `ephem-ref` with exactly those pins (not added: eval's lock and venv are shared).
+- **Domains: a convention.** The refracted target is judged where the reference's geometric altitude is
+  ≥ −1°, pending the owner's choice of cutoff (owner question 1). Below it eval refracts nothing (nor
+  does `app/core`'s oculus-core refraction), Horizons holds its −1° value (0.6466°) and Skyfield,
+  iterating from the true altitude, refracts nothing; those epochs are reported apart
+  (`refracted_below_cutoff.jsonl.gz`), never hidden. The −1° is not where a body leaves the view: a
+  camera above sea level sees down to its horizon dip (1.49° at Grand Canyon's 2,150 m), so the epochs
+  between the dip and −1° get a line of their own (`dip_band`). TODO(M2): judge down to each camera's
+  terrain horizon once the plates carry DEM horizon maps.
+- **Exit status**: 0 when every target is met, 1 when one is missed (the report is written either way),
+  2 on an error.
+
+Measured 23 Nov 2026 (`reports/ephem/20261123T113638Z`, `--offline` with the network blocked, 4.5 s
+on the M4, exit 1; oculus-core `0.1.0+1b5410b`; report schema 2):
+
+- **Sun** (target 0.05° = 180″): geometric worst 12.7″ (p99 12.5″) against Horizons over 70,080
+  epochs, 30.7″ (22.3″ with UT1 − UTC taken out) against Skyfield over 1,000 samples, 1998–2030.
+  Refracted: p99 12.6″, and **one** epoch beyond target in the domain: Yosemite, 13 May 2027 03:00Z,
+  0.647°, where a 1.6″ difference puts the two geometric altitudes either side of eval's −1° cutoff.
+- **Moon** (target 0.3° = 1,080″): geometric worst 9.6″ against Horizons, 19.1″ (13.1″) against
+  Skyfield; refracted worst 9.6″; illuminated fraction within 0.0085 percentage points.
+- **D-002 superseded**: D-002's worst cases (0.19′ Sun, 0.13′ Moon; 294 rows, 3 sites) are exceeded
+  here: 0.212′ and 0.161′ against Horizons, 0.511′ and 0.318′ against Skyfield; still far inside the
+  targets (3′ and 18′).
+- **Refraction**: at one input altitude eval's Sæmundsson reproduces Horizons' refraction to 4e−6″ over
+  the domain: the same formula. Each at its own geometric altitude they differ by up to 1.95″, which is
+  the refraction slope (|dR/dh| ≈ 0.16 just above −1°) times oculus-core's 12″ altitude error, not the
+  models. Skyfield's iterated Bennett differs from eval's by up to 23.3″ on the samples (28.5″ over the
+  Horizons epochs), at −1 to 0°. `app/core` refracts with oculus-core's `refraction_from_true`, the same
+  formula without Meeus' +0.0019279′ term, so its refracted altitude is 0.116″ below eval's (read from
+  the pinned source; the binding does not expose it, so it is not measured).
+- **Below −1°** (Horizons): 34,386 Sun and 35,446 Moon epochs, all but one of each about 0.647° apart (the
+  one is a reverse straddle that agrees). Between the dip and −1°: 94 Sun and 106 Moon epochs at the
+  five cameras above 1,000 m, of them toward the view (within ±30° of the heading): Grand Teton Sun 9,
+  Moon 12; Yosemite Sun 4, Moon 4; Grand Canyon Moon 3. The error there is up to 0.649°.
+- **Sunrise and sunset**, 5,840 events: ours − NOAA at most 3.21 s (none beyond ±60 s); ours −
+  Skyfield 0.91 s; NOAA − Skyfield 3.72 s.
+- **Camera frames**: `camera.ts` matches the independent transform to 1.5e−12 px, with no direction
+  where the two disagree on in front or behind; the ephemeris error through it is ≤ 0.27 px.
+  `scene.sun` and `scene.moon` carry the geometric altitude, so the rendered disk sits below where the
+  body appears by the refraction: up to 40.3 px for the Sun (Yosemite) and 42.8 px for the Moon
+  (Smokies) in the native 3840 px frame, with the light direction off by up to 0.643° (Sun) and 0.645°
+  (Moon).
+- **The references**: Skyfield − Horizons is a pure hour-angle offset of +0.04 to +0.30 s (declination
+  within 0.04″): Earth rotation. Skyfield uses the UT1 − UTC table shipped with it (IERS values and
+  predictions to 23 Jan 2027, extrapolated after); Horizons uses its measured EOP to 20 Nov 2026, its
+  predictions to 15 Feb 2027 and its last value held after that: the Sun's offset minus Skyfield's
+  UT1 − UTC moves by 0.0002 s at a site after 15 Feb, against 0.09 s before. (The Moon's moves by
+  0.01 s there, because DE421 and DE441 also differ in the Moon's position, by up to 0.036″ in
+  declination.)
 
 ## Extractor v0.2 (PLAN.md M1.5; `extractor-v0.2`)
 
