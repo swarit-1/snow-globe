@@ -1,0 +1,12 @@
+# Lint and format settings for docs/ledger/ (standard-library scripts with no pyproject of their own):
+# the repo's rules, for Python 3.11, the first with tomllib. Run workers/common's locked ruff with
+# --no-cache, so nothing is written into the iCloud-synced tree:
+#   workers/common/.venv/bin/ruff check --no-cache docs/ledger
+#   workers/common/.venv/bin/ruff format --check --no-cache docs/ledger
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+# The ledger's strings use the PRD's own symbols (en dash, minus sign, times).
+allowed-confusables = ["–", "−", "×"]
