@@ -1,6 +1,6 @@
 # Bench: the scripted utterances for the M1 replay harness
 
-**Updated:** 2026-11-20 (UTC).
+**Updated:** 2026-11-23 (UTC).
 
 Renamed for Snow Globe on 21 Nov 2026 (D-080): the parser is `snow-globe-parse` in the crate `snow-globe-core` (were `lookout-parse` and `lookout-core`); the parser outputs recorded on 20 Nov came from the old binary at `8246a8b`, which differs only in name. `$SNOW_GLOBE_PARSE` (or the old `$LOOKOUT_PARSE`) names the binary.
 
@@ -25,6 +25,7 @@ wrong-paint rate. The script is the fixed input those numbers are measured on.
 | [utterances/prd_reading.py](utterances/prd_reading.py) | The source of the script: each row's text, tags and expected result as read from PRD §7.4 and §7.5. It writes both TSVs. |
 | [utterances/check.py](utterances/check.py) | Validates the script, reruns `snow-globe-parse` on every row, compares, and checks the stored verdicts |
 | [utterances/test_utterances.py](utterances/test_utterances.py) | Tests for both scripts (stdlib `unittest`) |
+| [replay/](replay/README.md) | The replay scorer and its report (PRD §10.6, ticket M1-09): schema-2 traces re-parsed at the context they record, every metric with a seeded cluster bootstrap. It has run only on synthetic runs; nothing is measured |
 | [ruff.toml](ruff.toml) | Lint and format settings, the same rules as every `pyproject.toml` in the repo |
 
 Everything here is Python standard library only, with no network and no audio:
@@ -34,6 +35,7 @@ python3 -I -B bench/utterances/check.py --no-parser     # validate the TSV and i
 python3 -I -B bench/utterances/check.py                 # also rerun the parser and compare
 python3 -I -B bench/utterances/check.py --reading-list  # the lines as the owner says them
 python3 -I -B -m unittest discover -s bench/utterances -t bench/utterances -p 'test_*.py'
+python3 -I -B -m unittest discover -s bench/replay -t bench/replay -p 'test_*.py'
 ruff check bench && ruff format --check bench           # any ruff; the repo's is in workers/common/.venv
 ```
 
@@ -319,7 +321,10 @@ $SNOW_GLOBE_DATA_DIR/fixtures/voice/            default <data dir>/fixtures/voic
   - channel count, sample rate, sample format, frames and duration;
   - key-down and key-up offsets, plus speech onset and end, all in ms. The onset is what "first
     partial ≤ 300 ms after speech onset" is measured from (PRD §14). Whether you were still
-    speaking at key-up, a PRD §10.6 report line, follows from them;
+    speaking at key-up, a PRD §10.6 report line, follows from them. Their names are
+    `key_down_ms`, `key_up_ms`, `speech_onset_ms` and `speech_end_ms`, counted from the
+    recording's first sample; the scorer reads the last three, with `id`, `take` and
+    `script_hash` ([replay/traces.py](replay/traces.py));
   - the input's kind (built-in or external), never a device name;
   - the consent scope, below.
 
@@ -356,10 +361,14 @@ $SNOW_GLOBE_DATA_DIR/fixtures/voice/            default <data dir>/fixtures/voic
 7. **Then:** the tool lists the kept takes against the script, and you report the count, for
    example 130 of 130, to the lead.
 
-The tool itself, the sample substitution, the per-pass cache namespaces and the scorer are M1
-work (`TODO(M1)`, PLAN.md M1 1c).
+The tool itself, the sample substitution and the per-pass cache namespaces are M1 work
+(`TODO(M1)`, PLAN.md M1 1c). The scorer is built ([replay/](replay/README.md)) and has run only on
+synthetic runs.
 
 ## Scoring, proposed for the lead
+
+[replay/](replay/README.md) implements these rules; its README gives every metric with its
+denominator.
 
 - **Place and time accuracy:** re-parse the engine's final transcript with snow-globe-core at the
   row's reference clock, then compare with the expected columns as `check.py` does. The live
@@ -368,9 +377,10 @@ work (`TODO(M1)`, PLAN.md M1 1c).
   - The harness plays each follow-up as the trial straight after the row before it in script
     order, in the same app session and engine. `check.py` makes sure that row resolves to the
     follow-up's `context` place.
-  - The trace records the place the app actually used as its last place (`TODO(M1)`; an id, not
-    text). The scorer re-parses at that live context, never at the `context` column. A live
-    context that differs from the column makes the row wrong on place.
+  - The trace records the place the app actually used as its last place: trace schema 2's
+    `context`, as manifest ids and never text ([trace.rs](../app/core/src/trace.rs)). The scorer
+    re-parses at that live context, never at the `context` column. A live context that differs
+    from the column makes the row wrong on place.
   - The report also counts follow-ups whose live context differed, and why (the row before was
     misheard, or the app lost it), so one mishearing isn't hidden.
   - A follow-up played ≥ 30 min after the row before is an idle trial only if the app keeps its
@@ -385,10 +395,14 @@ work (`TODO(M1)`, PLAN.md M1 1c).
   - Normalised, both the reference and the engine's output first have their numbers written out
     the way `check.py`'s `spoken()` does: "4", "four" and "4:00" all count as "four", and "a.m.",
     "am" and "a m" as one word. Any alias counts as its place's name, and "Mt" as "Mount".
-  - `TODO(M1)`: the normaliser itself, in the scorer.
+  - The normaliser is [replay/wer.py](replay/wer.py).
+- **Display state** (D-068): each trace records whether the display was on when the query
+  began (schema 2's `state.display`); the report gives display-asleep trials apart and inside
+  the totals.
 - **Transcripts** the scorer needs (WER and the re-parse) stay out of the trace, which never
   holds text (PRD §10.5). They go beside the run's results under `$SNOW_GLOBE_DATA_DIR`, outside git
-  and iCloud, with the recordings' retention (`TODO(M1)`).
+  and iCloud, with the recordings' retention. The scorer reads them as `transcripts.jsonl`
+  ([replay/README.md](replay/README.md)); writing them is the harness's job (`TODO(M1)`).
 
 ## Real-use utterances (≥ 30, PRD §10.6)
 

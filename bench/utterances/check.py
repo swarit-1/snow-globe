@@ -239,7 +239,7 @@ def ordinal(n: int) -> str:
 def spoken(text: str) -> str:
     """`text` with its numbers written as the owner reads them aloud: "4" as "four", "1:30" as
     "one thirty", "2:05" as "two oh five", "21st" as "twenty-first", "am" as "a.m." (bench/README.md
-    "Recording"). The WER normaliser is to use the same forms (TODO(M1), the scorer)."""
+    "Recording"). The WER normaliser, bench/replay/wer.py, uses the same forms."""
 
     def clock(m: re.Match[str]) -> str:
         h, mm = int(m[1]), int(m[2])
