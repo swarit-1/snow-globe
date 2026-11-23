@@ -15,6 +15,7 @@ caller supplies them and the renderer checks the Sun.
 pnpm install
 pnpm test               # tsc + unit tests (math, CPU reference, Monte Carlo) + headless SwiftShader tests
 pnpm render --scene s.json --plate p.jpg [--sky-mask m.png] [--depth d.png] --out out.png
+pnpm render:batch --jobs jobs.jsonl   # many scenes through one headless runner (eval's p1dev uses it)
 pnpm bench              # per-frame times, SwiftShader and (if available) Chromium's GPU path
 pnpm montecarlo [--case above|deck|thin|cirrus]   # PRD §9.5 coverage Monte Carlo table (M1.5 gate evidence)
 pnpm goldens:update     # regenerate the synthetic plate and the three goldens (review before committing)

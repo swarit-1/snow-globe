@@ -20,6 +20,7 @@
     "test:headless": "vitest run --project headless",
     "build": "node scripts/build.ts",
     "render": "node scripts/render.ts",
+    "render:batch": "node scripts/render-batch.ts",
     "bench": "node scripts/bench.ts",
     "goldens:update": "node scripts/goldens-update.ts",
     "plate:synthetic": "node scripts/make-synthetic-plate.ts",
