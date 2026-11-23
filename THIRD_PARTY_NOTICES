@@ -17,6 +17,11 @@ rename (DECISIONS.md D-080): the project is Snow Globe, its own packages are
 renamed (snow-globe-*, imported as snow_globe_*; @snow-globe/renderer; the
 Swift package SnowGlobeSpeech), and each went up one minor version. The notes
 above keep the names of their day. No third-party package version changed.
+Revised on 23 Nov 2026 for wave 2 (commits 1d4bf19 to bf2bbff): eval's
+ephemeris validation reads JPL data (section 1) and runs Skyfield in an
+isolated environment that no lock file holds (4d); 4b and 4c now say what
+runs since the post-gate switch (D-090), and the scope names the overlay. No
+third-party package version changed in any lock file.
 It implements PRD.md
 §12 and the licence ledger of §15.4. At M5 a version generated from the
 licence ledger replaces it (PLAN.md, M5). docs/checks' `notices` check keeps
@@ -34,8 +39,8 @@ Scope
   it installs to run (its runtime closure, development groups left out), at
   the versions its uv.lock pins; then the native libraries bundled inside
   those wheels on this Mac (section 4).
-- Node: the renderer's direct dependencies, plus the one runtime package they
-  pull in.
+- Node: the renderer's and the overlay's direct dependencies, plus the one
+  runtime package the renderer's pull in.
 - Each package's own licence text ships inside its distribution. The lock
   files list everything else (app/Cargo.lock, spikes/m1-platform/Cargo.lock,
   workers/common/uv.lock, workers/capture/uv.lock, workers/forecast/uv.lock,
@@ -104,6 +109,23 @@ Bright Star Catalogue, 5th revised edition (Hoffleit & Warren 1991; CDS V/50)
   Status: its terms of use are still to be confirmed by the owner. Nothing of
           the catalogue is in this repository; the match files, which hold
           catalogue positions, stay in the data dir.
+
+JPL Horizons observer tables and the DE421 planetary ephemeris, used only by
+eval's ephemeris validation (`snow-globe-eval ephem-validate`, PLAN.md M2)
+  Basis:  produced by the Solar System Dynamics Group, Jet Propulsion
+          Laboratory, California Institute of Technology, under contract with
+          NASA. Neither page states a licence or terms of use (read 23 Nov
+          2026: the Horizons manual, version 4.98e of 25 Aug 2026, and the DE
+          export page of 21 Dec 2020). The Horizons manual suggests a citation:
+          Giorgini, J.D. and the JPL Solar System Dynamics Group, "NASA/JPL
+          Horizons On-Line Ephemeris System", with its URL and the date the
+          data were retrieved.
+  Duty:   cite Horizons as above wherever its numbers are reported.
+  Status: the fetched tables and the DE421 kernel stay in the data dir
+          (cache/ephem/). Six Horizons responses are recorded verbatim as test
+          fixtures in eval/tests/fixtures/ephem/horizons/; whether JPL's terms
+          allow redistributing them is still to be confirmed. Nothing of it
+          ships in the app.
 
 Other cited sources in the manifests
   TopoQuest and Wikipedia are cited for single facts (a GNIS id, a summit
@@ -237,17 +259,18 @@ Planned, not in the code yet
     Development only: pytest 9.2.0 (MIT), ruff 0.17.5 (MIT),
     moto 5.2.5 (Apache-2.0).
 
-4b. workers/capture: snow-globe-capture 0.3.0 (declares MIT; 0.3.0, the
-    renamed package, is the working tree, and lookout-capture 0.2.1,
-    committed in b9520e2, is what runs, from the snapshot of 3cd2ca7)
+4b. workers/capture: snow-globe-capture 0.3.0 (declares MIT; since the
+    post-gate switch of 22-23 Nov, D-090, 0.3.0 is what runs, from the
+    snapshot of aee6f92)
     snow-globe-common  0.2.0    this repository, with the "s3" extra
     httpx              0.28.1   BSD-3-Clause
     pillow             13.0.0   MIT-CMU
     Development only: pytest, ruff, moto, boto3 (as above).
 
-4c. workers/forecast: snow-globe-forecast 0.3.0 (declares MIT; 0.3.0, the
-    renamed package, is the working tree; lookout-forecast 0.2.0 is
-    committed in 08a996c, and 0.1.0, committed in 09e2ec8, is what runs)
+4c. workers/forecast: snow-globe-forecast 0.3.0 (declares MIT; since the
+    post-gate switch, D-090, 0.3.0 is what the forecast stand-in runs, from
+    the snapshot of aee6f92; the hindcast mode of 1d4921e is newer than the
+    snapshot)
     snow-globe-common  0.2.0       this repository, with the "s3" extra
     httpx              0.28.1      BSD-3-Clause
     jsonschema         4.26.0      MIT
@@ -279,6 +302,12 @@ Planned, not in the code yet
     and, so that the backtest pair's real-extractor test runs (D-062),
     eccodes 2.50.1 and eccodeslib 2.50.0.34 (Apache-2.0, ECMWF), the forecast
     worker's locked versions.
+    Isolated environment, in no lock file and never imported by eval:
+    `ephem-validate` runs Skyfield through `uv run --no-project --python 3.13`
+    with exactly skyfield 1.55 (MIT), jplephem 2.24 (MIT), sgp4 2.27 (MIT),
+    numpy 2.5.4 (BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0) and
+    certifi 2026.10.23 (MPL-2.0), downloaded by uv from PyPI on its first
+    run. Its data (DE421) is in section 1.
 
 4e. Runtime closures: every third-party package each project installs to
     run, development groups left out, at its uv.lock version. Licences as

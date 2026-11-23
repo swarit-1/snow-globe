@@ -37,8 +37,8 @@
       "why": "the former name, and the fallbacks still read (the jobs' old names ended at the switch, D-090)"
     },
     "THIRD_PARTY_NOTICES": {
-      "lines": 7,
-      "why": "revision notes of 20 Nov and the 8246a8b image note keep the names they were written under"
+      "lines": 5,
+      "why": "revision notes of 20 Nov and the 8246a8b image note keep the names they were written under (5 since 23 Nov, when 4b and 4c stopped naming the pre-switch packages that ran)"
     },
     "app/core/src/datadir.rs": {
       "lines": 21,
