@@ -400,7 +400,7 @@ If time runs short, cut from the top. Item 1 is already gone: unverified places 
   - **What it feeds:** extractor v0 at the design-H cameras, a first τ, persistence, a first S_mos, the block length and a first MDE, all from T1a's summer weeks (due Tue 24 Nov).
   - **Its two dated needs:**
     - K2's Point Reyes landmark, named by the 14 Dec freeze, from T1a;
-    - the inputs of Point Reyes's M2 plate, from T3pr, due Sun 29 Nov.
+    - the inputs of Point Reyes's M2 plate, from T3pr, due Sun 29 Nov. T3pr was queued ahead of T1b at 01:40 UTC on 23 Nov, with four of its six clear days, the only four that eval's viewers passed. The last two come from T1b's September and October weeks once they land (D-091).
   - **Its own targets,** if the loop runs at least 2.2 h every UTC day: T0–T1b and T3pr by Sun 29 Nov, T2 by Thu 10 Dec and T1c by Tue 15 Dec. T0 finished on 20 Nov.
   - **Measured against them** (the plan regenerated from the live queue, D-072; 1,000 requests a UTC day from 21 Nov, 1.0 % errors, with T3pr queued ahead of T1b as it recommends): T1a lands on Tue 24 Nov, T3pr on Wed 25 Nov, T1b on Mon 30 Nov, T2 on Fri 11 Dec and T1c on Tue 15 Dec.
     - **Missed by a day:** T1b (37 requests short on 29 Nov) and T2 (122 short on 10 Dec). The nine UTC days through 29 Nov hold 8,910 useful requests, and T1a, T1b and T3pr need 8,947, so no order meets both 29 Nov targets. At 19 Nov's 3.7 % error rate, T1a (25 Nov) and T1c (Wed 16 Dec) are also a day late.

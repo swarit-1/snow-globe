@@ -1179,6 +1179,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
 - **Archived HRRR needed:** T1a–T2, 360 dates and 5,812 valid hours, 95.9 GB at the 24 h lead; with T1c, 423 dates and 112.5 GB; with TQ too, 495 dates and 130.9 GB.
 - **Amended 20 Nov (D-078):** the lead queued T1b behind T1a at 18:12 UTC (way (b) of section 8), from drafts regenerated on a fresh copy of the live queue; T3pr follows when its six evenings are chosen, and T1b then moves behind it.
 - **Amended 21 Nov (D-083):** capture 0.3.0's loop resumes a failed day search itself at its first idle on a later UTC day, at most once a day and 3 times in all, so the daily resume these finish days assume becomes automatic after the post-gate switch; until then the lead resumes by hand. `loop_sim` keeps 0.2.x's model unless it is given the new setting.
+- **Amended 23 Nov (D-091):** T3pr is queued ahead of T1b, at 01:40 UTC on 23 Nov, with four clear days, not six: only four passed eval's three viewers. The last two come from T1b's Point Reyes September and October weeks once those land.
 
 ## D-073 — The backtest pair's run choice applies the archived stamp floor · decided (eval; uncommitted) · 2026-11-20 · amends D-054
 - **Change:** `pair_forecast.choose_run` passes `listed_availability(bucket)` to `select_run_for_issue`, on the client the extraction uses. So a candidate run is available at the later of the lag model and its trusted S3 stamps, as in the extractor, and a run whose stamps are later than the issue time is skipped for an older one.
@@ -1283,6 +1284,7 @@ Every model, vendor, data-source and architecture decision, with the evidence be
 - **Amended 21 Nov (D-082):** built in eval's data report, and narrowed: a camera not polled since a restart is flagged, and it counts up to the window's end while the latest loop lists it; only a camera the latest loop does not list is left out. The narrowing waits for the lead's word.
 - **Amended 21 Nov (D-083):** capture's `TODO(M1)` above is built in 0.3.0 (uncommitted): a failed day search is resumed automatically, once a UTC day and 3 times in all. The manual daily resume stays until the 0.3.0 loop runs, after the switch.
 - **Amended 23 Nov (D-090):** the 0.3.0 loop runs since 00:02:07 UTC on 23 Nov, and its queue heartbeat records `auto_resume_max` 3, so the lead's manual daily resume has ended.
+- **Amended 23 Nov (D-091):** T3pr is queued, and T1b has moved behind it as planned here. The lead removed T1b's 367 pending entries and added the same 367 again after T3pr's 8, at 01:40 UTC on 23 Nov.
 
 ## D-079 — The archive limiter fix committed; capture 0.2.1 live since 19:56 UTC; the Mac slept through the restart · decided (lead; record and operation) · 2026-11-20 · amends D-049, D-069, D-076, D-077, D-078
 - **The limiter fix** (D-077's fix): commit `3cd2ca7`, in `workers/common` and capture's spacing constant.
@@ -1615,6 +1617,32 @@ Every model, vendor, data-source and architecture decision, with the evidence be
   - the data dir is `~/snow-globe-data` from 23:58:09 UTC on 22 Nov. `~/lookout-data` is a symlink to it, so commands keep naming `~/lookout-data`; a real folder in its place would make every resolver refuse (D-080);
   - the switch refuses to run again, because it needs `~/lookout-data` to be a real folder;
   - a re-snapshot is again the procedure in the supervisor's header: flip `current`, touch `cache/runtime/graceful-stop.capture`, then SIGTERM the capture loop's python and the stand-in's bash, and each restarts from `current`. It needs the supervisor running, and it is the lead's, on AC power or, on battery, with the lid open and `caffeinate -i` held across it (D-079, D-089).
+- **Spend:** $0. No paid call was made.
+
+## D-091 — T3pr queued ahead of T1b with four clear Point Reyes days, not six; the last two come from T1b's September and October weeks · decided (lead; queued from eval's choice) · 2026-11-23 · amends D-072, D-078
+- **Who chose:** eval, as D-072 assigns ("eval or the owner, from Point Reyes's T1 frames"), in a read-only workflow of the lead's session (`wf_99ff1e93-e1f`, 00:49–01:30 UTC on 23 Nov). It opened only frames dated before 1 Jun 2026 by local date, UTC stamp and folder date, wrote only to the session scratchpad, and never touched the live queue.
+- **Candidates:** the sidecars of the 517 Point Reyes hires T1a frames give 34 local days: the weeks of 9 Jun, 14 Jul and 11 Aug 2025, and 18–30 May 2026. All 34 are complete in their last three daylight hours and at midday, and all are in the fresh `draft-T3pr.sh`'s 182 `T3PR_DAYS`. A metadata score ranked them: the Laplacian variance, chroma and luma of the last three evening frames, the frame nearest sunset counted double. That score is a weak proxy, so the top 14 were viewed.
+- **Votes:** three viewers, each weighing one lens (the sunlit landmarks; the sky toward the Sun; the whole day), independently opened each day's last three evening frames and its midday frame. Each judged whether the evening was clear: direct sun on the scene until near sunset, with no fog or low cloud on the landmarks or the Sun (PRD §8.5 step 8, the sunset check).
+  - 2026-05-28: 3 of 3 clear, all with high confidence.
+  - 2026-05-18, 2026-05-26 and 2025-06-14: 2 of 3, with a positive confidence-weighted margin (low 1, medium 2, high 3).
+  - 2026-05-19, 2025-06-11, 2025-08-14, 2025-07-20 and 2026-05-30: 2 of 3, but at or below zero once weighted. 2026-05-19's T3pr run would also end 15–18 min before sunset: the archive has no 20:15 PDT frame, and 20:30 is under −2°.
+  - 2025-06-15: 1 of 3. 2026-05-20, 2026-05-24, 2026-05-25 and 2026-05-27: 0 of 3.
+- **The lead's call: four now, not six padded.** No day the viewers rejected or split on is used. The four sunsets lie at azimuth 295.4–300.3°, so they cover only the late spring and early summer Sun.
+- **The last two** are chosen the same way from T1b's Point Reyes September and October weeks once those frames land. The cost model's stand-ins for them, 2025-09-17 and 2025-10-15, set at 272.3° and 258.7°, which widens the sunset check's spread. They are then queued ahead of T1b's remaining entries, the same way as below.
+  - **Estimated:** take the planner's figures at 01:06 UTC: T1a had about 1,258 requests open, and T1b's September 2025 week sits about 1,885 requests into T1b. Add T3pr's 8 entries: 172 new GETs for the four clear days, by their cached searches, plus the four night days' hourly frames. At 1,000 requests a UTC day, that week then lands on about 26 Nov. That leaves time to queue the two and meet T3pr's 29 Nov due date. This is an estimate, not a measurement.
+- **What ran** (way (b) of the plan's section 8): one guarded script of the lead's, at 01:40:31–01:40:59 UTC on 23 Nov, against the live queue (`Q=$HOME/lookout-data/state/archive/queue.json`). The running 0.3.0 loop kept working: the queue is edited under its `flock` and replaced atomically.
+  1. The drafts were regenerated with `plan.py` from a fresh copy (808 entries, SHA-256 `8ed48eb8…`): 367 T1b entries pending, and no T3pr entry yet.
+  2. `draft-T3pr.sh` with `EVENINGS='2025-06-14 2026-05-18 2026-05-26 2026-05-28'` added 8 entries. Four are night days, every hour with any Sun: 2026-01-21, 2026-05-27, 2025-08-13 and 2025-10-15. Four are the clear days, every frame at NPS Sun ≥ −2°.
+  3. `archive queue remove` took out T1b's 367 pending entries.
+  4. A re-plan from a fresh copy gave the same 367 T1b ids. Its `draft-T1b.sh` (54 `add` lines) put them back.
+  5. **The result:** 816 entries, no duplicate id. Positions 1–441 are unchanged, T3pr is at 442–449 and T1b at 450–816.
+  
+  At 01:41:15 UTC the 0.3.0 runner had used 960 of the day's 1,000 requests, so T3pr starts after T1a's remainder, from 24 Nov.
+- **Held-out guard:** every frame T3pr can fetch on those days is before 2026-06-01T00:00Z, by local date, UTC instant and wall-clock date. This was checked with capture's `held_out_reason` and the planner's `plannable_in`; the latest clear-day frame is 2026-05-29T03:30Z. None falls in the sealed window.
+- **Evidence** (outside the repo, in `~/lookout-data/reports/t3pr/`):
+  - `choice-20261123.json`: the inventory, the votes and the choice (SHA-256 `f0eb277b…`);
+  - `queue-before-20261123T014031Z.json` (`8ed48eb8…`) and `queue-after-20261123T014118Z.json` (`57ddfede…`);
+  - the three command logs.
 - **Spend:** $0. No paid call was made.
 
 ---
