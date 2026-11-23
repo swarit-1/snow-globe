@@ -1,0 +1,65 @@
+{
+ "what": "Geometric Sun elevations capture recorded in real Rainier thumbnail sidecars (snow_globe_capture.sun / lookout_capture.sun, NOAA solar calculator), at the camera position of the capture snapshot's manifest (46.78455, -121.74065, the pre-23 Nov 2026 position). Recorded 2026-11-23 for snow_globe_forecast.hindcast.sun's test.",
+ "camera": [
+  46.78455,
+  -121.74065
+ ],
+ "rows": [
+  {
+   "sidecar": "thumbs/rainier.paradise-mountain/2026-11-20/20261120T025003Z_f68333b61286.json",
+   "image_time_utc": "2026-11-20T02:50:03.421000Z",
+   "elevation_deg": -23.929,
+   "model": "NOAA solar calculator (lookout_capture.sun)",
+   "capture_version": "lookout-capture/0.2.0"
+  },
+  {
+   "sidecar": "thumbs/rainier.paradise-mountain/2026-11-20/20261120T140801Z_9b0cefd15134.json",
+   "image_time_utc": "2026-11-20T14:08:01.551000Z",
+   "elevation_deg": -11.72,
+   "model": "NOAA solar calculator (lookout_capture.sun)",
+   "capture_version": "lookout-capture/0.2.0"
+  },
+  {
+   "sidecar": "thumbs/rainier.paradise-mountain/2026-11-20/20261120T235501Z_eb52a2e07a90.json",
+   "image_time_utc": "2026-11-20T23:55:01.679000Z",
+   "elevation_deg": 3.936,
+   "model": "NOAA solar calculator (lookout_capture.sun)",
+   "capture_version": "lookout-capture/0.2.1"
+  },
+  {
+   "sidecar": "thumbs/rainier.paradise-mountain/2026-11-21/20261121T094104Z_b4d5aca7da0b.json",
+   "image_time_utc": "2026-11-21T09:41:04.631000Z",
+   "elevation_deg": -55.266,
+   "model": "NOAA solar calculator (lookout_capture.sun)",
+   "capture_version": "lookout-capture/0.2.1"
+  },
+  {
+   "sidecar": "thumbs/rainier.paradise-mountain/2026-11-21/20261121T192502Z_2dc4c70ab349.json",
+   "image_time_utc": "2026-11-21T19:25:02.520000Z",
+   "elevation_deg": 22.879,
+   "model": "NOAA solar calculator (lookout_capture.sun)",
+   "capture_version": "lookout-capture/0.2.1"
+  },
+  {
+   "sidecar": "thumbs/rainier.paradise-mountain/2026-11-22/20261122T050802Z_4adc0315e3d3.json",
+   "image_time_utc": "2026-11-22T05:08:02.945000Z",
+   "elevation_deg": -47.247,
+   "model": "NOAA solar calculator (lookout_capture.sun)",
+   "capture_version": "lookout-capture/0.2.1"
+  },
+  {
+   "sidecar": "thumbs/rainier.paradise-mountain/2026-11-22/20261122T145801Z_35d732d516e5.json",
+   "image_time_utc": "2026-11-22T14:58:01.611000Z",
+   "elevation_deg": -4.142,
+   "model": "NOAA solar calculator (lookout_capture.sun)",
+   "capture_version": "lookout-capture/0.2.1"
+  },
+  {
+   "sidecar": "thumbs/rainier.paradise-mountain/2026-11-23/20261123T003901Z_950ac3401c67.json",
+   "image_time_utc": "2026-11-23T00:39:01.634000Z",
+   "elevation_deg": -2.786,
+   "model": "NOAA solar calculator (snow_globe_capture.sun)",
+   "capture_version": "snow-globe-capture/0.3.0"
+  }
+ ]
+}

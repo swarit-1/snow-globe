@@ -139,9 +139,9 @@
         "grib_last_modified_utc": {"$ref": "#/$defs/utc"},
         "idx_last_modified_utc": {"$ref": "#/$defs/utc"},
         "availability_utc": {"$ref": "#/$defs/utc"},
-        "availability_source": {"description": "live-s3-lastmodified: a live run's S3 LastModified (the later of GRIB2 and .idx). modeled: an archived run, run start + the lag model. archived-s3-lastmodified (since forecast 0.2.0): an archived run whose own S3 stamps are later than the model, so they are the availability (availability_model.s3_floor_utc).", "enum": ["live-s3-lastmodified", "modeled", "archived-s3-lastmodified"]},
+        "availability_source": {"description": "live-s3-lastmodified: a live run's S3 LastModified (the later of GRIB2 and .idx). modeled: an archived run, run start + the lag model. archived-s3-lastmodified (since forecast 0.2.0): an archived run whose own S3 stamps are later than the model, so they are the availability (availability_model.s3_floor_utc); in a hindcast file (snow-globe-forecast hindcast, under forecast/hindcast/) every hour, because the hindcast takes the stamps as the availability whatever the model says (availability_model is then the live lag model's prediction, kept for comparison, and may be later).", "enum": ["live-s3-lastmodified", "modeled", "archived-s3-lastmodified"]},
         "availability_model": {
-          "description": "How an archived hour's availability was computed when the file was written (null for live hours): the lag model, and (since 0.2.0) the floor its own S3 stamps set. snow_globe_forecast.availability.select_stored_run recomputes the model from the current lag log and applies the same floor.",
+          "description": "How an archived hour's availability was computed when the file was written (null for live hours): the lag model, and (since 0.2.0) the floor its own S3 stamps set. In a hindcast file it is the live lag model's prediction for comparison only (the availability is the stamps). snow_globe_forecast.availability.select_stored_run recomputes the model from the current lag log and applies the same floor.",
           "oneOf": [
             {"type": "null"},
             {

@@ -15,6 +15,8 @@ Commands (all but ``status --offline`` read NOAA's bucket):
   (no GRIB). With ``--log``, every listed hour not logged yet (live or survey) becomes a
   survey ``lag`` event in ``forecast_log/lag_survey/<today>.jsonl`` (D-027).
 - ``lag-check RUN ...``: chosen runs' S3 stamps next to the lag model (no GRIB, no writes).
+- ``hindcast plan|fetch|compare|leads|status``: P1's 24 h-lead hindcast, written only under
+  ``forecast/hindcast/`` (:mod:`.hindcast.cli`).
 
 Shared options: ``--max-fh N``, ``--fields F ...`` (inventory names, aliases or unique
 variables, e.g. ``VIS "HGT:cloud base" LCDC``), ``--only VIEWPOINT``, ``--max-mb N`` (refuse a
@@ -289,6 +291,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check.add_argument("run_ids", nargs="+", metavar="YYYYMMDDHH")
     _add_save_listings_option(check)
+
+    from .hindcast.cli import add_parser as add_hindcast_parser
+
+    add_hindcast_parser(sub)
     return parser
 
 
@@ -800,6 +806,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     try:
+        if args.command == "hindcast":
+            from .hindcast.cli import main as hindcast_main
+
+            return hindcast_main(args)  # its own storage root and bucket client
         if args.command == "tick":
             return _cmd_tick(args)  # the handler opens its own bucket client and storage
         if args.command == "status" and args.offline:

@@ -36,6 +36,7 @@ uv run pytest -m network -s tests/test_live.py        # live smoke, about 21 MB
 | `snow-globe-forecast datum-check YYYYMMDDHH` | Compare the height fields with the model terrain and with `PRES:cloud base` |
 | `snow-globe-forecast lag-survey --start YYYYMMDDHH [--end YYYYMMDDHH] [--log] [--save-listings DIR]` | Publication lags of past runs from S3 listings (one per run, no GRIB; the run the newest-complete search found is not listed again). `--end` defaults to the newest complete run. Without `--log` it writes nothing; with it, every listed hour not logged yet (live or survey) becomes a survey lag event in `forecast_log/lag_survey/<today>.jsonl`. An hour with a stamp more than 24 h after the run start (a rewritten object) is left out and never logged (`stamps_not_trusted`) |
 | `snow-globe-forecast lag-check YYYYMMDDHH ... [--save-listings DIR]` | Each run's S3-stamp lags next to the lag model (live + survey, and live only), and the availability an archived run of it gets (`availability_lag_min`, `availability_source`, `hours_set_by_stamps`, `hours_with_ignored_stamps`); one listing per run, writes nothing |
+| `snow-globe-forecast hindcast plan\|fetch\|compare\|leads\|status` | P1's 24 h-lead hindcast, written only under `forecast/hindcast/` (see "Hindcast mode" below) |
 
 Shared options: `--max-mb N` refuses a run whose planned download is larger (planned from the
 inventories, before any GRIB byte is fetched); `--force` rewrites existing files; `--json`.
@@ -115,7 +116,8 @@ identical at f00, f01, f18 and f48 of 2026111906, all 1,905,141 cells), and late
 byte range for it. `snow_globe_forecast.output.validate_document` checks the schema and the shapes.
 
 Sample points per viewpoint: the camera cell; the view azimuth every 1.5 km from 1.5 to 45 km
-(M2 picks where the ray meets each layer); every manifest landmark (Rainier's summit); and the
+(M2 picks where the ray meets each layer); every manifest landmark (Rainier's summit, Gibraltar
+Rock, Anvil Rock and Little Tahoma Peak since the manifest correction of 23 Nov 2026); and the
 5 × 5 block around the camera cell. That is 56 points, plus one per landmark.
 
 **Lead** = `valid_time_utc - availability_utc`. A run is live if it is processed within 24 h of its
@@ -253,6 +255,71 @@ GRIB data).
 | HGT:surface across hours, run 2026111906 | identical at f00, f01, f18, f48 (max difference 0.0 m over 1,905,141 cells; 2,153,695-byte messages); 8.6 MB downloaded to check |
 | All 22 fields, whole run (terrain once) | 453.0 MB (18 h run 2026111910, 14.95 % of the GRIB2 files); 1,202.1 MB (48 h run 2026111906, 15.04 %); the plan itself costs one listing and one `.idx` per hour (546,827 bytes for 49 hours) |
 | Costliest fields (MB per hour) | HPBL 2.99, HGT:cloud base 2.83, UGRD 2.38, VGRD 2.38, HGT:surface 2.15 (now once per run), ceiling 1.86, top 1.72, RH 1.65, VIS 1.50 |
+
+## Hindcast mode (P1 at a 24 h lead; PRD §13.4)
+
+`snow-globe-forecast hindcast ...` (`snow_globe_forecast.hindcast`) fetches archived runs for P1's
+development pairs. It runs the live extractor through `HindcastStorage`, which maps the extractor's
+keys into `<data dir>/forecast/hindcast/` and refuses any other key, so it never writes
+`forecast/hrrr/` or `forecast_log/`; the live data dir (frames, thumbs, live files, `forecast_log`) is
+read through a read-only view.
+
+| Command | Does |
+|---|---|
+| `hindcast plan [--lead-h 24] [--max-total-mb 2000]` | Every captured daytime frame (Sun >= 3 deg, geometric, NOAA equations at the manifest camera; sidecars of `frames/` and `thumbs/`, never the sealed window) is paired with the newest run whose hours bracketing its valid time were available 24 h before it (`select_run_for_issue`; only 00/06/12/18Z runs reach that far), and each run's hours are priced from the `.idx` byte ranges of the live worker's 8 fields. Listings and inventories only. Writes `plan/p1-lead<lead>h.json` (`p1-lead24h.json` for P1), so a plan at another lead never replaces P1's. Exit 4 if what the hindcast has already downloaded plus the runs not written yet exceed the cap (`totals.within_cap`, the rule `fetch` applies) |
+| `hindcast fetch [--lead-h 24] [--max-total-mb 2000] [--max-errors 4]` | Fetches the plan at that lead, Rainier only: one request at a time, retries with back-off, resumable (a written run costs no request), and every byte the hindcast downloads (plan included) counted against the cap. A run whose file holds other hours (another plan) is fetched for the union, so the file is widened, never narrowed; a run the extractor still writes nothing for is listed in `runs_not_written`, never as written, and the command exits 1 (`not-written`) |
+| `hindcast compare` | Each hindcast hour's S3 availability against the live lag model and the live + survey model, and against the lag the live log recorded; each row gives the lags each model pools for its hour (the p95 rules need 20) |
+| `hindcast leads [--leads 1 3 6 12 24 48] [--sample-runs ...] [--max-total-mb 2000]` | Design P's forecast hours per run and MB per day (see below), priced at three field profiles from a few `.idx` files |
+| `hindcast status` | Files, plans and their totals, progress and the network ledger (offline) |
+
+Every command but `status` holds one lock (`forecast/hindcast/state/locks/hindcast-command.lock`),
+so no two run at once and the network ledger has one writer (each ledger update also adds only its
+own client's new counts, under a lock of its own). Before every network attempt, retries included,
+a command waits out the quiet window (`--quiet-start-minute 50 --quiet-end-minute 5` by default,
+the task's window), and refuses the request once the hindcast's whole download has reached
+`--max-total-mb`. Of the stand-in's 75 live fetches from 20 Nov 06:00Z to 23 Nov 09:40Z, 61 started
+between :50 and :05 and 13 between :05 and :15 (runs published late); `--quiet-end-minute 15` would
+cover those too.
+
+What it writes, under `forecast/hindcast/`: `hrrr/<viewpoint_id>/<YYYYMMDDHH>z.json` (the live files'
+format, `"live": false`), `log/<day>.jsonl` (the extractor's `run` events and `hindcast-*` events:
+plan, run, error, back-off, quiet-window pause, cap), `state/` (markers, locks, `hindcast-fetch.json`
+progress, `network-ledger.json`), `plan/` (the current plan and its history), `reports/`, `cache/s3/`
+(every listing and `.idx` answer, so none is fetched twice) and `cache/grib/` (subsets, deleted as
+soon as they are decoded).
+
+**Availability in a hindcast file** is each hour's S3 `LastModified`, the later of the GRIB2 and
+`.idx` stamps, exactly as a live file records it, so it is never earlier than S3 says
+(`availability_source` `archived-s3-lastmodified`; a stamp more than 24 h after the run start is not
+trusted, and an hour with no trusted stamp is refused). `availability_model` holds the **live lag
+model's** prediction for the hour (`LagModel` over `forecast_log/*.jsonl`'s live lags only, when the
+file was written), for comparison only, with the floor in `s3_floor_utc`. So in a hindcast file
+`archived-s3-lastmodified` means "the stamps, by the hindcast's rule", not "the stamps were later
+than the model" as in the worker's own archived files; such an hour has `availability_model.lag_s`
+later than `lag_s`.
+
+**This is the task's rule, not D-008's.** D-008, D-027 and PRD §8.3 model an archived run as its run
+start plus the p95 lag, never before the stamps (D-054). `availability.select_stored_run` applies that rule to
+any `"live": false` file and ignores its `availability_utc`; given no `lag_model`, it reads the lag
+log of the storage it is handed, and a `HindcastStorage`'s log holds no lags, so every hour would sit
+on the 120 min fallback. Pass the live data dir's `LagModel` explicitly, and read `availability_utc`
+to pair under the hindcast's rule (eval's P1 dev table does). Re-selecting the plan's 105 pairs from
+the 8 files (23 Nov, 11:34 UTC): the S3 rule gives the plan's run for all 105; the D-054 rule with
+the live + survey model for 104 (1 moves to another stored run); with the live-only model, or
+`select_stored_run` on the hindcast storage with no model, for 97 (6 move, 2 find no stored run).
+Which rule P1 uses is the lead's call.
+
+Measured on 23 Nov 2026 (Rainier, manifest as corrected that day):
+
+| What | Value |
+|---|---|
+| Frames (`plan`, 10:28 UTC) | 342 unique (342 frame and 294 thumbnail sidecars, 294 in both), 19 Nov 06:30Z to 23 Nov 10:23Z; 105 daytime, all paired; Sun check against the 317 sidecars that record it: max 0.0046 deg, no frame changes side of 3 deg |
+| Plan | 8 runs (2026111812 f30-f31; 2026111818, 2026111918, 2026112018, 2026112118 f25-f30; 2026111912, 2026112012 f27-f32; 2026112112 f28-f32): 43 forecast hours, 441,854,992 bytes planned; actual leads 24.01-29.94 h (median 27.22); the plan cost 716,863 bytes in 51 requests (8 listings, 43 `.idx`) |
+| Fetch (10:28:43-10:29:26 UTC) | 8 files written; 441,854,992 bytes of GRIB in 137 range requests, the planned bytes exactly; 0 retries, 0 errors; 42.9 s wall, 37.9 s in transfers, 0 s paused; no subset left |
+| S3 against the lag models (43 hours) | S3 lags 81.7-94.8 min. Live lag model: every hour on the 120 min fallback, 25.2-38.3 min later than S3, never early; the live log holds 4 live lags for each of f25-f32 (runs 2026111900, 06, 18 and 2026112000), below the 20 its p95 rules need. Live + survey model: 1 hour early, 2026112018 f26 by 342 s (S3 92.6 min, model 86.9 min; a run the survey never listed), the others later by up to 641 s. The 20 hours the live or survey log also holds (6 live, 14 survey) agree with S3 to 0.0 s |
+| Design P, daytime at Rainier and Point Reyes in the sealed window (`leads`) | 21 runs a day, 130 forecast hours for leads 1-24 h; 48 h is never served. At the stand-in's 8 fields (D-050): 1,280 MB a day (1,722 MB with the stand-in's f00-f02 for every run). The same hours at the scene builder's 12 fields: 2,137 MB (2,903 MB); at all 22 fields, the deployed job's profile (D-101): 3,284 MB (4,521 MB) |
+| Design P, every valid time | 24 runs, 320 forecast hours (20 for each synoptic run; 11-14, 240 in all, for the 20 others). 8 fields: 3,093 MB a day (3,298 MB with f00-f02); 12 fields: 5,202 MB (5,560 MB); 22 fields: 8,025 MB (8,610 MB) |
+| Bytes per forecast hour (`.idx` of 2026112200, 06, 07, 08; terrain 2.15 MB once per run) | 8 fields 7.8-10.5 MB; 12 fields 13.6-17.4 MB; 22 fields 22.1-26.3 MB |
 
 ## Why not Herbie (D-008 said Herbie)
 

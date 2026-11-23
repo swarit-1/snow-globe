@@ -257,6 +257,14 @@ class HrrrBucket:
         return f"{self.base_url}/{key}"
 
     # -- retry core ----------------------------------------------------------------
+    def _before_attempt(self, attempt: int) -> None:
+        """Called before every attempt of a request: the first (``attempt`` 1) and each retry.
+
+        The live worker sends at once. A subclass may wait here, or refuse by raising (the
+        hindcast's :class:`.hindcast.cachebucket.CachingBucket` waits out its quiet window
+        and checks its download cap before each attempt, retries included).
+        """
+
     def _delay(self, attempt: int, response: httpx.Response | None) -> float:
         hinted = retry_after_s(response) if response is not None else None
         delay = self.backoff_s * 2 ** (attempt - 1)
@@ -274,6 +282,7 @@ class HrrrBucket:
     ) -> bytes:
         last_error: Exception | None = None
         for attempt in range(1, self.max_attempts + 1):
+            self._before_attempt(attempt)
             started = time.monotonic()
             response: httpx.Response | None = None
             try:

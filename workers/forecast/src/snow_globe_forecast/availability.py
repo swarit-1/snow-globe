@@ -98,8 +98,11 @@ AvailabilitySource = Literal[
 ]
 #: An archived hour whose modelled availability is not earlier than its trusted stamps.
 SOURCE_MODELED: AvailabilitySource = "modeled"
-#: An archived hour whose own trusted S3 stamps are later than the model: the stamps win.
-#: The two are :data:`.output.ARCHIVED_SOURCES`, the file format's list (tested).
+#: An archived hour whose availability is its own trusted S3 stamps: in the worker's archived
+#: files because they are later than the model (the stamps win, D-054); in a hindcast file
+#: (``snow-globe-forecast hindcast``, under ``forecast/hindcast/``) always, by the hindcast's
+#: rule, with ``availability_model`` the live lag model's prediction kept for comparison, which
+#: may be later. The two are :data:`.output.ARCHIVED_SOURCES`, the file format's list (tested).
 SOURCE_ARCHIVED_STAMP: AvailabilitySource = "archived-s3-lastmodified"
 
 #: (forecast hour, minutes after run start): the *typical* lags in docs/research/forecast.md

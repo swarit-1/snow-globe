@@ -101,6 +101,20 @@ MODEL_VERSION_NOTE = (
     "Not encoded in GRIB2: generatingProcessIdentifier is 83 (NCEP ON388 Table A: HRRR) for "
     "every version. PRD 8.1 dates HRRRv4 from Dec 2020; tell versions apart by run date."
 )
+#: The note every archived file carries (:meth:`Extractor._archived_hour` says how its
+#: availability was set); the hindcast mode writes its own (:attr:`Extractor.archived_note`).
+ARCHIVED_NOTE = (
+    "Archived run: availability_utc is modeled (run start + the lag model of "
+    "snow_globe_forecast.availability.LagModel when this file was written: the p95 of "
+    "the lags logged for this cycle and hour, live or surveyed from S3 listings, or a "
+    "conservative 120 min until enough are logged; availability_model says which and "
+    "counts the samples by method), but never before the hour's own S3 LastModified "
+    "stamps: where they are later than the model, they are the availability "
+    "(availability_source archived-s3-lastmodified, availability_model.s3_floor_utc). "
+    "A stamp more than 24 h after the run start is a rewritten object and is ignored "
+    "(s3_stamps_ignored). availability.select_stored_run recomputes the model from the "
+    "current log and applies the same stamps."
+)
 #: Evidence that HGT:surface may be fetched once per run and repeated for every hour.
 TERRAIN_STATIC_EVIDENCE = (
     "HGT:surface is the model's static terrain: on run 2026111906 it was bit-for-bit "
@@ -353,6 +367,9 @@ def run_covered(
 
 class Extractor:
     """Runs extractions against one bucket client and one storage backend."""
+
+    #: The note of an archived file (see :data:`ARCHIVED_NOTE`).
+    archived_note: str = ARCHIVED_NOTE
 
     def __init__(
         self,
@@ -715,11 +732,28 @@ class Extractor:
                 "field_names": names,
                 "fields": fields_json,
                 "values": values,
-                "notes": _notes(vp, done, names, live),
+                "notes": _notes(vp, done, names, live, self.archived_note),
             }
             validate_document(doc)
             docs[vp.id] = doc
         return docs
+
+    def _archived_hour(
+        self, run_start: datetime, fh: int, files: HourFiles
+    ) -> tuple[datetime, str, dict[str, Any]]:
+        """``(availability, source, availability_model)`` of one hour of an archived run.
+
+        Modelled, but never before the hour's own trusted S3 stamps (PRD §13.9,
+        :func:`.availability.archived_availability`). The hindcast mode
+        (:class:`.hindcast.extractor.HindcastExtractor`) overrides this.
+        """
+        assert files.grib is not None and files.idx is not None
+        return archived_availability(
+            self.lag_model,
+            run_start,
+            fh,
+            ArchivedStamps(files.grib.last_modified, files.idx.last_modified),
+        )
 
     def _hour_json(self, listing: RunListing, item: _HourDone, live: bool) -> dict[str, Any]:
         files = item.plan.files
@@ -730,13 +764,8 @@ class Extractor:
         model: dict[str, Any] | None
         if live:
             availability, source, model = available, "live-s3-lastmodified", None
-        else:  # modelled, but never before the hour's own trusted stamps (PRD §13.9)
-            availability, source, model = archived_availability(
-                self.lag_model,
-                run_start,
-                item.plan.fh,
-                ArchivedStamps(files.grib.last_modified, files.idx.last_modified),
-            )
+        else:
+            availability, source, model = self._archived_hour(run_start, item.plan.fh, files)
         return {
             "fh": item.plan.fh,
             "valid_time_utc": isoformat_z(valid_time(run_start, item.plan.fh)),
@@ -904,7 +933,13 @@ def _point_json(point: GriddedPoint, terrain: float | None) -> dict[str, Any]:
     }
 
 
-def _notes(vp: Viewpoint, done: Sequence[_HourDone], names: Sequence[str], live: bool) -> list[str]:
+def _notes(
+    vp: Viewpoint,
+    done: Sequence[_HourDone],
+    names: Sequence[str],
+    live: bool,
+    archived_note: str = ARCHIVED_NOTE,
+) -> list[str]:
     notes = [
         "Values are [field][forecast hour][point]; null = GRIB bitmap missing (for HGT:cloud "
         "base/ceiling/top: no cloud or no ceiling), a point outside the grid, or a field absent "
@@ -938,18 +973,7 @@ def _notes(vp: Viewpoint, done: Sequence[_HourDone], names: Sequence[str], live:
             "n*(lon - LoV), n = sin(38.5 deg), before reading them as east/north."
         )
     if not live:
-        notes.append(
-            "Archived run: availability_utc is modeled (run start + the lag model of "
-            "snow_globe_forecast.availability.LagModel when this file was written: the p95 of "
-            "the lags logged for this cycle and hour, live or surveyed from S3 listings, or a "
-            "conservative 120 min until enough are logged; availability_model says which and "
-            "counts the samples by method), but never before the hour's own S3 LastModified "
-            "stamps: where they are later than the model, they are the availability "
-            "(availability_source archived-s3-lastmodified, availability_model.s3_floor_utc). "
-            "A stamp more than 24 h after the run start is a rewritten object and is ignored "
-            "(s3_stamps_ignored). availability.select_stored_run recomputes the model from the "
-            "current log and applies the same stamps."
-        )
+        notes.append(archived_note)
     missing = sorted({name for item in done for name in item.plan.missing_fields})
     if missing:
         notes.append(f"Fields absent from some inventories (nulls there): {', '.join(missing)}.")
