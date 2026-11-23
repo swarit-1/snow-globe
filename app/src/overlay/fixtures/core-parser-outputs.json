@@ -1,0 +1,457 @@
+{
+ "about": "Real snow-globe-parse output (app/core at commit 479d4d8, built 22 Nov 2026) for the overlay's protocol tests: every query must validate as a parsed message's query, and the errors map to no_match, out_of_range and error messages.",
+ "cases": [
+  {
+   "utterance": "is rainier out tomorrow at 4",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 0,
+   "output": {
+    "place_id": "rainier",
+    "viewpoint_id": "rainier.paradise-mountain",
+    "valid_time": "2026-11-20T16:00:00-08:00",
+    "valid_time_utc": "2026-11-21T00:00:00Z",
+    "tz": "America/Los_Angeles",
+    "time_source": {
+     "kind": "clock",
+     "text": "tomorrow at 4",
+     "rule": "day-plus-bare-hour"
+    },
+    "ambiguities": [
+     {
+      "field": "meridiem",
+      "chosen": "pm",
+      "alternative": "2026-11-20T04:00:00-08:00"
+     }
+    ],
+    "overrides": {},
+    "path": "fast_path",
+    "confidence": 0.97,
+    "place_source": "utterance",
+    "place_match": {
+     "stage": "alias",
+     "score": 1.0
+    },
+    "horizon": "hrrr",
+    "flags": []
+   }
+  },
+  {
+   "utterance": "show me rainier at 9",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 0,
+   "output": {
+    "place_id": "rainier",
+    "viewpoint_id": "rainier.paradise-mountain",
+    "valid_time": "2026-11-19T09:00:00-08:00",
+    "valid_time_utc": "2026-11-19T17:00:00Z",
+    "tz": "America/Los_Angeles",
+    "time_source": {
+     "kind": "clock",
+     "text": "at 9",
+     "rule": "bare-hour"
+    },
+    "ambiguities": [
+     {
+      "field": "meridiem",
+      "chosen": "am",
+      "alternative": "2026-11-19T21:00:00-08:00"
+     }
+    ],
+    "overrides": {},
+    "path": "fast_path",
+    "confidence": 0.97,
+    "place_source": "utterance",
+    "place_match": {
+     "stage": "alias",
+     "score": 1.0
+    },
+    "horizon": "hrrr",
+    "flags": []
+   }
+  },
+  {
+   "utterance": "rainier at 9 pm",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 0,
+   "output": {
+    "place_id": "rainier",
+    "viewpoint_id": "rainier.paradise-mountain",
+    "valid_time": "2026-11-19T21:00:00-08:00",
+    "valid_time_utc": "2026-11-20T05:00:00Z",
+    "tz": "America/Los_Angeles",
+    "time_source": {
+     "kind": "clock",
+     "text": "at 9 pm",
+     "rule": "explicit-hour"
+    },
+    "ambiguities": [],
+    "overrides": {},
+    "path": "fast_path",
+    "confidence": 1.0,
+    "place_source": "utterance",
+    "place_match": {
+     "stage": "alias",
+     "score": 1.0
+    },
+    "horizon": "hrrr",
+    "flags": []
+   }
+  },
+  {
+   "utterance": "point reyes at sunset friday",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 0,
+   "output": {
+    "place_id": "point-reyes",
+    "viewpoint_id": "point-reyes.beach",
+    "valid_time": "2026-11-20T16:56:53-08:00",
+    "valid_time_utc": "2026-11-21T00:56:53Z",
+    "tz": "America/Los_Angeles",
+    "time_source": {
+     "kind": "solar",
+     "text": "at sunset friday",
+     "rule": "sunset",
+     "event": "sunset",
+     "sun_altitude_deg": -0.833
+    },
+    "ambiguities": [],
+    "overrides": {},
+    "path": "fast_path",
+    "confidence": 1.0,
+    "place_source": "utterance",
+    "place_match": {
+     "stage": "alias",
+     "score": 1.0
+    },
+    "horizon": "hrrr",
+    "flags": []
+   }
+  },
+  {
+   "utterance": "grand canyon golden hour",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 0,
+   "output": {
+    "place_id": "grand-canyon",
+    "viewpoint_id": "grand-canyon.yavapai",
+    "valid_time": "2026-11-19T17:02:45-07:00",
+    "valid_time_utc": "2026-11-20T00:02:45Z",
+    "tz": "America/Phoenix",
+    "time_source": {
+     "kind": "solar",
+     "text": "golden hour",
+     "rule": "golden-hour",
+     "event": "evening_golden_hour",
+     "sun_altitude_deg": 2.0,
+     "interval": {
+      "start": "2026-11-19T16:40:21-07:00",
+      "end": "2026-11-19T17:35:12-07:00",
+      "start_altitude_deg": 6.0,
+      "end_altitude_deg": -4.0
+     }
+    },
+    "ambiguities": [],
+    "overrides": {},
+    "path": "fast_path",
+    "confidence": 1.0,
+    "place_source": "utterance",
+    "place_match": {
+     "stage": "alias",
+     "score": 1.0
+    },
+    "horizon": "hrrr",
+    "flags": []
+   }
+  },
+  {
+   "utterance": "yosemite blue hour saturday morning",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 0,
+   "output": {
+    "place_id": "yosemite",
+    "viewpoint_id": "yosemite.turtleback",
+    "valid_time": "2026-11-21T06:22:31-08:00",
+    "valid_time_utc": "2026-11-21T14:22:31Z",
+    "tz": "America/Los_Angeles",
+    "time_source": {
+     "kind": "solar",
+     "text": "blue hour saturday morning",
+     "rule": "blue-hour",
+     "event": "morning_blue_hour",
+     "sun_altitude_deg": -5.0,
+     "interval": {
+      "start": "2026-11-21T06:17:05-08:00",
+      "end": "2026-11-21T06:27:58-08:00",
+      "start_altitude_deg": -6.0,
+      "end_altitude_deg": -4.0
+     }
+    },
+    "ambiguities": [],
+    "overrides": {},
+    "path": "fast_path",
+    "confidence": 1.0,
+    "place_source": "utterance",
+    "place_match": {
+     "stage": "alias",
+     "score": 1.0
+    },
+    "horizon": "hrrr",
+    "flags": []
+   }
+  },
+  {
+   "utterance": "point reyes now",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 0,
+   "output": {
+    "place_id": "point-reyes",
+    "viewpoint_id": "point-reyes.beach",
+    "valid_time": "2026-11-19T08:00:00-08:00",
+    "valid_time_utc": "2026-11-19T16:00:00Z",
+    "tz": "America/Los_Angeles",
+    "time_source": {
+     "kind": "now",
+     "text": "now",
+     "rule": "now"
+    },
+    "ambiguities": [],
+    "overrides": {},
+    "path": "fast_path",
+    "confidence": 1.0,
+    "place_source": "utterance",
+    "place_match": {
+     "stage": "alias",
+     "score": 1.0
+    },
+    "horizon": "hrrr",
+    "flags": [
+     "live"
+    ]
+   }
+  },
+  {
+   "utterance": "point rays tonight",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 0,
+   "output": {
+    "place_id": "point-reyes",
+    "viewpoint_id": "point-reyes.beach",
+    "valid_time": "2026-11-19T21:00:00-08:00",
+    "valid_time_utc": "2026-11-20T05:00:00Z",
+    "tz": "America/Los_Angeles",
+    "time_source": {
+     "kind": "part_of_day",
+     "text": "tonight",
+     "rule": "tonight"
+    },
+    "ambiguities": [],
+    "overrides": {},
+    "path": "fast_path",
+    "confidence": 1.0,
+    "place_source": "utterance",
+    "place_match": {
+     "stage": "alias",
+     "score": 1.0
+    },
+    "horizon": "hrrr",
+    "flags": []
+   }
+  },
+  {
+   "utterance": "rainier next wednesday at noon",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 0,
+   "output": {
+    "place_id": "rainier",
+    "viewpoint_id": "rainier.paradise-mountain",
+    "valid_time": "2026-11-25T12:00:00-08:00",
+    "valid_time_utc": "2026-11-25T20:00:00Z",
+    "tz": "America/Los_Angeles",
+    "time_source": {
+     "kind": "clock",
+     "text": "next wednesday at noon",
+     "rule": "noon"
+    },
+    "ambiguities": [],
+    "overrides": {},
+    "path": "fast_path",
+    "confidence": 1.0,
+    "place_source": "utterance",
+    "place_match": {
+     "stage": "alias",
+     "score": 1.0
+    },
+    "horizon": "gfs",
+    "flags": [
+     "gfs_horizon"
+    ]
+   }
+  },
+  {
+   "utterance": "what about midnight",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": "rainier",
+   "exit": 0,
+   "output": {
+    "place_id": "rainier",
+    "viewpoint_id": "rainier.paradise-mountain",
+    "valid_time": "2026-11-20T00:00:00-08:00",
+    "valid_time_utc": "2026-11-20T08:00:00Z",
+    "tz": "America/Los_Angeles",
+    "time_source": {
+     "kind": "clock",
+     "text": "midnight",
+     "rule": "midnight"
+    },
+    "ambiguities": [],
+    "overrides": {},
+    "path": "fast_path",
+    "confidence": 0.95,
+    "place_source": "context",
+    "place_match": {
+     "stage": "context",
+     "score": 1.0
+    },
+    "horizon": "hrrr",
+    "flags": []
+   }
+  },
+  {
+   "utterance": "rainier sunday at 1:30 am",
+   "now": "2026-10-30T10:00:00-05:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 0,
+   "output": {
+    "place_id": "rainier",
+    "viewpoint_id": "rainier.paradise-mountain",
+    "valid_time": "2026-11-01T01:30:00-07:00",
+    "valid_time_utc": "2026-11-01T08:30:00Z",
+    "tz": "America/Los_Angeles",
+    "time_source": {
+     "kind": "clock",
+     "text": "sunday at 1:30 am",
+     "rule": "day-plus-explicit-hour"
+    },
+    "ambiguities": [],
+    "overrides": {},
+    "path": "fast_path",
+    "confidence": 0.98,
+    "place_source": "utterance",
+    "place_match": {
+     "stage": "alias",
+     "score": 1.0
+    },
+    "horizon": "hrrr",
+    "flags": [
+     "dst_fold"
+    ]
+   }
+  },
+  {
+   "utterance": "rainier at 7 am",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 0,
+   "output": {
+    "place_id": "rainier",
+    "viewpoint_id": "rainier.paradise-mountain",
+    "valid_time": "2026-11-20T07:00:00-08:00",
+    "valid_time_utc": "2026-11-20T15:00:00Z",
+    "tz": "America/Los_Angeles",
+    "time_source": {
+     "kind": "clock",
+     "text": "at 7 am",
+     "rule": "explicit-hour"
+    },
+    "ambiguities": [],
+    "overrides": {},
+    "path": "fast_path",
+    "confidence": 1.0,
+    "place_source": "utterance",
+    "place_match": {
+     "stage": "alias",
+     "score": 1.0
+    },
+    "horizon": "hrrr",
+    "flags": [
+     "rolled_to_tomorrow"
+    ]
+   }
+  },
+  {
+   "utterance": "golden gate at 9",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 2,
+   "output": {
+    "error": "no_match",
+    "text": "golden gate",
+    "closest": [
+     {
+      "place_id": "grand-teton",
+      "place": "Grand Teton",
+      "score": 0.38
+     },
+     {
+      "place_id": "yosemite",
+      "place": "Yosemite",
+      "score": 0.36
+     },
+     {
+      "place_id": "smokies",
+      "place": "Great Smoky Mountains",
+      "score": 0.34
+     }
+    ]
+   }
+  },
+  {
+   "utterance": "rainier yesterday at 4",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 2,
+   "output": {
+    "error": "out_of_range",
+    "reason": "past",
+    "place_id": "rainier",
+    "viewpoint_id": "rainier.paradise-mountain",
+    "requested": "2026-11-18T16:00:00-08:00",
+    "latest_valid": "2026-11-26T08:00:00-08:00"
+   }
+  },
+  {
+   "utterance": "rainier in two weeks",
+   "now": "2026-11-19T10:00:00-06:00",
+   "machine_tz": "America/Chicago",
+   "context": null,
+   "exit": 2,
+   "output": {
+    "error": "unrecognised",
+    "reason": "time words outside the grammar: weeks"
+   }
+  }
+ ]
+}

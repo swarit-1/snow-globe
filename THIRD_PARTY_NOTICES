@@ -361,6 +361,17 @@ Planned, not in the code yet
     Chromium headless shell (revision 1254; BSD-3-Clause with its bundled
     third-party licences), which renders through SwiftShader (Apache-2.0).
 
+5b. NODE (app/src/package.json: @snow-globe/overlay 0.1.0, private; the
+    overlay's web layer, which ships inside the app from M1)
+
+    Every package is a development dependency, at the same version as the
+    renderer's above (app/src/pnpm-lock.yaml): @types/node 24.19.2, ajv
+    8.20.0, esbuild 0.28.2 (with @esbuild/darwin-arm64), playwright-core
+    1.65.0 (the key-mash stress test's browser, the same Chromium headless
+    shell), typescript 6.0.3, vite 8.3.6 and vitest 5.1.0. The overlay
+    imports no package at run time, so its bundle holds only its own
+    sources; ajv is used by its tests and scripts only.
+
 
 6. SWIFT (app/speech-macos: Swift package SnowGlobeSpeech, library 0.3.0)
 -------------------------------------------------------------------------------

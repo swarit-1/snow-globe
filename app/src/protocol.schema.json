@@ -1,0 +1,2151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://snow-globe.invalid/schemas/overlay-protocol.schema.json",
+  "title": "Snow Globe overlay protocol, version 1",
+  "description": "Messages from the Rust core to the overlay webview (the root), and from the webview to the core ($defs.outbound), PRD sections 5, 6.3 and 10.3. Generated from app/src/overlay/protocol.ts; do not edit by hand. Rules no schema states, which parseInbound() also enforces: timestamps are real instants, time zones are known IANA zones, the locale is a known tag, and a query's valid_time and valid_time_utc are the same instant. Transport rules: messages arrive in send order on one channel, query_gen rises by one per key press from 1, and diagnostics never carry transcript text.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "query_started"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "Key down: a new query began; everything older is cancelled (PRD §5.2 Listening)."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "text",
+        "stable"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "partial"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "stable": {
+          "type": "boolean",
+          "description": "True for a stable partial (PRD §7.1 lever 2)."
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "A partial transcript for the listening pill (the view shows its end)."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "level"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "audio_level"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "level": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "Microphone level for the waveform (a level only, never audio)."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "released"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "Key up: listening ends and the query resolves (PRD §5.2 Resolving)."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "scene_hash",
+        "query",
+        "display"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "parsed"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "scene_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "The 64-bit SceneHash of what the frame shows, as 16 lower-case hex digits."
+        },
+        "query": {
+          "$ref": "#/$defs/query"
+        },
+        "display": {
+          "$ref": "#/$defs/display"
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "The query was parsed and resolved to a scene; the chips can show. It may come on a stable partial, before key-up (PRD §7.2); a later No match or Out of range for the query then withdraws the scene."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "scene_hash",
+        "cause",
+        "query",
+        "display"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "scene_changed"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "scene_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "The 64-bit SceneHash of what the frame shows, as 16 lower-case hex digits."
+        },
+        "cause": {
+          "enum": [
+            "scrub",
+            "meridiem_flip",
+            "place_choice",
+            "use_offer"
+          ]
+        },
+        "query": {
+          "$ref": "#/$defs/query"
+        },
+        "display": {
+          "$ref": "#/$defs/display"
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "The same query moved to another scene (scrubbed, AM/PM flipped, another place chosen, or the Out of range offer taken); tiers start again. It is also the answer to use_offer."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "scene_hash",
+        "tier",
+        "eta_ms"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "tier_started"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "scene_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "The 64-bit SceneHash of what the frame shows, as 16 lower-case hex digits."
+        },
+        "tier": {
+          "enum": [
+            0,
+            1,
+            2
+          ],
+          "description": "The tier as an integer: lifecycle.rs Tier0 = 0, Tier1 = 1, Tier2 = 2 (the core serialises \"tier0\", \"tier1\", \"tier2\"; the shell maps them)."
+        },
+        "eta_ms": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60000
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "A tier began rendering and is expected in eta_ms (feeds the Tier 0 skip rule, D-012 row 11)."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "scene_hash",
+        "frame",
+        "tier",
+        "label"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "tier_frame_ready"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "scene_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "The 64-bit SceneHash of what the frame shows, as 16 lower-case hex digits."
+        },
+        "frame": {
+          "$ref": "#/$defs/frame"
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        },
+        "tier": {
+          "const": 0
+        },
+        "label": {
+          "$ref": "#/$defs/photo_label"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "scene_hash",
+        "frame",
+        "tier",
+        "label"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "tier_frame_ready"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "scene_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "The 64-bit SceneHash of what the frame shows, as 16 lower-case hex digits."
+        },
+        "frame": {
+          "$ref": "#/$defs/frame"
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        },
+        "tier": {
+          "const": 1
+        },
+        "label": {
+          "$ref": "#/$defs/simulated_label"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "scene_hash",
+        "frame",
+        "tier",
+        "label"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "tier_frame_ready"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "scene_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "The 64-bit SceneHash of what the frame shows, as 16 lower-case hex digits."
+        },
+        "frame": {
+          "$ref": "#/$defs/frame"
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        },
+        "tier": {
+          "const": 2
+        },
+        "label": {
+          "$ref": "#/$defs/refined_label"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "scene_hash",
+        "tier",
+        "reason"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "tier_rejected"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "scene_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "The 64-bit SceneHash of what the frame shows, as 16 lower-case hex digits."
+        },
+        "tier": {
+          "enum": [
+            0,
+            1,
+            2
+          ],
+          "description": "The tier as an integer: lifecycle.rs Tier0 = 0, Tier1 = 1, Tier2 = 2 (the core serialises \"tier0\", \"tier1\", \"tier2\"; the shell maps them)."
+        },
+        "reason": {
+          "enum": [
+            "registration",
+            "structure",
+            "brightness",
+            "colour",
+            "fog",
+            "late",
+            "spend_cap",
+            "provider_error",
+            "disabled"
+          ]
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "A tier will not paint for this scene (PRD §9.7: Tier 2 rejected or late shows a hollow third mark)."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "transcript",
+        "closest"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "no_match"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "transcript": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "closest": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "place_id",
+              "place",
+              "score"
+            ],
+            "properties": {
+              "place_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+              },
+              "place": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          },
+          "maxItems": 3
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "No place matched: show the transcript and the closest known places, never a guess (PRD §5.2, §7.5). Withdraws any scene of the query: nothing of it stays on screen."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "reason",
+        "place_id",
+        "viewpoint_id",
+        "tz",
+        "requested",
+        "latest_valid",
+        "display"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "out_of_range"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "reason": {
+          "enum": [
+            "past",
+            "beyond_horizon"
+          ]
+        },
+        "place_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "viewpoint_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*\\.[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "tz": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$",
+          "description": "An IANA time zone."
+        },
+        "requested": {
+          "type": "string",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?[+-]([01]\\d|2[0-3]):[0-5]\\d$",
+          "description": "RFC 3339 with the place offset."
+        },
+        "latest_valid": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?[+-]([01]\\d|2[0-3]):[0-5]\\d$",
+              "description": "RFC 3339 with the place offset."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "display": {
+          "$ref": "#/$defs/display"
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "The time is in the past or beyond 7 days: show the horizon and offer the latest valid time (PRD §5.2, §7.4). Withdraws any scene of the query; taking the offer (use_offer) brings scene_changed."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "reason"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "cancelled"
+        },
+        "query_gen": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+        },
+        "reason": {
+          "enum": [
+            "esc",
+            "no_speech",
+            "shutdown"
+          ]
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "The query ended (Esc, or key-up with no speech): the overlay goes idle and nothing of it paints again (PRD §5.2)."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "query_gen",
+        "code",
+        "fatal"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "error"
+        },
+        "query_gen": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "code": {
+          "enum": [
+            "speech_unavailable",
+            "microphone_denied",
+            "not_understood",
+            "assets_unavailable",
+            "render_failed",
+            "internal"
+          ]
+        },
+        "fatal": {
+          "type": "boolean",
+          "description": "True if the query cannot go on; it then ends like Esc."
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "Something failed. Codes only: no free text, so no transcript can reach a log."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "on_device_only",
+        "cloud_speech",
+        "tier2",
+        "locale",
+        "units",
+        "reduce_motion",
+        "measuring"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "settings"
+        },
+        "on_device_only": {
+          "type": "boolean",
+          "description": "Disables every cloud path (PRD §15.1)."
+        },
+        "cloud_speech": {
+          "type": "boolean",
+          "description": "The cloud speech toggle (off by default, D-015)."
+        },
+        "tier2": {
+          "type": "boolean",
+          "description": "Whether Tier 2 refinement is on."
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 35,
+          "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$"
+        },
+        "units": {
+          "enum": [
+            "metric",
+            "us"
+          ]
+        },
+        "reduce_motion": {
+          "anyOf": [
+            {
+              "type": "boolean",
+              "description": "Overrides the system setting; null follows prefers-reduced-motion."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "measuring": {
+          "type": "boolean",
+          "description": "Harness mode: draw the pixel tag and show MEASURING (PRD §10.4, §15.2)."
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "App settings that change what the overlay shows."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "seq",
+        "destinations"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "destination"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "destinations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "provider",
+              "carries"
+            ],
+            "properties": {
+              "provider": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "carries": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "audio",
+                    "text",
+                    "image"
+                  ]
+                },
+                "maxItems": 3,
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            }
+          },
+          "maxItems": 4
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "Where audio, text or images will go. Empty means on-device. In each key press the core sends no byte to a cloud destination until destination_shown for this seq and that query_gen arrives (PRD §15.1)."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "online"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "network"
+        },
+        "online": {
+          "type": "boolean"
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "Network state: offline shows cached tiers with a \"forecast from\" time (PRD §5.2)."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "frames"
+      ],
+      "properties": {
+        "v": {
+          "const": 1,
+          "description": "Protocol version."
+        },
+        "type": {
+          "const": "prefetch"
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/frame"
+          },
+          "maxItems": 16,
+          "minItems": 1
+        },
+        "core_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709552000,
+          "description": "Optional, diagnostics only: the core's monotonic clock at send, in ns (a u64; above 2^53 a JavaScript number rounds it, so the webview never computes with it)."
+        }
+      },
+      "description": "Frames the core expects to ask for soon (a stable partial named the place, PRD §6.3 step 2, §9.1): the webview decodes them in the background, so a later tier_frame_ready for the same URL is a swap. Nothing paints from it."
+    }
+  ],
+  "$defs": {
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "place_id",
+        "viewpoint_id",
+        "valid_time",
+        "valid_time_utc",
+        "tz",
+        "time_source",
+        "ambiguities",
+        "overrides",
+        "path",
+        "confidence",
+        "place_source",
+        "place_match",
+        "horizon",
+        "flags"
+      ],
+      "properties": {
+        "place_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "viewpoint_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*\\.[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "valid_time": {
+          "type": "string",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?[+-]([01]\\d|2[0-3]):[0-5]\\d$",
+          "description": "RFC 3339 with the place offset."
+        },
+        "valid_time_utc": {
+          "type": "string",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?Z$",
+          "description": "RFC 3339 in UTC."
+        },
+        "tz": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$",
+          "description": "An IANA time zone."
+        },
+        "time_source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "text",
+            "rule"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "now",
+                "clock",
+                "solar",
+                "part_of_day",
+                "relative",
+                "day"
+              ]
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 10000,
+              "description": "The time words as heard (never written to traces)."
+            },
+            "rule": {
+              "enum": [
+                "no-time",
+                "now",
+                "relative",
+                "bare-hour",
+                "explicit-hour",
+                "day-plus-bare-hour",
+                "day-plus-explicit-hour",
+                "noon",
+                "midnight",
+                "sunrise",
+                "sunset",
+                "dawn",
+                "dusk",
+                "golden-hour",
+                "blue-hour",
+                "part-of-day",
+                "tonight",
+                "day-only",
+                "day-only-now"
+              ]
+            },
+            "event": {
+              "enum": [
+                "sunrise",
+                "sunset",
+                "dawn",
+                "dusk",
+                "morning_golden_hour",
+                "evening_golden_hour",
+                "morning_blue_hour",
+                "evening_blue_hour"
+              ]
+            },
+            "sun_altitude_deg": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "interval": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end",
+                "start_altitude_deg",
+                "end_altitude_deg"
+              ],
+              "properties": {
+                "start": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?[+-]([01]\\d|2[0-3]):[0-5]\\d$",
+                  "description": "RFC 3339 with the place offset."
+                },
+                "end": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?[+-]([01]\\d|2[0-3]):[0-5]\\d$",
+                  "description": "RFC 3339 with the place offset."
+                },
+                "start_altitude_deg": {
+                  "type": "number",
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "end_altitude_deg": {
+                  "type": "number",
+                  "minimum": -90,
+                  "maximum": 90
+                }
+              }
+            }
+          }
+        },
+        "ambiguities": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "field",
+                  "chosen",
+                  "alternative"
+                ],
+                "properties": {
+                  "field": {
+                    "const": "meridiem"
+                  },
+                  "chosen": {
+                    "enum": [
+                      "am",
+                      "pm"
+                    ]
+                  },
+                  "alternative": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?[+-]([01]\\d|2[0-3]):[0-5]\\d$",
+                    "description": "RFC 3339 with the place offset."
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "field",
+                  "chosen",
+                  "alternative"
+                ],
+                "properties": {
+                  "field": {
+                    "const": "place"
+                  },
+                  "chosen": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+                  },
+                  "alternative": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "field",
+                  "chosen",
+                  "alternative"
+                ],
+                "properties": {
+                  "field": {
+                    "const": "viewpoint"
+                  },
+                  "chosen": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "pattern": "^[a-z0-9]+(-[a-z0-9]+)*\\.[a-z0-9]+(-[a-z0-9]+)*$"
+                  },
+                  "alternative": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "pattern": "^[a-z0-9]+(-[a-z0-9]+)*\\.[a-z0-9]+(-[a-z0-9]+)*$"
+                  }
+                }
+              }
+            ],
+            "description": "query.rs Ambiguity: meridiem (\"am\" or \"pm\", the other reading as RFC 3339), or the chosen and the other place or viewpoint ID."
+          },
+          "maxItems": 4
+        },
+        "overrides": {
+          "type": "object",
+          "additionalProperties": false,
+          "maxProperties": 0,
+          "description": "Overrides are Later (PRD §4.3); version 1 carries only {}."
+        },
+        "path": {
+          "enum": [
+            "fast_path",
+            "fallback"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "place_source": {
+          "enum": [
+            "utterance",
+            "context"
+          ]
+        },
+        "place_match": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stage",
+            "score"
+          ],
+          "properties": {
+            "stage": {
+              "enum": [
+                "alias",
+                "exact",
+                "fuzzy",
+                "phonetic",
+                "context"
+              ]
+            },
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "horizon": {
+          "enum": [
+            "hrrr",
+            "gfs"
+          ]
+        },
+        "flags": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "live",
+              "rolled_to_tomorrow",
+              "rolled_to_next_hour",
+              "rolled_to_next_week",
+              "dst_gap",
+              "dst_fold",
+              "gfs_horizon"
+            ]
+          },
+          "maxItems": 7,
+          "uniqueItems": true
+        }
+      },
+      "description": "The structured query of PRD §7.3, as snow-globe-core serialises it (with the D-040 fields)."
+    },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "place_name",
+        "viewpoint_name"
+      ],
+      "properties": {
+        "place_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "viewpoint_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "alternative_place": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      },
+      "description": "Names from the manifest; alternative_place names the other reading of a place ambiguity."
+    },
+    "credits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "pattern": "^https://"
+          }
+        }
+      },
+      "maxItems": 4,
+      "minItems": 1,
+      "description": "Credit lines from the licence ledger (PRD §15.4)."
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^(snowglobe|asset)://localhost/",
+          "description": "Where the webview loads the pixels: an app-local URL the shell serves, never a remote camera (PRD §15.3)."
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        }
+      },
+      "description": "The frame to paint."
+    },
+    "photo_label": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "taken_at",
+        "tz",
+        "source",
+        "camera_name",
+        "matched_on",
+        "credits"
+      ],
+      "properties": {
+        "kind": {
+          "const": "photo"
+        },
+        "taken_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?[+-]([01]\\d|2[0-3]):[0-5]\\d$",
+          "description": "RFC 3339 with the place offset."
+        },
+        "tz": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$",
+          "description": "An IANA time zone."
+        },
+        "source": {
+          "enum": [
+            "capture",
+            "archive"
+          ]
+        },
+        "camera_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "matched_on": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "sun_position",
+              "time_of_year",
+              "forecast_class"
+            ]
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "credits": {
+          "$ref": "#/$defs/credits"
+        }
+      }
+    },
+    "simulated_label": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "valid_time",
+        "tz",
+        "run",
+        "forecast",
+        "sun_altitude_deg",
+        "moon",
+        "credits"
+      ],
+      "properties": {
+        "kind": {
+          "const": "simulated"
+        },
+        "valid_time": {
+          "type": "string",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?[+-]([01]\\d|2[0-3]):[0-5]\\d$",
+          "description": "RFC 3339 with the place offset."
+        },
+        "tz": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$",
+          "description": "An IANA time zone."
+        },
+        "run": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "cycle_utc",
+            "available_at",
+            "pinned"
+          ],
+          "properties": {
+            "model": {
+              "enum": [
+                "hrrr",
+                "gfs"
+              ]
+            },
+            "cycle_utc": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?Z$",
+              "description": "RFC 3339 in UTC."
+            },
+            "available_at": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?Z$",
+              "description": "RFC 3339 in UTC."
+            },
+            "pinned": {
+              "type": "boolean"
+            }
+          }
+        },
+        "forecast": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cloud_low",
+            "cloud_mid",
+            "cloud_high",
+            "ceiling_m",
+            "visibility_m",
+            "precip_rate_mm_h",
+            "precip_type"
+          ],
+          "properties": {
+            "cloud_low": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "cloud_mid": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "cloud_high": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "ceiling_m": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 30000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "visibility_m": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "precip_rate_mm_h": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 500
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "precip_type": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "rain",
+                    "snow",
+                    "mixed",
+                    "freezing"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "sun_altitude_deg": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "moon": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "illuminated",
+            "altitude_deg"
+          ],
+          "properties": {
+            "illuminated": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "altitude_deg": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          }
+        },
+        "credits": {
+          "$ref": "#/$defs/credits"
+        }
+      }
+    },
+    "refined_label": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "valid_time",
+        "tz",
+        "run",
+        "forecast",
+        "sun_altitude_deg",
+        "moon",
+        "credits",
+        "refine"
+      ],
+      "properties": {
+        "kind": {
+          "const": "refined"
+        },
+        "valid_time": {
+          "type": "string",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?[+-]([01]\\d|2[0-3]):[0-5]\\d$",
+          "description": "RFC 3339 with the place offset."
+        },
+        "tz": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$",
+          "description": "An IANA time zone."
+        },
+        "run": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "cycle_utc",
+            "available_at",
+            "pinned"
+          ],
+          "properties": {
+            "model": {
+              "enum": [
+                "hrrr",
+                "gfs"
+              ]
+            },
+            "cycle_utc": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?Z$",
+              "description": "RFC 3339 in UTC."
+            },
+            "available_at": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?Z$",
+              "description": "RFC 3339 in UTC."
+            },
+            "pinned": {
+              "type": "boolean"
+            }
+          }
+        },
+        "forecast": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cloud_low",
+            "cloud_mid",
+            "cloud_high",
+            "ceiling_m",
+            "visibility_m",
+            "precip_rate_mm_h",
+            "precip_type"
+          ],
+          "properties": {
+            "cloud_low": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "cloud_mid": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "cloud_high": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "ceiling_m": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 30000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "visibility_m": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "precip_rate_mm_h": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 500
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "precip_type": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "rain",
+                    "snow",
+                    "mixed",
+                    "freezing"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "sun_altitude_deg": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "moon": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "illuminated",
+            "altitude_deg"
+          ],
+          "properties": {
+            "illuminated": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "altitude_deg": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          }
+        },
+        "credits": {
+          "$ref": "#/$defs/credits"
+        },
+        "refine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "provider"
+          ],
+          "properties": {
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "provider": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          }
+        }
+      }
+    },
+    "outbound": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "v",
+            "type",
+            "overlay_version",
+            "time_origin_ms"
+          ],
+          "properties": {
+            "v": {
+              "const": 1,
+              "description": "Protocol version."
+            },
+            "type": {
+              "const": "ready"
+            },
+            "overlay_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "time_origin_ms": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000000000000,
+              "description": "performance.timeOrigin (Unix ms)."
+            }
+          },
+          "description": "The page is loaded; the core may send messages."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "v",
+            "type",
+            "query_gen",
+            "scene_hash",
+            "tier",
+            "outcome",
+            "faded",
+            "received_ms"
+          ],
+          "properties": {
+            "v": {
+              "const": 1,
+              "description": "Protocol version."
+            },
+            "type": {
+              "const": "paint"
+            },
+            "query_gen": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+            },
+            "scene_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{16}$",
+              "description": "The 64-bit SceneHash of what the frame shows, as 16 lower-case hex digits."
+            },
+            "tier": {
+              "enum": [
+                0,
+                1,
+                2
+              ],
+              "description": "The tier as an integer: lifecycle.rs Tier0 = 0, Tier1 = 1, Tier2 = 2 (the core serialises \"tier0\", \"tier1\", \"tier2\"; the shell maps them)."
+            },
+            "outcome": {
+              "enum": [
+                "painted",
+                "skipped",
+                "dropped",
+                "failed"
+              ]
+            },
+            "reason": {
+              "enum": [
+                "generation",
+                "dismissed",
+                "scene",
+                "tier",
+                "superseded",
+                "reset",
+                "load_failed"
+              ]
+            },
+            "faded": {
+              "type": "boolean",
+              "description": "True if the tier cross-faded in (PRD §5.5)."
+            },
+            "held_ms": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 60000,
+              "description": "How long the Tier 0 skip rule held this frame."
+            },
+            "prefetched": {
+              "type": "boolean",
+              "description": "True if the pixels were decoded in the background before the frame was asked for (a prefetch hit), false if decoded on the key-up path."
+            },
+            "previous_ms": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600000,
+              "description": "On the first frame of a scene after a scrub, AM/PM flip or offer: how long the previous scene's frame had stayed on screen since the scene changed (visible-wrong time, PRD §10.3)."
+            },
+            "received_ms": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000,
+              "description": "performance.now() of the page, in ms (diagnostic, PRD §10.4)."
+            },
+            "prepared_ms": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000,
+              "description": "performance.now() of the page, in ms (diagnostic, PRD §10.4)."
+            },
+            "frame_ms": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000,
+              "description": "performance.now() of the page, in ms (diagnostic, PRD §10.4)."
+            },
+            "committed_ms": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000,
+              "description": "performance.now() of the page, in ms (diagnostic, PRD §10.4)."
+            },
+            "half_ms": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000,
+              "description": "The frame callback at which the tier first stood at 50 % opacity or more. A painted report without it: the frame was drawn but replaced or cleared before its cross-fade reached 50 %."
+            }
+          },
+          "description": "What became of a tier frame, with page timestamps. Paint times here are diagnostics; the measured paint is the composited frame (PRD §10.4)."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "v",
+            "type",
+            "seq",
+            "query_gen",
+            "frame_ms"
+          ],
+          "properties": {
+            "v": {
+              "const": 1,
+              "description": "Protocol version."
+            },
+            "type": {
+              "const": "destination_shown"
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "query_gen": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+            },
+            "frame_ms": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000
+            }
+          },
+          "description": "The destination chip for seq has been on screen for a full frame during key press query_gen: in that key press the first byte may leave now. Never sent while the panel is hidden, nor for a destination that contradicts on-device only."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "v",
+            "type",
+            "query_gen"
+          ],
+          "properties": {
+            "v": {
+              "const": 1,
+              "description": "Protocol version."
+            },
+            "type": {
+              "const": "dismiss"
+            },
+            "query_gen": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991,
+                  "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "description": "Esc in the focused panel: hide and hand focus back (PRD §5.4)."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "v",
+            "type",
+            "query_gen",
+            "minutes"
+          ],
+          "properties": {
+            "v": {
+              "const": 1,
+              "description": "Protocol version."
+            },
+            "type": {
+              "const": "scrub"
+            },
+            "query_gen": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+            },
+            "minutes": {
+              "type": "integer",
+              "minimum": -1440,
+              "maximum": 1440
+            }
+          },
+          "description": "Left or Right: scrub one hour; with Shift, ten minutes (PRD §5.4). From the time the query last asked for, so also back out of an Out of range reached by scrubbing. The core answers with scene_changed or out_of_range."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "v",
+            "type",
+            "query_gen"
+          ],
+          "properties": {
+            "v": {
+              "const": 1,
+              "description": "Protocol version."
+            },
+            "type": {
+              "const": "flip_meridiem"
+            },
+            "query_gen": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+            }
+          },
+          "description": "M: flip AM and PM (PRD §5.4)."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "v",
+            "type",
+            "query_gen",
+            "png_base64",
+            "refined"
+          ],
+          "properties": {
+            "v": {
+              "const": 1,
+              "description": "Protocol version."
+            },
+            "type": {
+              "const": "copy"
+            },
+            "query_gen": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+            },
+            "png_base64": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40000000
+            },
+            "refined": {
+              "type": "boolean"
+            }
+          },
+          "description": "C: the frame with its caption burned into the pixels (PRD §5.5); refined frames also need IPTC metadata, which the core adds."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "v",
+            "type",
+            "query_gen",
+            "valid_time"
+          ],
+          "properties": {
+            "v": {
+              "const": 1,
+              "description": "Protocol version."
+            },
+            "type": {
+              "const": "use_offer"
+            },
+            "query_gen": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "description": "The query generation (lifecycle.rs QueryGen): one per key press, rising from 1."
+            },
+            "valid_time": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,9})?[+-]([01]\\d|2[0-3]):[0-5]\\d$",
+              "description": "RFC 3339 with the place offset."
+            }
+          },
+          "description": "The user took the Out of range offer of the latest valid time. The core answers with scene_changed (cause use_offer) for the same query_gen."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "v",
+            "type",
+            "url"
+          ],
+          "properties": {
+            "v": {
+              "const": 1,
+              "description": "Protocol version."
+            },
+            "type": {
+              "const": "open_url"
+            },
+            "url": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "pattern": "^https://"
+            }
+          },
+          "description": "Open a credit link in the browser (the panel never navigates)."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "v",
+            "type",
+            "code",
+            "message_type",
+            "detail"
+          ],
+          "properties": {
+            "v": {
+              "const": 1,
+              "description": "Protocol version."
+            },
+            "type": {
+              "const": "protocol_error"
+            },
+            "code": {
+              "enum": [
+                "invalid_json",
+                "invalid_message",
+                "unsupported_version",
+                "generation_ahead"
+              ]
+            },
+            "message_type": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z_]*$"
+            },
+            "detail": {
+              "type": "string",
+              "maxLength": 300,
+              "description": "Where the message failed (a path and a rule), never its content."
+            }
+          },
+          "description": "A message from the core was refused."
+        }
+      ]
+    }
+  }
+}
