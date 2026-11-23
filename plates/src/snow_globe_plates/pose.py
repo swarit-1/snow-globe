@@ -160,9 +160,14 @@ class PoseSolution:
 
 
 def _angles(pose: Pose, dirs: NDArray[np.float64], px: NDArray[np.float64]) -> NDArray[np.float64]:
+    """The angle, in degrees, between each marked pixel's ray and its landmark's true direction
+    (the reprojection check of PRD §8.5 step 7). atan2 of |ray × dir| and ray · dir keeps full
+    precision near zero, where arccos of the dot product bottoms out at about 1e-6 degrees in
+    float64."""
     rays = pixel_rays(px[:, 0], px[:, 1], pose)
-    cos = np.clip(np.sum(rays * dirs, axis=-1), -1.0, 1.0)
-    return np.degrees(np.arccos(cos))
+    sin = np.linalg.norm(np.cross(rays, dirs), axis=-1)
+    cos = np.sum(rays * dirs, axis=-1)
+    return np.degrees(np.arctan2(sin, cos))
 
 
 def _fit(
