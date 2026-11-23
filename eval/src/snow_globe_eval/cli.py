@@ -16,6 +16,10 @@
   :mod:`.extractor_v0_2_run`); refuses to score without the pre-registration; offline,
   resumable, writes under ``<data dir>/scores/extractor-v0.2/``, never over a finished run.
   ``--merge-labels DIR --labels OUT`` writes a new merged labels file instead.
+- ``snow-globe-eval p1dev``: PLAN M1.5's dev-only P1 table (PRD §13.4–§13.7; :mod:`.p1dev`):
+  every Rainier daytime frame rendered from its 24 h hindcast run and scored against
+  persistence, climatology and S_rule; offline, resumable, writes under
+  ``<data dir>/scores/p1dev/`` and ``<data dir>/renders/p1dev/``.
 - ``snow-globe-eval ephem-validate``: PLAN M2's ephemeris validation (PRD §8.4;
   :mod:`.ephem_validate`): oculus-core and eval's refraction against JPL Horizons (8 viewpoints,
   hourly for 12 months), 1,000 Skyfield samples and NOAA sunrise/sunset, and the camera-frame
@@ -231,6 +235,12 @@ def _parser() -> argparse.ArgumentParser:
         "--tau-lo",
         type=float,
         help="hidden threshold (v0's fixed 0.35); any other value marks the run as overridden",
+    )
+
+    from .p1dev import add_arguments as add_p1dev_arguments
+
+    add_p1dev_arguments(
+        sub.add_parser("p1dev", help="PLAN M1.5's dev-only P1 table (resumable; --run-id)")
     )
 
     from .ephem_validate.cli import register as register_ephem_validate
@@ -502,6 +512,10 @@ def main(argv: list[str] | None = None) -> int:
             return _data_report(args)
         if args.command == "extractor-v0":
             return _extractor_v0(args)
+        if args.command == "p1dev":
+            from .p1dev import run_from_args
+
+            return run_from_args(args)
         if args.command == "ephem-validate":
             return args.handler(args)
         if args.command == "extractor-v0.2":

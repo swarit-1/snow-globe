@@ -15,6 +15,7 @@ uv run snow-globe-eval heldout --check FRAME  # may this frame be used for devel
 uv run snow-globe-eval data-report            # the M0.5 gate's 72 h log evidence (offline, read-only); --json
 uv run snow-globe-eval extractor-v0           # extractor v0 over every Rainier capture (plate v0.1) + validation on the hand labels
 uv run snow-globe-eval extractor-v0.2 --run-id ID  # extractor v0.2's pre-registered leave-one-day-out check on labels v0.2, v0 beside it
+uv run snow-globe-eval p1dev [--run-id ID]    # M1.5's dev-only P1 table: every Rainier daytime frame rendered from its 24 h hindcast; resumable
 uv run snow-globe-eval ephem-validate         # M2 ephemeris validation: Horizons, Skyfield, NOAA, camera frames; --offline re-runs from the cache
 ```
 
@@ -90,6 +91,14 @@ the run it was made with.
 | `pair_score.py` | §13.4, §13.5 | One pair's P1 cell (event "visible"; partial masked; in-cloud excluded, hidden in the sensitivity) as a one-pair `Contingency`, plus the ratio error |
 | `registration.py` | §8.6 | How far a frame's aim differs from the plate's (phase correlation of gradient images): a diagnostic in the pair record; the Same view gate itself stays "not checked" |
 | `data_report/` | §16 M0.5, §15.3 | `snow-globe-eval data-report`: the M0.5 gate's log evidence from `$SNOW_GLOBE_DATA_DIR`, read-only. Per viewpoint: polls, image GETs, frames and thumbnails by storage policy (checked against the disk), rate caps, errors, poll gaps send to send, the most GETs in a rolling hour, the bounds at nps.gov (the least poll gap and 5-GET span nps.gov can have seen, and the pairs and windows not provably 300 s or 3600 s apart), and the distinct live HRRR runs with their hours and fields; outages, restarts and their excess, exclusions and the 72 h clock by the gate rule. Never opens an image, `archive/` or `quarantine/` |
+| `p1dev.py` | §13.4–§13.7, §16 M1.5 | `snow-globe-eval p1dev`: PLAN.md M1.5's dev-only P1 table, end to end and resumable (see "The dev-only P1 table" below) |
+| `p1dev_forecast.py` | §8.3, §13.1 | The hindcast catalogue and the choice: the newest run whose bracketing hours were available by the issue time, under the `d054` rule (run start + the recorded lag model, never before the S3 stamps; D-027, D-054; default) or `s3-stamps` (the hindcast's rule); hours dated before their own S3 stamps refused; `scene_run` reads the fields the live profile lacks as missing |
+| `p1dev_extract.py` | §13.3, §13.4, §13.1 | The extractor as a parameter (v0 now): one pool, one τ and the truth frame's references for the real frame and its render; `readings_as_of`: the classes a baseline may use at an issue time (clear-day pool cut to frames available by then) |
+| `p1dev_baselines.py` | §13.6, §13.1 | Persistence (a) and (b) (D-036), climatology and S_rule for one frame, through the leakage-guarded store; `AsOfLabelStore` labels every frame as of each issue time |
+| `p1dev_assets.py` | §13.1, §13.9 | The backtest pair's fitted-asset rule, recorded per frame: plate input frames and clear-day references before the issue time and off the valid local day; a truth frame that is a plate input is excluded |
+| `p1dev_render.py` | §9.5, §13.2 | The renderer's batch entry point (`renderer/scripts/render-batch.ts`): one headless runner per batch, the rendering code's identity |
+| `p1dev_table.py` | §13.4, §13.5, §13.7 | PSS per method and the paired ΔPSS with day-block bootstrap intervals; partial and in-cloud masks; JSON and Markdown |
+| `p1dev_weeks.py` | §13.9 | Dev-fit and dev-check weeks: ISO-week parity of the valid time's local day (odd fit, even check) |
 
 ## Choices worth knowing
 
@@ -406,6 +415,79 @@ apart from the new in-cloud counts (`20261123-lodo2/posthoc/compare.json`). Pool
   (`report.md`, `scores.json`, `folds.json`, `predictions.jsonl`, `run.json`, `posthoc/`). A
   finished run's folder is never written over: re-running pre-registration §11's command now
   refuses, and a check of a run takes a new `--run-id`.
+
+## The dev-only P1 table (PLAN.md M1.5; `p1dev`)
+
+`snow-globe-eval p1dev [--run-id ID] [--extractor v0] [--table-only]` makes M1.5's gate table, "a
+dev-only P1 table, with nothing held out touched", under `<data dir>/scores/p1dev/<run-id>/`
+(`run.json`, `command.txt`, `extractor/`, `scenes/`, `frames/<frame>.json`, `table.json`,
+`table.md`) and `<data dir>/renders/p1dev/<run-id>/`. For every Rainier daytime frame (Sun ≥ 3°):
+
+- **Guard.** `frame_file_verdict` from metadata before any byte is read; a frame that fails it stops
+  the run (`LeakageError`). Frames the extractor run left out as not development are counted.
+- **Forecast** (`p1dev_forecast`). Issue = valid − 24 h. The newest file in
+  `forecast/hindcast/hrrr/<viewpoint>/` whose bracketing hours were available at or before the issue
+  time; none, and the frame has no model forecast. `--availability d054` (the default) dates an
+  archived hour at the later of run start + its recorded lag model (D-027) and its S3 floor (D-054);
+  the model is the one each hour records, since this table never reads `forecast_log/`.
+  `--availability s3-stamps` takes the hindcast's own rule, the S3 stamps alone; the lead rules which
+  P1 uses. Each record names the run the other rule would choose, and the table lists the frames
+  where they differ. A test checks the choice under both rules against a brute-force rule over 3,000
+  random issue times and leads: no run available after its issue time is ever chosen, and no newer
+  eligible one is passed over.
+- **Scene and render.** `scene.build_scene` with plate v0.1's `renderer_inputs.camera` (position, lens
+  height, pose), over its base and sky mask, through `renderer/scripts/render-batch.ts` (one
+  SwiftShader runner per batch of `--batch` frames). The hindcast holds the live field profile
+  (D-050): no cloud top, precipitation or 10 m wind, which `build_scene` reads; `scene_run` gives it
+  those fields missing at every hour, so it takes its own fallbacks (no top cap; precipitation and
+  wind 0, flagged), and each scene lists them. TODO(M1.5): `scene.py` should accept the live profile
+  itself.
+- **Truth and prediction** (`p1dev_extract`). Extractor v0 runs once over every capture
+  (`extractor_v0_run.run`, into `extractor/`); the render is scored with the same parameters and pool,
+  at the truth frame's Sun and local day, so both get the same references (`same_references` in each
+  record). The model forecasts "visible" when the render's summit band is visible, as `pair_score`
+  reads one pair; a render the extractor cannot class gives no forecast.
+- **Fitted assets** (`p1dev_assets`). The backtest pair's rule (a plate input frame or clear-day
+  reference taken and available before the issue time, not on the valid local day) is checked and
+  recorded per frame. A truth frame that is one of the plate's input frames (base, or the geometry
+  frame the sky mask was segmented from) is excluded from P1 and counted. The primary still uses
+  plate v0.1 and the whole clear-day pool, pending the lead's ruling; two sensitivity blocks keep
+  only the frames whose assets pass, and those whose plate inputs lie off the valid local day.
+- **Baselines** (`p1dev_baselines`): persistence (a) and (b) (D-036) and climatology through the
+  leakage-guarded store, S_rule from the same run. S_mos: TODO(M2), fitted at the freeze. Their
+  labels are made **as of each issue time** (`AsOfLabelStore`): a frame's class depends on its
+  clear-day references, and the run's pool holds frames of every day, the valid frame among them,
+  so each frame a baseline reads is classified again with the pool cut to frames imaged and
+  available by the issue time; each record lists the references behind the persistence labels.
+- **Table** (`p1dev_table`): per subset (all, dev-fit, dev-check weeks), PSS per method and the paired
+  ΔPSS against the stronger persistence (chosen on dev-fit weeks by `choose_persistence`), against
+  the other persistence, climatology and S_rule; day-block bootstrap (1-day blocks, the PRD minimum:
+  TODO(M2), 10,000 resamples, seed 20261123); partial excluded and counted; in-cloud its own class and
+  hidden in a sensitivity block; frames without a forecast listed by method, reason and local day.
+  Labelled provisional while any reason is listed; its first sentence follows the extractor's
+  validation.
+- **Resume.** The same `--run-id` skips each frame whose record is final (`scored`, `no-forecast`)
+  and whose frame, forecast file, extractor, rendering code (the batch script's identity digest) and
+  provenance (the digest of the code that makes records, the manifest's and plate's SHA-256, the
+  availability rule) are unchanged; renders are reused when their scene and rendering code are; a
+  frame that had no forecast, or whose scene or render failed, is tried again. Every batch must
+  report the identity the run started with, or the run stops and a resume renders those frames again.
+  The extractor stage is reused only under the same extractor code. Options that change results are
+  fixed at the first start; each invocation's code is kept in `run.json`.
+- **Another extractor.** Write a class with `p1dev_extract.P1Extractor`'s methods, add it to
+  `EXTRACTORS`, and run with `--extractor <version>` and a new run id.
+
+Measured 23 Nov 2026 (run `20261123T1235Z-v0-d054`, started 12:31:09 UTC, on AC power, after the
+review's fixes): 105 daytime frames of 19–22 Nov; 103 with a hindcast run under `d054` (8 runs; the
+2 others' only run is modelled available after their issue times), 103 renders; 181 s in all, 150.0 s
+of it in 9 render batches. Under `s3-stamps` 8 frames would use another run. 4 truth frames are plate
+inputs and are excluded. SwiftShader at 1920×1080: page-side render median 536 ms, p95 3,495 ms (the
+first frame of a batch compiles), `renderToFiles` median 983 ms. A resume after a code change redoes
+all 105 records and reuses every render: 11.5 s.
+
+The first run, `20261123T1050Z-v0`, is superseded: its baselines read labels made against clear-day
+references imaged after the issue time (the valid frame among them), so its persistence and
+climatology rows are not valid, and it dated hindcast hours by their S3 stamps alone.
 
 ## Measured (this machine, MacBook Air M4, 19 Nov 2026)
 
