@@ -1,0 +1,1715 @@
+{
+ "kind": "snow-globe.frame-labels",
+ "version": "v0",
+ "viewpoint_id": "rainier.paradise-mountain",
+ "bands": [
+  "summit",
+  "upper",
+  "mid",
+  "near"
+ ],
+ "protocol": {
+  "labeller": "the extractor-v0 builder (Claude, an AI agent), by viewing; one labeller, no second pass yet",
+  "labelled_at_utc": "2026-11-23",
+  "before_any_ratio": "every label was written before extractor v0 computed any ratio for any frame",
+  "frames": "every Rainier live capture of 19-22 Nov 2026 with the Sun at or above 3 deg in its capture sidecar (NOAA solar position): 105 frames",
+  "views": "per frame, a crop of the mountain (x 440-1600, y 230-500 of the 1920x1080 frame) at 0.6x beside the summit dome (x 440-900, y 250-360) at 1x; borderline summits re-checked at 2-3x",
+  "bands": {
+   "summit": "the summit dome from the big tree to Gibraltar Rock's top: its skyline and upper surface",
+   "upper": "Gibraltar Rock and the upper Nisqually and Cowlitz glaciers down to the Cowlitz Cleaver",
+   "mid": "the Camp Muir / Cathedral Rocks ridge, the Muir Snowfield ridge up to Anvil Rock, Little Tahoma, and the snow below them",
+   "near": "the near snow ridges right of Little Tahoma (x 1240-1540)"
+  },
+  "states": {
+   "visible": "the band's terrain edges are distinct (its silhouette against the sky where it has one, and its rock and ice texture); at most a thin wisp over a small part",
+   "partial": "cloud or a veil covers a noticeable part of the band, or makes its features faint, but some of it can still be made out",
+   "hidden": "none of the band's terrain can be made out"
+  },
+  "camera_in_cloud": "true when the camera itself is in fog: the near trees (under ~300 m) are faded",
+  "clear_day_reference": "true when every band is visible and the mountain is in direct sunlight (sky clear or partly clear around it); these frames are extractor v0's reference pool",
+  "sky": "clear, partly, hazy, overcast, fog or snow (falling snow in front of the camera)",
+  "light": "direct, soft or mixed on the mountain, null when the mountain is hidden"
+ },
+ "frames": [
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T180202Z_f00969b60e5f.jpg",
+   "sha256": "f00969b60e5f80576be3ea5a5e7363e99b48548c02800148ae6378395c176103",
+   "image_time_utc": "2026-11-19T18:02:02.165000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T193402Z_804243449e37.jpg",
+   "sha256": "804243449e3798c914e34f1988b7a453a76c59ba25e943b0ee63338a3c654c7b",
+   "image_time_utc": "2026-11-19T19:34:02.302000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T195002Z_d316497562e5.jpg",
+   "sha256": "d316497562e5ead6ce445d6fcd434a080711427591ac32425d72097395fdba7a",
+   "image_time_utc": "2026-11-19T19:50:02.069000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T215102Z_597ae02d63b4.jpg",
+   "sha256": "597ae02d63b403dbc0621eca2c395656b8dc1c965ced9b48671b078c085b5de2",
+   "image_time_utc": "2026-11-19T21:51:02.073000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "partial",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": "lower-left face and near ridges visible; upper mountain in cloud"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T220702Z_dda7548fe817.jpg",
+   "sha256": "dda7548fe817430dd6000d643f88559f03c37f6edbe2d04b96f1c8b2c01b0440",
+   "image_time_utc": "2026-11-19T22:07:02.307000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "partial",
+    "mid": "partial",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "mixed",
+   "clear_day_reference": false,
+   "note": "dome top in cloud; its lower-left face visible"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T222301Z_9d72bdce6982.jpg",
+   "sha256": "9d72bdce698262cb8d28106a865fdb7496a1060cf34c3fa62bb62e50a9af48ed",
+   "image_time_utc": "2026-11-19T22:23:01.908000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "partial",
+    "mid": "partial",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "mixed",
+   "clear_day_reference": false,
+   "note": "left part of the dome and its skyline visible; cloud over the right part and Gibraltar"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T223901Z_6a16f5995635.jpg",
+   "sha256": "6a16f5995635cac018ef8bdfdd7888a86a429e0c4810ac55370ad273664bcd70",
+   "image_time_utc": "2026-11-19T22:39:01.808000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "partial",
+    "mid": "partial",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "mixed",
+   "clear_day_reference": false,
+   "note": "left part of the dome and its skyline visible; cloud over the right part and Gibraltar"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T225502Z_81c54b208b63.jpg",
+   "sha256": "81c54b208b6330eae0ca801df656eb52fb8bef1e72f7aa79459defcc8a0e3cc1",
+   "image_time_utc": "2026-11-19T22:55:02.509000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "partial",
+    "mid": "partial",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": "left face faint; middle in cloud"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T231058Z_91e1fe8b3bd7.jpg",
+   "sha256": "91e1fe8b3bd7df9491b62de4557b03fb62d0139e10be0a6fcbaefbc61d20af35",
+   "image_time_utc": "2026-11-19T23:10:58.010000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "partial"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": "near ridges faint"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T232658Z_2a07ff12c60f.jpg",
+   "sha256": "2a07ff12c60f48c1f529cbedea472e414f590077630a862f75523c6c7a7e83d4",
+   "image_time_utc": "2026-11-19T23:26:58.344000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T234202Z_b3d93e12b79c.jpg",
+   "sha256": "b3d93e12b79c89f9d0f4e5302576f779f22e2931b7aa4b0ac45ea65a1223a7c6",
+   "image_time_utc": "2026-11-19T23:42:02.478000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "partial"
+   },
+   "camera_in_cloud": false,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": "knoll faint; near ridges faint"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T235758Z_64874cda81ee.jpg",
+   "sha256": "64874cda81eea58bcd3aab81cb0318e57ea020d53ebf80f1c032cb3b7ba8c3f6",
+   "image_time_utc": "2026-11-19T23:57:58.279000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": "alpenglow, Sun 3.7 deg"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T155801Z_ba37a679d177.jpg",
+   "sha256": "ba37a679d1773ec7a7c73fdc3ba3fb42325e4b53020d8c131a13cad13a213708",
+   "image_time_utc": "2026-11-20T15:58:01.659000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "clear",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T161402Z_bf30dcf51637.jpg",
+   "sha256": "bf30dcf51637459a9b09f2cf2d1d14563b6440fdd1c6131eb4d38ed6447b12d7",
+   "image_time_utc": "2026-11-20T16:14:02.426000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "clear",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T162901Z_d833b73d28e5.jpg",
+   "sha256": "d833b73d28e59847957832c3e3fcd508af066694c1244cbf6751d60657ec7566",
+   "image_time_utc": "2026-11-20T16:29:01.694000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "clear",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T164501Z_1b38b10899bd.jpg",
+   "sha256": "1b38b10899bd519f2cb85ec496ef29100505be146fd1703f8e9748153751dba2",
+   "image_time_utc": "2026-11-20T16:45:01.195000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "clear",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": "small snow plume at the summit"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T170058Z_7c4409bc30af.jpg",
+   "sha256": "7c4409bc30af9ba4d60f08b4c087c4060000ca3007c3115a5758788c148f4f8c",
+   "image_time_utc": "2026-11-20T17:00:58.095000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "clear",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": "small snow plume at the summit"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T171659Z_a605f9642f38.jpg",
+   "sha256": "a605f9642f38947fc91b4f7622c1c2ad977504c384f3b876883603b087e26e47",
+   "image_time_utc": "2026-11-20T17:16:59.196000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "clear",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T173159Z_f9ac7401bdb0.jpg",
+   "sha256": "f9ac7401bdb077bffb53add0c454c96392a0bba9b83e10e7e533654dabf4f62b",
+   "image_time_utc": "2026-11-20T17:31:59.865000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "clear",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T174801Z_8e0aa88535b3.jpg",
+   "sha256": "8e0aa88535b38ce49f7749224ac0871d62ec3ebfaadb2063a34dcd6348975c43",
+   "image_time_utc": "2026-11-20T17:48:01.867000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "clear",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T180402Z_21d0ace9e6f2.jpg",
+   "sha256": "21d0ace9e6f29f7f71654cd7027bd5a97ee2dda374eba21f39e192b1a5037cd5",
+   "image_time_utc": "2026-11-20T18:04:02.334000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "clear",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T181904Z_e87cd537eb55.jpg",
+   "sha256": "e87cd537eb5516773207749cf0b190568299a2ef593f1cc11b92f7f9aec3b7b9",
+   "image_time_utc": "2026-11-20T18:19:04.700000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "hazy",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": "thin high cloud; shadows still visible"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T183502Z_4bc0ceca6240.jpg",
+   "sha256": "4bc0ceca624018964571ddfb09a4bc9cd4d85b5851b3c4c0371321cd809a2925",
+   "image_time_utc": "2026-11-20T18:35:02.466000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T185102Z_854b7cdc59e8.jpg",
+   "sha256": "854b7cdc59e8b6b245a29c92f85b50882a13ee4ba6e59a5ede07cbdf8d100447",
+   "image_time_utc": "2026-11-20T18:51:02.399000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T190602Z_dd1b8ed7d5a4.jpg",
+   "sha256": "dd1b8ed7d5a4640ec8de8f62fe9c147055dab87d96f1cdde271d5357c9c88979",
+   "image_time_utc": "2026-11-20T19:06:02.065000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "partial",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": "Little Tahoma visible; Camp Muir ridge in cloud"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T192201Z_9828a5fe62a6.jpg",
+   "sha256": "9828a5fe62a670b0d0cdd996cd2e07f1f342159a7c2279df602c5d7561930cb5",
+   "image_time_utc": "2026-11-20T19:22:01.865000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": null,
+   "clear_day_reference": false,
+   "note": "knoll clear"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T193802Z_ffddc2aba694.jpg",
+   "sha256": "ffddc2aba694138085171be3a66f3d50f3b8bed7905cb5dadbbc45d714d5136f",
+   "image_time_utc": "2026-11-20T19:38:02.432000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T200101Z_b63fc12835f6.jpg",
+   "sha256": "b63fc12835f6c5cd15489d8360aefb4d5e44859f3354f0317fedde102f96358b",
+   "image_time_utc": "2026-11-20T20:01:01.967000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T201659Z_8179475db14a.jpg",
+   "sha256": "8179475db14a12d063e41a0feb957f9a4dcd292f5d4000806da1707ca0f2257f",
+   "image_time_utc": "2026-11-20T20:16:59.635000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T203202Z_e90101b1a772.jpg",
+   "sha256": "e90101b1a772a4a9316c80ce2d48ab7583cd25de5e7d441d935b55f5d7b1ee24",
+   "image_time_utc": "2026-11-20T20:32:02.003000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": "knoll barely visible; near trees still sharp"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T204701Z_4161ca30a8f3.jpg",
+   "sha256": "4161ca30a8f31ea7e9acbdebeda0442ae0bf683a13ab90d2b2ffc29758a139ec",
+   "image_time_utc": "2026-11-20T20:47:01.970000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T210202Z_6528343d6bdf.jpg",
+   "sha256": "6528343d6bdf7e0e98f2dbabffba93576df90c3eab5ea54ad14b8ea60f0ed867",
+   "image_time_utc": "2026-11-20T21:02:02.338000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T211802Z_5969aebcaf7b.jpg",
+   "sha256": "5969aebcaf7b7e6011ff1a7b8c816ea32bdf0ef9ed4f698fe06d49548ccdb969",
+   "image_time_utc": "2026-11-20T21:18:02.105000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T213357Z_04b90481be88.jpg",
+   "sha256": "04b90481be8850378289e73f9822e2bef58ae14a560acdf32dd7f0d8a370da90",
+   "image_time_utc": "2026-11-20T21:33:57.739000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T215000Z_65b62fa7d41f.jpg",
+   "sha256": "65b62fa7d41faf80930d32c1003016159aaf76b6993cc32243449fe61bd24463",
+   "image_time_utc": "2026-11-20T21:50:00.340000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T220559Z_a425985aed73.jpg",
+   "sha256": "a425985aed7389eca0598741f45105644292344586fbae19bed9f07f557a5e5b",
+   "image_time_utc": "2026-11-20T22:05:59.074000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T222101Z_8b4e00214d4b.jpg",
+   "sha256": "8b4e00214d4bbbee6d65a0d44d2f34b423cc3375253bc7f56bf42d0a37e797c2",
+   "image_time_utc": "2026-11-20T22:21:01.775000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T223601Z_b3b8645e17c1.jpg",
+   "sha256": "b3b8645e17c1a19f082b4634c347bbf29dd1264c0d0ad03a81e3a962661d8799",
+   "image_time_utc": "2026-11-20T22:36:01.708000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T225201Z_e5d74e657e32.jpg",
+   "sha256": "e5d74e657e32d3a164cbedd50d747bef0afed5ea4bd9257d1dc8257d7f177cbf",
+   "image_time_utc": "2026-11-20T22:52:01.909000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T230801Z_6fc001181056.jpg",
+   "sha256": "6fc001181056e309385732405e94581f0922d01bba67edbe2aab72b8868f91fc",
+   "image_time_utc": "2026-11-20T23:08:01.943000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T232359Z_2230e54ce1f6.jpg",
+   "sha256": "2230e54ce1f6464e7114ade293cbc9e4c07dd9d4f702ad0df526a5564e77da40",
+   "image_time_utc": "2026-11-20T23:23:59.211000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T233859Z_7e680b939f71.jpg",
+   "sha256": "7e680b939f713903aae6b6e1abaf3561653d415db0502bd7d3422b2197edcfc6",
+   "image_time_utc": "2026-11-20T23:38:59.245000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T235501Z_eb52a2e07a90.jpg",
+   "sha256": "eb52a2e07a9068ce910a10147889229b1403220b5b173df7df1a716744a797c5",
+   "image_time_utc": "2026-11-20T23:55:01.679000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T155957Z_e592c2018e88.jpg",
+   "sha256": "e592c2018e88a22ba38b9b9c35afa6898b4194cf1cce649ac06ba7bb6cd60f83",
+   "image_time_utc": "2026-11-21T15:59:57.587000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T161502Z_40e9116a8349.jpg",
+   "sha256": "40e9116a8349205c43be4a3823414103df509274ede54d9d29de10779f3dc838",
+   "image_time_utc": "2026-11-21T16:15:02.154000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T163002Z_493b94eed1e9.jpg",
+   "sha256": "493b94eed1e96f9b244d83f6fd7f4a360ce88eb421ec22d9b786002e242129cf",
+   "image_time_utc": "2026-11-21T16:30:02.288000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T164701Z_4171f1daf5d3.jpg",
+   "sha256": "4171f1daf5d3c0021415d9ca28ab90c9a2aec226f3fa2c0c21b4fc6a52de138b",
+   "image_time_utc": "2026-11-21T16:47:01.088000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T170200Z_3775c5e50219.jpg",
+   "sha256": "3775c5e50219f933337c0c183ec4ca64f122fb02b157f10f5906db6dfe647883",
+   "image_time_utc": "2026-11-21T17:02:00.154000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "direct",
+   "clear_day_reference": true,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T171900Z_16bf184b3409.jpg",
+   "sha256": "16bf184b34095a2d687e2a4e9628f0dd03ad1ac4c0aa85f1780b456d75b315d5",
+   "image_time_utc": "2026-11-21T17:19:00.155000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "mixed",
+   "clear_day_reference": false,
+   "note": "sunlit summit under a broken altostratus deck"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T173302Z_d5dc8e70932e.jpg",
+   "sha256": "d5dc8e70932e9f50a102c41aeb967b1b79a9cda1183dae9c10bb0bcb4a3c22ff",
+   "image_time_utc": "2026-11-21T17:33:02.322000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "mixed",
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T175004Z_f265301d3848.jpg",
+   "sha256": "f265301d38485fb870a331b2a4cc26ce587ea5747b73c11059b4116f7dc3f9a9",
+   "image_time_utc": "2026-11-21T17:50:04.653000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T180503Z_a367cbe7c103.jpg",
+   "sha256": "a367cbe7c1035fd2e332e1246842c5f9f91a0fb77346379cbb6cd6cc17bf937b",
+   "image_time_utc": "2026-11-21T18:05:03.685000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": "veil over the top-left of the dome (skyline indistinct near the tree)"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T182101Z_9e20382a9b38.jpg",
+   "sha256": "9e20382a9b381191324ee784efa26d3e0704e4481f54c34dc287361651858f5e",
+   "image_time_utc": "2026-11-21T18:21:01.718000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T183701Z_17af60336701.jpg",
+   "sha256": "17af60336701ead2d5f3ef8bb63316b60f7e818f30cede4c898395af7ef74622",
+   "image_time_utc": "2026-11-21T18:37:01.685000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T185202Z_514a627357ce.jpg",
+   "sha256": "514a627357cefafcda7c32956e7af9f5d9e61feb41be1ee9ae97d9d57460cc00",
+   "image_time_utc": "2026-11-21T18:52:02.119000Z",
+   "bands": {
+    "summit": "visible",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "mixed",
+   "clear_day_reference": false,
+   "note": "sun breaking through on the lower-left face"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T190802Z_1e1611871a1f.jpg",
+   "sha256": "1e1611871a1fff6c51cb3ae47aa01d0912c09dda599e50345ef31966483eb122",
+   "image_time_utc": "2026-11-21T19:08:02.119000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": "veil over the top-left of the dome"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T192502Z_2dc4c70ab349.jpg",
+   "sha256": "2dc4c70ab349f17d8ae98fc7c22dcccb4d6ef416673d34850d06bd71457c2e9c",
+   "image_time_utc": "2026-11-21T19:25:02.520000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": "veil over the dome top"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T194101Z_ed656e0516f8.jpg",
+   "sha256": "ed656e0516f8e8ed5ce371e0641e9b9411afca1c634b35113deace57a665134b",
+   "image_time_utc": "2026-11-21T19:41:01.887000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": "dome skyline faint"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T195602Z_6ff41c3f999a.jpg",
+   "sha256": "6ff41c3f999a56df54dfcfd53cc7c1b65c4829706528f2cf4dcda610dedc70c6",
+   "image_time_utc": "2026-11-21T19:56:02.355000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": "dome skyline faint"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T201201Z_8eb1dcda24dd.jpg",
+   "sha256": "8eb1dcda24ddd9212304610b4ab7e23d7e9813f6fae47f5dec8f4d062906da12",
+   "image_time_utc": "2026-11-21T20:12:01.655000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": "dome top faint"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T202800Z_b6ce0811a9d0.jpg",
+   "sha256": "b6ce0811a9d0c063432afc9b059062485d1baf4abb1faf87f4eae83250d63ad6",
+   "image_time_utc": "2026-11-21T20:28:00.790000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": "soft",
+   "clear_day_reference": false,
+   "note": "dome skyline faint, upper dome blending into cloud"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T204301Z_40441268da95.jpg",
+   "sha256": "40441268da95128adbe4031c05b7f74c1b2aa77cb06d70d13f121fb0553bd8f2",
+   "image_time_utc": "2026-11-21T20:43:01.657000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "partial",
+    "mid": "partial",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T205702Z_4e1d229b7a03.jpg",
+   "sha256": "4e1d229b7a036efe27e5b804c4df74e4e5d09afe4659858016d0c7cf020dda78",
+   "image_time_utc": "2026-11-21T20:57:02.057000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "partial",
+    "mid": "partial",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T211500Z_e70cc7ccf148.jpg",
+   "sha256": "e70cc7ccf148e34a0fb3fd1d5856e1e8f3c2199711e6d785982f6ade5cafc7c1",
+   "image_time_utc": "2026-11-21T21:15:00.791000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "partial",
+    "mid": "partial",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T213001Z_847f5152b933.jpg",
+   "sha256": "847f5152b933524aeb1037c7d5029e1d28c1a14cfa3a71812786538e796efff5",
+   "image_time_utc": "2026-11-21T21:30:01.759000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "partial",
+    "mid": "partial",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T214701Z_d01ce562909e.jpg",
+   "sha256": "d01ce562909ee5bc562fc5a67a136a2c305c5c0273a2dee59ad43a6da6f55644",
+   "image_time_utc": "2026-11-21T21:47:01.259000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "partial"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T220257Z_4ca8c0e7043a.jpg",
+   "sha256": "4ca8c0e7043ab3fddd62b00babb20657b6031481ff43ea50e6dc0cdc34714d18",
+   "image_time_utc": "2026-11-21T22:02:57.627000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T221857Z_af2523a413e1.jpg",
+   "sha256": "af2523a413e15c9b3cb7c166ff2886433d6a3d5ba65b25c85803c2b0e81347a7",
+   "image_time_utc": "2026-11-21T22:18:57.894000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "partial"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T223357Z_472eb6058b19.jpg",
+   "sha256": "472eb6058b19407840a8b20672edaf3153e610d725f6fc927b7e97b77a30324e",
+   "image_time_utc": "2026-11-21T22:33:57.862000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "partial"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T225001Z_322db2dfcaf9.jpg",
+   "sha256": "322db2dfcaf9f1700a28695c9248afe6f0c8859544316370faeb52b99f2adc40",
+   "image_time_utc": "2026-11-21T22:50:01.163000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "partial"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T230558Z_3a59f3a164e7.jpg",
+   "sha256": "3a59f3a164e77ca04a2fde76442d7de9bdf6647284ce44db988b379b3c2afb7f",
+   "image_time_utc": "2026-11-21T23:05:58.331000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "partial"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T232102Z_9769afb7273b.jpg",
+   "sha256": "9769afb7273b387a8f3065d5ade225ff13d6b3eae161f3829a23fed08682dcc0",
+   "image_time_utc": "2026-11-21T23:21:02.298000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "partial"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T233659Z_ec9c6964c158.jpg",
+   "sha256": "ec9c6964c158c04af30d5baa69b247f02471897e6ee42402a359b0c4fb67f3b1",
+   "image_time_utc": "2026-11-21T23:36:59.833000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "partial"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T235201Z_a67640b4733a.jpg",
+   "sha256": "a67640b4733a41a60b5255ca8636a9fc8c9b1463a9048be711831cffe67747d5",
+   "image_time_utc": "2026-11-21T23:52:01.767000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "partial"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T160002Z_07a8d429954c.jpg",
+   "sha256": "07a8d429954ccaa8f0e5e294f0f5808b95052d9fdef12d224775e4ee07027f47",
+   "image_time_utc": "2026-11-22T16:00:02.182000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "partial"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T161702Z_87fa20b9ca9e.jpg",
+   "sha256": "87fa20b9ca9e47339a5a8ddfaf6980355bc28f4ed9e6916b2c809dbe61f48ca3",
+   "image_time_utc": "2026-11-22T16:17:02.282000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T163202Z_210353f0af23.jpg",
+   "sha256": "210353f0af230b1a3bc17a332f7733694907a994fa86f55b6783774cc4dbe0a5",
+   "image_time_utc": "2026-11-22T16:32:02.182000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T164802Z_9bf6e853db35.jpg",
+   "sha256": "9bf6e853db35887bd8ffa3b20c7a56a590395d3338d7d131bf1df35957117d68",
+   "image_time_utc": "2026-11-22T16:48:02.515000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T170402Z_603e4703b7e1.jpg",
+   "sha256": "603e4703b7e16893b044f68c02d60e7758d87074b6afdd85c5a4e52879554c98",
+   "image_time_utc": "2026-11-22T17:04:02.549000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T171959Z_a103b5a9adee.jpg",
+   "sha256": "a103b5a9adee3098bc32c24d4fb0fb08a2f8ac51a7dd0032c66fb08206b9989d",
+   "image_time_utc": "2026-11-22T17:19:59.450000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T173502Z_8607625e56da.jpg",
+   "sha256": "8607625e56dab6340076cfbbb70a81c9f0e94bd907ae5d09389dd816439dafb8",
+   "image_time_utc": "2026-11-22T17:35:02.050000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T175059Z_c0cc6901c500.jpg",
+   "sha256": "c0cc6901c5001b470044c0413ee1ddf5986224ebec59973538275aa44a100f7f",
+   "image_time_utc": "2026-11-22T17:50:59.184000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T180501Z_6e18a2c82057.jpg",
+   "sha256": "6e18a2c82057889b622b1afab23b0471583080414fe579440137d7d054a94854",
+   "image_time_utc": "2026-11-22T18:05:01.884000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T182202Z_1b2a1a1e4cb5.jpg",
+   "sha256": "1b2a1a1e4cb53e641c11f2a3c9fb1b3b4d2f9405ed6c684a0bdf51bc71a1d2da",
+   "image_time_utc": "2026-11-22T18:22:02.350000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T183801Z_e98079433ecb.jpg",
+   "sha256": "e98079433ecb198f283fcfd855cc9ef4b2caad939f99671fb905075097f791e6",
+   "image_time_utc": "2026-11-22T18:38:01.050000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T185302Z_50a083c8f4ac.jpg",
+   "sha256": "50a083c8f4acf7b71db99c21fe8adc1e3a82ccc6e9476459bd5338da3706a520",
+   "image_time_utc": "2026-11-22T18:53:02.485000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T190901Z_ec11a61ac227.jpg",
+   "sha256": "ec11a61ac227382799bcd3e44ad48881fcafa58a2b42b1f97e214d60ff2fbfb3",
+   "image_time_utc": "2026-11-22T19:09:01.952000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T192402Z_e4fc096800c0.jpg",
+   "sha256": "e4fc096800c00d99ad3d1dd9f7e13961906129f75aef5d8072c952094a53c8b6",
+   "image_time_utc": "2026-11-22T19:24:02.220000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": "knoll faint"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T194101Z_e93d67bdc18c.jpg",
+   "sha256": "e93d67bdc18c18ee5d86b7a70f1067e8616fe619da8a9fbf950250afa7a1c929",
+   "image_time_utc": "2026-11-22T19:41:01.221000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": "knoll faint"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T195602Z_05731b65cebb.jpg",
+   "sha256": "05731b65cebb08d7973efa000cebfbfe5877735cad08fc9b3c0cfbfa005663cd",
+   "image_time_utc": "2026-11-22T19:56:02.222000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": "knoll faint"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T201201Z_cc8abd66d616.jpg",
+   "sha256": "cc8abd66d61621d7aab2d7c5ad872623d8824e5c52b46e784d4ae4c931ab6c6a",
+   "image_time_utc": "2026-11-22T20:12:01.922000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": "knoll faint"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T202802Z_8dc631d6750b.jpg",
+   "sha256": "8dc631d6750b7e5d9bf590953587184dad1144ab87c906ce8095db79f751c280",
+   "image_time_utc": "2026-11-22T20:28:02.223000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T204357Z_fa37b7bb4577.jpg",
+   "sha256": "fa37b7bb4577864bb7d8fe74e2530e67926509a46a0f879363c205d8949ce74b",
+   "image_time_utc": "2026-11-22T20:43:57.823000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T205901Z_d832ea06d2a5.jpg",
+   "sha256": "d832ea06d2a56dca214c94021445ba0e5656c13eb37afb0eaa1d72a6245c3563",
+   "image_time_utc": "2026-11-22T20:59:01.591000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": "knoll faint"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T211301Z_57bb907e0d8d.jpg",
+   "sha256": "57bb907e0d8dd3d442e0725d89505d6e77d7d8f0d974ce3b3231d97c901a3c7e",
+   "image_time_utc": "2026-11-22T21:13:01.691000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": "knoll faint"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T212802Z_0184b3d5bbfb.jpg",
+   "sha256": "0184b3d5bbfb6839c885a02232b1b6a9da35f150cb0210dead14755a32a2c67f",
+   "image_time_utc": "2026-11-22T21:28:02.192000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "snow",
+   "light": null,
+   "clear_day_reference": false,
+   "note": "knoll faint"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T214559Z_9ba5f4205756.jpg",
+   "sha256": "9ba5f420575659b8f76e0002910d3265f22eb531b40e843df3f76f7a0e42ed4b",
+   "image_time_utc": "2026-11-22T21:45:59.460000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": "knoll faint; near trees still sharp"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T220102Z_bde2bb32200f.jpg",
+   "sha256": "bde2bb32200f8235f37ce65f4093acf4cb295f1cb15fb26538ecf4dd860afc0b",
+   "image_time_utc": "2026-11-22T22:01:02.461000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T221702Z_ffa2aa33f783.jpg",
+   "sha256": "ffa2aa33f78341107c95315a3c4ee7b884b602639204cbdf975f1f97ed38e854",
+   "image_time_utc": "2026-11-22T22:17:02.162000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T223302Z_6c1cdf562a2b.jpg",
+   "sha256": "6c1cdf562a2b2564f0a29ef2e2ea415c805c8fcdca32b6b7facba85c7576eab8",
+   "image_time_utc": "2026-11-22T22:33:02.495000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": true,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T224901Z_28f7ac461d17.jpg",
+   "sha256": "28f7ac461d1744b6704bbe2c28be7bd51dc4c55a33c6031e1a952b66afc9edbb",
+   "image_time_utc": "2026-11-22T22:49:01.863000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "fog",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T230501Z_dc146bc73f16.jpg",
+   "sha256": "dc146bc73f167bf6b6f801b2f22ffc94b9eb27ee693b2717e60ac684e3c14b0e",
+   "image_time_utc": "2026-11-22T23:05:01.964000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "hidden",
+    "mid": "hidden",
+    "near": "hidden"
+   },
+   "camera_in_cloud": false,
+   "sky": "overcast",
+   "light": null,
+   "clear_day_reference": false,
+   "note": ""
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T232101Z_b23ab7458d50.jpg",
+   "sha256": "b23ab7458d5034e49a4e5971b948fd26f30f8397c61d2aeade353209ee1ab81e",
+   "image_time_utc": "2026-11-22T23:21:01.098000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "partial",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "direct",
+   "clear_day_reference": false,
+   "note": "summit dome skyline faint through cloud"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T233601Z_4d8f6cf61dbc.jpg",
+   "sha256": "4d8f6cf61dbcc55dcc34762468d81be37bbd9f8b6c5a3bc222bd060d5bd7061f",
+   "image_time_utc": "2026-11-22T23:36:01.999000Z",
+   "bands": {
+    "summit": "partial",
+    "upper": "visible",
+    "mid": "visible",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "direct",
+   "clear_day_reference": false,
+   "note": "cap cloud over the top-left of the dome"
+  },
+  {
+   "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T235202Z_1e027b2fe237.jpg",
+   "sha256": "1e027b2fe237c69897732bece87498b53af7e20d46cdf3e23aeb1f86d4153857",
+   "image_time_utc": "2026-11-22T23:52:02.166000Z",
+   "bands": {
+    "summit": "hidden",
+    "upper": "partial",
+    "mid": "partial",
+    "near": "visible"
+   },
+   "camera_in_cloud": false,
+   "sky": "partly",
+   "light": "direct",
+   "clear_day_reference": false,
+   "note": ""
+  }
+ ]
+}

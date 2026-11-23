@@ -8,6 +8,9 @@
   and with ``--check`` what it lets given frame files be used for (metadata only).
 - ``snow-globe-eval data-report``: the M0.5 gate's log evidence, per viewpoint, with outages,
   exclusions and the 72 h clock (PRD §16 M0.5, :mod:`.data_report`); offline and read-only.
+- ``snow-globe-eval extractor-v0``: extractor v0 over every capture of a viewpoint against its
+  plate's landmark bands, and its validation on the hand labels (PRD §13.3, §13.8;
+  :mod:`.extractor_v0_run`); offline, writes under ``<data dir>/scores/extractor-v0/``.
 
 None touches the network, except ``backtest-pair --forecast auto``, which backfills one
 HRRR run from NOAA's public bucket through snow-globe-forecast.
@@ -184,6 +187,38 @@ def _parser() -> argparse.ArgumentParser:
     )
     report.add_argument(
         "--clock-hours", type=float, default=72.0, help="hours the gate needs (default 72)"
+    )
+
+    v0 = sub.add_parser(
+        "extractor-v0",
+        help="extractor v0 over every capture of a viewpoint, validated on the hand labels",
+    )
+    v0.add_argument("--viewpoint", default="rainier.paradise-mountain")
+    v0.add_argument(
+        "--plate",
+        type=Path,
+        help="plate folder (default: <data dir>/plates/<viewpoint>/v0.1, the current plate)",
+    )
+    v0.add_argument(
+        "--labels",
+        type=Path,
+        help="labels file (default: the committed snow_globe_eval/labels_rainier_v0_1.json)",
+    )
+    v0.add_argument(
+        "--out",
+        type=Path,
+        help="output folder (default: <data dir>/scores/extractor-v0/<viewpoint>/<UTC stamp>)",
+    )
+    v0.add_argument(
+        "--tau-hi",
+        type=float,
+        help="visible threshold (v0's fixed 0.6); any other value marks the run as overridden, "
+        "and its validation never meets the bar",
+    )
+    v0.add_argument(
+        "--tau-lo",
+        type=float,
+        help="hidden threshold (v0's fixed 0.35); any other value marks the run as overridden",
     )
     return parser
 
@@ -384,6 +419,57 @@ def _data_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def _extractor_v0(args: argparse.Namespace) -> int:
+    from datetime import UTC, datetime
+
+    from snow_globe_common.paths import data_dir
+
+    from .extractor_v0 import V0Params
+    from .extractor_v0_run import DEFAULT_PLATE_VERSION, run, with_thresholds
+
+    root = data_dir()
+    plate = args.plate or root / "plates" / args.viewpoint / DEFAULT_PLATE_VERSION
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    runs = root / "scores" / "extractor-v0" / args.viewpoint
+    out = args.out or runs / stamp
+    if args.out is None and out.exists():
+        raise ValueError(f"{out} exists; runs are never overwritten")
+    params = with_thresholds(V0Params(), tau_hi=args.tau_hi, tau_lo=args.tau_lo)
+    report = run(
+        data_root=root,
+        viewpoint_id=args.viewpoint,
+        plate_dir=plate,
+        labels_path=args.labels,
+        out_dir=out,
+        params=params,
+        run_log=runs / "runs.jsonl",
+    )
+    summary, validation = report["summary"], report["validation"]
+    print(
+        json.dumps(
+            {
+                "out": str(out),
+                "frame_classes": summary["frame_classes"],
+                "daytime_frames": summary["daytime_frames"],
+                "daytime_without_usable_reference": summary["daytime_without_usable_reference"],
+                "band_classes_of_scored_frames": summary["band_classes_of_scored_frames"],
+                "validation_f1_label_partial_excluded": {
+                    b: v["label_partial_excluded"]["f1"] for b, v in validation["bands"].items()
+                },
+                "validation_n": {
+                    b: v["label_partial_excluded"]["n"] for b, v in validation["bands"].items()
+                },
+                "meets_f1_bar": {b: v["meets_f1_bar"] for b, v in validation["bands"].items()},
+                "reference_pool_frames_left_out": validation["reference_pool_frames_left_out"],
+                "thresholds_overridden": validation["thresholds_overridden"],
+                "publishable": validation["publishable"],
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point of the ``snow-globe-eval`` console script."""
     args = _parser().parse_args(argv)
@@ -394,6 +480,8 @@ def main(argv: list[str] | None = None) -> int:
             return _heldout(args)
         if args.command == "data-report":
             return _data_report(args)
+        if args.command == "extractor-v0":
+            return _extractor_v0(args)
         return _ephem_check(args)
     except (ValueError, FileNotFoundError, RuntimeError) as exc:
         print(f"snow-globe-eval {args.command}: {type(exc).__name__}: {exc}", file=sys.stderr)

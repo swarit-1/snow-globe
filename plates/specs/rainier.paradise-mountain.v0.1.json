@@ -1,0 +1,912 @@
+{
+ "kind": "snow-globe.plate-spec",
+ "spec_version": 2,
+ "viewpoint_id": "rainier.paradise-mountain",
+ "plate_version": "v0.1",
+ "supersedes": {
+  "plate_version": "v0",
+  "why": "review fixes of 23 Nov 2026: inputs checked against the committed split's fit bound; star positions moved out of the repo into the data dir's match file, from BSC5 instead of Hipparcos-2, by the committed matcher with its rejected candidates recorded; bands clipped to the observed terrain, their sky margins grown from the observed skyline and given to one band each; each band's skyline checked over every column it owns, with a bar; lens-height sensitivity reported"
+ },
+ "frame_size": [
+  1920,
+  1080
+ ],
+ "time_zone": "America/Los_Angeles",
+ "camera": {
+  "start": {
+   "lat": 46.78455,
+   "lon": -121.74065,
+   "basis": "viewpoint manifest camera position (the Jackson Visitor Center, an assumption; position_uncertainty_m 500)"
+  },
+  "agl_m": 10.0,
+  "agl_basis": "assumed lens height above the DEM ground; a fit that also used the skyline and left it free gave 10.8 m",
+  "position": "solved jointly with the pose (east and north offsets from start)",
+  "agl_sensitivity_m": [
+   3.0,
+   20.0,
+   40.0
+  ]
+ },
+ "dem": {
+  "path": "plates/rainier.paradise-mountain/sources/3dep_bare_earth_10m.tif",
+  "sha256": "9d6d4a8c920b176687e8f8faf66c2d14805f7f47010390b876fb483249f66473",
+  "source": "USGS 3DEP bare-earth DEM via the National Map 3DEPElevation ImageServer exportImage (provenance.json beside it)",
+  "licence": "U.S. public domain",
+  "datum": "heights in metres above NAVD88; used as if ellipsoidal (the geoid term cancels within 20 km)"
+ },
+ "landmarks": [
+  {
+   "name": "Gibraltar Rock",
+   "gnis_id": 1533567,
+   "gnis_class": "Summit",
+   "lat": 46.845766,
+   "lon": -121.745427,
+   "height_from_dem_radius_m": 40.0,
+   "px": [
+    775.0,
+    329.0
+   ],
+   "sigma_px": 4.0,
+   "band": "upper",
+   "marked_on": "frames/rainier.paradise-mountain/2026-11-20/20261120T171659Z_a605f9642f38.jpg",
+   "identified_by": "the dark rock prow right of the summit dome; its GNIS point sits on the rock's top 0.8 deg right of the col where the dome's skyline meets it (DEM skyline profile from the camera), marked at that place on the top edge (5x crop, 20 Nov 17:17Z)",
+   "sources": [
+    {
+     "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+     "used_for": "lat/lon (USGS GNIS, layer 5 Landforms)",
+     "accessed": "2026-11-23"
+    },
+    {
+     "url": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+     "used_for": "height: highest 3DEP bare-earth cell within 40 m of the GNIS point",
+     "accessed": "2026-11-23"
+    }
+   ]
+  },
+  {
+   "name": "Anvil Rock",
+   "gnis_id": 1533536,
+   "gnis_class": "Pillar",
+   "lat": 46.829559,
+   "lon": -121.725943,
+   "height_from_dem_radius_m": 40.0,
+   "px": [
+    1159.0,
+    418.0
+   ],
+   "sigma_px": 3.0,
+   "band": "mid",
+   "marked_on": "frames/rainier.paradise-mountain/2026-11-20/20261120T171659Z_a605f9642f38.jpg",
+   "identified_by": "the sharp snow point at the top of the Muir Snowfield ridge, about 0.8 deg above Little Tahoma as the DEM profile shows; identification confirmed by the star-fixed orientation (5x crop)",
+   "sources": [
+    {
+     "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+     "used_for": "lat/lon (USGS GNIS, layer 5 Landforms)",
+     "accessed": "2026-11-23"
+    },
+    {
+     "url": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+     "used_for": "height: highest 3DEP bare-earth cell within 40 m of the GNIS point",
+     "accessed": "2026-11-23"
+    }
+   ]
+  },
+  {
+   "name": "Little Tahoma Peak",
+   "gnis_id": 1533577,
+   "gnis_class": "Summit",
+   "lat": 46.849428,
+   "lon": -121.711405,
+   "height_from_dem_radius_m": 40.0,
+   "px": [
+    1283.0,
+    437.0
+   ],
+   "sigma_px": 3.0,
+   "band": "upper",
+   "marked_on": "frames/rainier.paradise-mountain/2026-11-20/20261120T171659Z_a605f9642f38.jpg",
+   "identified_by": "the dark rock crag right of Anvil Rock; its top marked (3x crop); identification confirmed by the star-fixed orientation",
+   "sources": [
+    {
+     "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+     "used_for": "lat/lon (USGS GNIS, layer 5 Landforms)",
+     "accessed": "2026-11-23"
+    },
+    {
+     "url": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+     "used_for": "height: highest 3DEP bare-earth cell within 40 m of the GNIS point",
+     "accessed": "2026-11-23"
+    }
+   ]
+  }
+ ],
+ "stars": {
+  "frames": [
+   "frames/rainier.paradise-mountain/2026-11-20/20261120T022001Z_2d4160d6b051.jpg",
+   "frames/rainier.paradise-mountain/2026-11-20/20261120T040903Z_1e4b0431e943.jpg",
+   "frames/rainier.paradise-mountain/2026-11-20/20261120T061803Z_0a689404c8f0.jpg",
+   "frames/rainier.paradise-mountain/2026-11-20/20261120T075203Z_ddab86a36a2d.jpg",
+   "frames/rainier.paradise-mountain/2026-11-20/20261120T094101Z_c7c29e7d9276.jpg",
+   "frames/rainier.paradise-mountain/2026-11-20/20261120T110004Z_12996b961855.jpg",
+   "frames/rainier.paradise-mountain/2026-11-20/20261120T120405Z_56588afd5c14.jpg",
+   "frames/rainier.paradise-mountain/2026-11-20/20261120T130701Z_9cb0199b5318.jpg",
+   "frames/rainier.paradise-mountain/2026-11-20/20261120T140801Z_9b0cefd15134.jpg"
+  ],
+  "catalogue": {
+   "name": "Bright Star Catalogue, 5th Revised Ed. (Hoffleit & Warren 1991), CDS V/50",
+   "where": "read from the owner's local copy by match-stars (--catalogue); its positions are written only to the data dir's match file, never to the repo",
+   "terms": "no licence stated in the catalogue's ReadMe; distributed by NASA's Astronomical Data Center; the owner's Oculus ledger lists it as public. To be confirmed by the owner for this project's licence ledger (PRD §15.4)"
+  },
+  "match_settings": {
+   "vmax": 4.6,
+   "min_alt_deg": 2.0,
+   "passes": [
+    [
+     28,
+     10.0
+    ],
+    [
+     14,
+     8.0
+    ],
+    [
+     8,
+     7.0
+    ],
+    [
+     5,
+     6.0
+    ],
+    [
+     4,
+     6.0
+    ]
+   ],
+   "keep_px": 4.0,
+   "search_box": [
+    480,
+    0,
+    1900,
+    1060
+   ],
+   "sky_margin_px": 8,
+   "noise_box": [
+    600,
+    30,
+    1800,
+    250
+   ],
+   "median_px": 15,
+   "loss_scale_px": 2.0
+  },
+  "file": "plates/rainier.paradise-mountain/sources/stars_bsc5_v0.1.json",
+  "sha256": "5b4a4eb9fcc17475ad924f1de3b7dcebe7d46ead5efc45a7c115f7a221770301"
+ },
+ "initial_pose": {
+  "heading_deg": 2.11,
+  "pitch_deg": 10.0,
+  "roll_deg": 1.69,
+  "hfov_deg": 68.45
+ },
+ "base": {
+  "frames": [
+   "frames/rainier.paradise-mountain/2026-11-21/20261121T182101Z_9e20382a9b38.jpg",
+   "frames/rainier.paradise-mountain/2026-11-21/20261121T183701Z_17af60336701.jpg",
+   "frames/rainier.paradise-mountain/2026-11-21/20261121T175004Z_f265301d3848.jpg"
+  ],
+  "method": "median of the three after registration (zero shift required) and per-channel exposure gains matched on static terrain",
+  "dehazed": false,
+  "candidates_note": "all 105 daytime captures (Sun >= 3 deg, 19-22 Nov 2026) were viewed. Only 21 Nov 17:19-20:28Z offers overcast with the mountain out near midday; 19 Nov had fog and snow until 21:51Z and then broken cloud over the dome; 22 Nov snowed until 23:21Z.",
+  "candidates": [
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T182101Z_9e20382a9b38.jpg",
+    "verdict": "chosen",
+    "reason": "bright overcast, soft even light on the whole mountain; every band visible, the summit dome's skyline distinct up to the big tree; Sun 20.0 deg, 92 min before solar noon"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T183701Z_17af60336701.jpg",
+    "verdict": "chosen",
+    "reason": "bright overcast, soft even light; every band visible including the dome's skyline; Sun 21.0 deg, 76 min before solar noon"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T175004Z_f265301d3848.jpg",
+    "verdict": "chosen",
+    "reason": "overcast with every band visible; the summit slightly brighter (thinner cloud), so the median of three keeps the two softer frames' values where it differs; Sun 17.7 deg, 123 min before solar noon"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T180503Z_a367cbe7c103.jpg",
+    "verdict": "rejected",
+    "reason": "a veil over the top-left of the summit dome: its skyline is indistinct near the big tree (2x and 3x crops)"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T185202Z_514a627357ce.jpg",
+    "verdict": "rejected",
+    "reason": "sun breaking through onto the lower-left face: directional light, not overcast"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T190802Z_1e1611871a1f.jpg",
+    "verdict": "rejected",
+    "reason": "the dome's top-left veiled"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T192502Z_2dc4c70ab349.jpg",
+    "verdict": "rejected",
+    "reason": "the dome's top veiled"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T194101Z_ed656e0516f8.jpg",
+    "verdict": "rejected",
+    "reason": "the dome's skyline faint (veil)"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T195602Z_6ff41c3f999a.jpg",
+    "verdict": "rejected",
+    "reason": "the dome's skyline faint (veil); closest frame to solar noon"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T201201Z_8eb1dcda24dd.jpg",
+    "verdict": "rejected",
+    "reason": "the dome's top faint (veil)"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T171900Z_16bf184b3409.jpg",
+    "verdict": "rejected",
+    "reason": "sunlit summit under broken altostratus: mixed light"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-21/20261121T173302Z_d5dc8e70932e.jpg",
+    "verdict": "rejected",
+    "reason": "summit and Gibraltar sunlit under an overcast deck: mixed light"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-20/20261120T180402Z_21d0ace9e6f2.jpg",
+    "verdict": "rejected",
+    "reason": "clear sky, direct sunlight and shadows (the clear morning of 20 Nov, 15:58-18:51Z, is all direct light); used for geometry instead"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-19/20261119T235758Z_64874cda81ee.jpg",
+    "verdict": "rejected",
+    "reason": "every band visible but the Sun at 3.7 deg (alpenglow), 4 h after solar noon"
+   },
+   {
+    "key": "frames/rainier.paradise-mountain/2026-11-22/20261122T233601Z_4d8f6cf61dbc.jpg",
+    "verdict": "rejected",
+    "reason": "Sun 6.3 deg, direct low light, and a cap cloud over the top-left of the dome"
+   }
+  ]
+ },
+ "geometry_frame": "frames/rainier.paradise-mountain/2026-11-20/20261120T171659Z_a605f9642f38.jpg",
+ "overlay_box": [
+  0,
+  1046,
+  1920,
+  1080
+ ],
+ "skyline_margin_px": 6,
+ "band_registration_bar": {
+  "p90_abs_deg": 1.0,
+  "basis": "PRD §8.5 step 7's 1 deg landmark reprojection bar, applied to each band's DEM skyline against the observed one at the 90th percentile of the columns the band owns (tree tops left out). Chosen as the PRD's own number before this build computed any per-band figure; the reviews' figures for parts of the near band (p90 0.5-1.3 deg) were known then"
+ },
+ "bands": [
+  {
+   "name": "summit",
+   "min_height_m": 4000.0,
+   "description": "the summit dome above 4,000 m (P1's band)"
+  },
+  {
+   "name": "upper",
+   "min_height_m": 3200.0,
+   "max_height_m": 4000.0,
+   "description": "upper mountain: Gibraltar Rock, the upper Nisqually and Cowlitz glaciers, Little Tahoma"
+  },
+  {
+   "name": "mid",
+   "min_height_m": 2400.0,
+   "max_height_m": 3200.0,
+   "description": "mid-slopes: the Muir Snowfield ridge with Anvil Rock, the middle of the face"
+  },
+  {
+   "name": "near",
+   "max_height_m": 2400.0,
+   "min_distance_m": 1500.0,
+   "max_distance_m": 4000.0,
+   "description": "near ridge: the snow ridges 1.5-4 km out right of Little Tahoma (Panorama Point to McClure Rock)"
+  }
+ ],
+ "occluders": [
+  {
+   "name": "big tree and near forest",
+   "how": "the top of dark pixels connected to the DEM's near terrain (< 1.5 km) or the left edge in the base frame (Gaussian 1 px, luma < 0.30), per column, minimum over 7 columns; then edits made by viewing: everything left of x = 470 (the big tree), at most y = 400 for x 470-610 and y = 460 for x 611-720 (thin conifers in front of the lower-left face), a minimum over 41 columns right of x = 1180 (tall trees), 2 px margin; simplified to 1.5 px",
+   "polygon": [
+    [
+     0.0,
+     1080.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     469.0,
+     0.0
+    ],
+    [
+     470.0,
+     232.0
+    ],
+    [
+     476.0,
+     233.0
+    ],
+    [
+     477.0,
+     293.0
+    ],
+    [
+     499.0,
+     287.0
+    ],
+    [
+     505.0,
+     287.0
+    ],
+    [
+     510.0,
+     290.0
+    ],
+    [
+     511.0,
+     398.0
+    ],
+    [
+     610.0,
+     398.0
+    ],
+    [
+     611.0,
+     458.0
+    ],
+    [
+     720.0,
+     458.0
+    ],
+    [
+     721.0,
+     529.0
+    ],
+    [
+     723.0,
+     538.0
+    ],
+    [
+     725.0,
+     507.0
+    ],
+    [
+     730.0,
+     505.0
+    ],
+    [
+     736.0,
+     478.0
+    ],
+    [
+     744.0,
+     478.0
+    ],
+    [
+     746.0,
+     480.0
+    ],
+    [
+     748.0,
+     500.0
+    ],
+    [
+     751.0,
+     501.0
+    ],
+    [
+     752.0,
+     508.0
+    ],
+    [
+     756.0,
+     509.0
+    ],
+    [
+     760.0,
+     515.0
+    ],
+    [
+     766.0,
+     515.0
+    ],
+    [
+     768.0,
+     524.0
+    ],
+    [
+     779.0,
+     525.0
+    ],
+    [
+     780.0,
+     518.0
+    ],
+    [
+     785.0,
+     513.0
+    ],
+    [
+     786.0,
+     495.0
+    ],
+    [
+     788.0,
+     492.0
+    ],
+    [
+     794.0,
+     491.0
+    ],
+    [
+     796.0,
+     475.0
+    ],
+    [
+     804.0,
+     477.0
+    ],
+    [
+     816.0,
+     476.0
+    ],
+    [
+     819.0,
+     483.0
+    ],
+    [
+     821.0,
+     480.0
+    ],
+    [
+     836.0,
+     477.0
+    ],
+    [
+     838.0,
+     444.0
+    ],
+    [
+     845.0,
+     444.0
+    ],
+    [
+     847.0,
+     446.0
+    ],
+    [
+     849.0,
+     470.0
+    ],
+    [
+     853.0,
+     445.0
+    ],
+    [
+     863.0,
+     443.0
+    ],
+    [
+     871.0,
+     462.0
+    ],
+    [
+     872.0,
+     446.0
+    ],
+    [
+     880.0,
+     443.0
+    ],
+    [
+     883.0,
+     439.0
+    ],
+    [
+     889.0,
+     439.0
+    ],
+    [
+     893.0,
+     417.0
+    ],
+    [
+     900.0,
+     417.0
+    ],
+    [
+     911.0,
+     431.0
+    ],
+    [
+     915.0,
+     419.0
+    ],
+    [
+     928.0,
+     418.0
+    ],
+    [
+     930.0,
+     425.0
+    ],
+    [
+     938.0,
+     423.0
+    ],
+    [
+     943.0,
+     428.0
+    ],
+    [
+     945.0,
+     434.0
+    ],
+    [
+     953.0,
+     418.0
+    ],
+    [
+     959.0,
+     418.0
+    ],
+    [
+     965.0,
+     430.0
+    ],
+    [
+     969.0,
+     424.0
+    ],
+    [
+     972.0,
+     424.0
+    ],
+    [
+     977.0,
+     413.0
+    ],
+    [
+     983.0,
+     413.0
+    ],
+    [
+     988.0,
+     418.0
+    ],
+    [
+     1000.0,
+     418.0
+    ],
+    [
+     1002.0,
+     429.0
+    ],
+    [
+     1007.0,
+     434.0
+    ],
+    [
+     1009.0,
+     419.0
+    ],
+    [
+     1012.0,
+     416.0
+    ],
+    [
+     1019.0,
+     416.0
+    ],
+    [
+     1024.0,
+     426.0
+    ],
+    [
+     1028.0,
+     428.0
+    ],
+    [
+     1029.0,
+     420.0
+    ],
+    [
+     1036.0,
+     419.0
+    ],
+    [
+     1039.0,
+     423.0
+    ],
+    [
+     1041.0,
+     442.0
+    ],
+    [
+     1044.0,
+     443.0
+    ],
+    [
+     1047.0,
+     454.0
+    ],
+    [
+     1057.0,
+     456.0
+    ],
+    [
+     1061.0,
+     464.0
+    ],
+    [
+     1063.0,
+     460.0
+    ],
+    [
+     1081.0,
+     459.0
+    ],
+    [
+     1084.0,
+     462.0
+    ],
+    [
+     1093.0,
+     464.0
+    ],
+    [
+     1098.0,
+     471.0
+    ],
+    [
+     1106.0,
+     471.0
+    ],
+    [
+     1110.0,
+     478.0
+    ],
+    [
+     1121.0,
+     486.0
+    ],
+    [
+     1122.0,
+     535.0
+    ],
+    [
+     1132.0,
+     533.0
+    ],
+    [
+     1133.0,
+     493.0
+    ],
+    [
+     1140.0,
+     492.0
+    ],
+    [
+     1142.0,
+     494.0
+    ],
+    [
+     1143.0,
+     533.0
+    ],
+    [
+     1144.0,
+     526.0
+    ],
+    [
+     1151.0,
+     525.0
+    ],
+    [
+     1152.0,
+     492.0
+    ],
+    [
+     1159.0,
+     491.0
+    ],
+    [
+     1162.0,
+     496.0
+    ],
+    [
+     1176.0,
+     498.0
+    ],
+    [
+     1179.0,
+     501.0
+    ],
+    [
+     1180.0,
+     465.0
+    ],
+    [
+     1192.0,
+     462.0
+    ],
+    [
+     1238.0,
+     462.0
+    ],
+    [
+     1241.0,
+     470.0
+    ],
+    [
+     1305.0,
+     471.0
+    ],
+    [
+     1307.0,
+     465.0
+    ],
+    [
+     1315.0,
+     465.0
+    ],
+    [
+     1317.0,
+     457.0
+    ],
+    [
+     1363.0,
+     457.0
+    ],
+    [
+     1368.0,
+     459.0
+    ],
+    [
+     1373.0,
+     473.0
+    ],
+    [
+     1415.0,
+     473.0
+    ],
+    [
+     1420.0,
+     481.0
+    ],
+    [
+     1424.0,
+     496.0
+    ],
+    [
+     1444.0,
+     496.0
+    ],
+    [
+     1446.0,
+     470.0
+    ],
+    [
+     1536.0,
+     469.0
+    ],
+    [
+     1541.0,
+     491.0
+    ],
+    [
+     1563.0,
+     492.0
+    ],
+    [
+     1567.0,
+     503.0
+    ],
+    [
+     1601.0,
+     506.0
+    ],
+    [
+     1603.0,
+     488.0
+    ],
+    [
+     1637.0,
+     487.0
+    ],
+    [
+     1639.0,
+     471.0
+    ],
+    [
+     1685.0,
+     471.0
+    ],
+    [
+     1688.0,
+     477.0
+    ],
+    [
+     1693.0,
+     478.0
+    ],
+    [
+     1695.0,
+     488.0
+    ],
+    [
+     1726.0,
+     488.0
+    ],
+    [
+     1730.0,
+     491.0
+    ],
+    [
+     1731.0,
+     497.0
+    ],
+    [
+     1745.0,
+     497.0
+    ],
+    [
+     1748.0,
+     484.0
+    ],
+    [
+     1795.0,
+     484.0
+    ],
+    [
+     1797.0,
+     486.0
+    ],
+    [
+     1828.0,
+     486.0
+    ],
+    [
+     1831.0,
+     489.0
+    ],
+    [
+     1853.0,
+     489.0
+    ],
+    [
+     1855.0,
+     455.0
+    ],
+    [
+     1901.0,
+     455.0
+    ],
+    [
+     1909.0,
+     466.0
+    ],
+    [
+     1919.0,
+     495.0
+    ],
+    [
+     1920.0,
+     1080.0
+    ]
+   ]
+  }
+ ]
+}

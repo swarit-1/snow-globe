@@ -1,0 +1,142 @@
+{
+  "kind": "snow-globe.manifest-proposal",
+  "viewpoint_id": "rainier.paradise-mountain",
+  "for": "viewpoints/manifests/rainier.paradise-mountain.json: the lead's call; nothing here is applied",
+  "from_plate": "plates/specs/rainier.paradise-mountain.v0.1.json, built to <data dir>/plates/rainier.paradise-mountain/v0.1/plate.json",
+  "landmarks_append": {
+    "where": "after the summit, which stays landmarks[0]: eval's backtest pair and SceneSpec read landmarks[0]",
+    "band_names": "the plate's: upper (3,200-4,000 m) and mid (2,400-3,200 m). The schema's band enum has mid but no upper; add 'upper' to viewpoints/schema/viewpoint.schema.json in the same commit, or these entries do not validate",
+    "same_commit": "workers/forecast/tests/test_points.py::test_rainier_points: the landmark count goes from 1 to 4, and Rainier's forecast files gain three landmark points from the next snapshot",
+    "landmarks": [
+      {
+        "name": "Gibraltar Rock",
+        "lat": 46.845766,
+        "lon": -121.745427,
+        "height_m": 3863,
+        "distance_km": 6.82,
+        "azimuth_deg": 356.9,
+        "band": "upper",
+        "px": [
+          775.0,
+          329.0
+        ],
+        "sources": [
+          {
+            "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+            "used_for": "lat/lon: GNIS 1533567 'Gibraltar Rock' (Summit), layer 5 Landforms",
+            "accessed": "2026-11-23"
+          },
+          {
+            "url": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+            "used_for": "height: highest USGS 3DEP bare-earth cell within 40 m of the GNIS point (10 m export, metres above NAVD88)",
+            "accessed": "2026-11-23"
+          },
+          {
+            "url": "https://www.nps.gov/webcams-mora/mountain.jpg",
+            "used_for": "px: marked by viewing the capture of 2026-11-20 17:16:59Z (1920x1080); identification checked against the 3DEP skyline and a star-fixed orientation (plates/specs/rainier.paradise-mountain.v0.1.json)",
+            "accessed": "2026-11-20",
+            "note": "distance_km and azimuth_deg are from this manifest's camera position; from the camera position solved for plate v0.1 they are 6.47 km and 354.3 deg"
+          }
+        ]
+      },
+      {
+        "name": "Anvil Rock",
+        "lat": 46.829559,
+        "lon": -121.725943,
+        "height_m": 2919,
+        "distance_km": 5.13,
+        "azimuth_deg": 12.6,
+        "band": "mid",
+        "px": [
+          1159.0,
+          418.0
+        ],
+        "sources": [
+          {
+            "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+            "used_for": "lat/lon: GNIS 1533536 'Anvil Rock' (Pillar), layer 5 Landforms",
+            "accessed": "2026-11-23"
+          },
+          {
+            "url": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+            "used_for": "height: highest USGS 3DEP bare-earth cell within 40 m of the GNIS point (10 m export, metres above NAVD88)",
+            "accessed": "2026-11-23"
+          },
+          {
+            "url": "https://www.nps.gov/webcams-mora/mountain.jpg",
+            "used_for": "px: marked by viewing the capture of 2026-11-20 17:16:59Z (1920x1080); identification checked against the 3DEP skyline and a star-fixed orientation (plates/specs/rainier.paradise-mountain.v0.1.json)",
+            "accessed": "2026-11-20",
+            "note": "distance_km and azimuth_deg are from this manifest's camera position; from the camera position solved for plate v0.1 they are 4.72 km and 10.3 deg"
+          }
+        ]
+      },
+      {
+        "name": "Little Tahoma Peak",
+        "lat": 46.849428,
+        "lon": -121.711405,
+        "height_m": 3384,
+        "distance_km": 7.55,
+        "azimuth_deg": 17.1,
+        "band": "upper",
+        "px": [
+          1283.0,
+          437.0
+        ],
+        "sources": [
+          {
+            "url": "https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer",
+            "used_for": "lat/lon: GNIS 1533577 'Little Tahoma Peak' (Summit), layer 5 Landforms",
+            "accessed": "2026-11-23"
+          },
+          {
+            "url": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+            "used_for": "height: highest USGS 3DEP bare-earth cell within 40 m of the GNIS point (10 m export, metres above NAVD88)",
+            "accessed": "2026-11-23"
+          },
+          {
+            "url": "https://www.nps.gov/webcams-mora/mountain.jpg",
+            "used_for": "px: marked by viewing the capture of 2026-11-20 17:16:59Z (1920x1080); identification checked against the 3DEP skyline and a star-fixed orientation (plates/specs/rainier.paradise-mountain.v0.1.json)",
+            "accessed": "2026-11-20",
+            "note": "distance_km and azimuth_deg are from this manifest's camera position; from the camera position solved for plate v0.1 they are 7.12 km and 15.9 deg"
+          }
+        ]
+      }
+    ]
+  },
+  "camera": {
+    "keep": "view_azimuth_deg stays the bearing to the summit (its view_azimuth_source): the forecast worker lays its view-ray sample points along it (workers/forecast/src/snow_globe_forecast/points.py), and the solved optical heading belongs in pose.heading_deg",
+    "if_the_solved_position_is_adopted": {
+      "lat": 46.78783,
+      "lon": -121.73704,
+      "elevation_m": 1688,
+      "elevation_note": "USGS 3DEP ground under the solved position; the plate assumes the lens 10 m above it (1697.95 m); the mount is unidentified",
+      "view_azimuth_deg": 346.2,
+      "view_azimuth_source": "computed: initial great-circle bearing from the plate v0.1 camera position to the GNIS Mount Rainier summit point",
+      "position_uncertainty_m": 200,
+      "position_uncertainty_basis": "the solve moves 60 m north between an assumed lens height of 3 m and 40 m (plate.json pose_check.agl_sensitivity), and the near ridge 1.8-3.3 km out fits only from a position about 170 m further south (plates/README.md, 'Near field'), which the stars and far landmarks reject; 200 m covers both",
+      "every_landmark": "distance_km and azimuth_deg must be recomputed with the camera (the loader checks bearings to 0.5 deg): the summit becomes 7.44 km at 346.2 deg"
+    }
+  },
+  "pose": {
+    "heading_deg": 2.137,
+    "pitch_deg": 9.9936,
+    "roll_deg": 1.6426,
+    "fov_deg": 68.5637,
+    "pose_rms_px": 1.6,
+    "pose_check_deg": 0.28,
+    "pose_check_method": "gnis-landmarks+stars: landmark reprojection is a fit residual (the camera position is fitted to the three landmarks); the independent check is the DEM skyline per band (summit p90 0.41 deg, upper 0.37, mid 0.16; near 1.22, over its 1 deg bar)",
+    "note": "fov_deg is the horizontal FOV, the renderer's hfov; pose_rms_px is the stars' median residual"
+  },
+  "plate": {
+    "version": 1,
+    "version_note": "the schema wants an integer: plate v0.1 would be version 1 here unless the schema takes the builder's plate_version string",
+    "base": "plates/rainier.paradise-mountain/v0.1/base.png",
+    "sky_mask": "plates/rainier.paradise-mountain/v0.1/sky.png",
+    "landmark_bands": "plates/rainier.paradise-mountain/v0.1/bands.png",
+    "dem": {
+      "source": "USGS 3DEP bare-earth DEM, 10 m, via the National Map 3DEPElevation ImageServer exportImage (23 Nov 2026)",
+      "licence": "U.S. public domain",
+      "datum": "heights in metres above NAVD88"
+    }
+  }
+}

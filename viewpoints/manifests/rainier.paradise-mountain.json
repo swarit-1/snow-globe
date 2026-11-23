@@ -108,6 +108,12 @@
           "used_for": "height: official 14,410 ft (4,392 m), USGS 1956 survey",
           "accessed": "2026-11-19",
           "note": "USGS 3DEP gives 4391.4 m at this point; a 2024 independent GNSS survey found Columbia Crest 21.8 ft lower than in 1998 and the SW rim now highest (14,406.2 ft NAVD88). Irrelevant at pixel scale from 7.7 km."
+        },
+        {
+          "url": "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+          "used_for": "visibility from this camera: a ray cast through the USGS 3DEP bare-earth DEM (10 m) toward the highest DEM cell within 40 m of this point (4392.2 m)",
+          "accessed": "2026-11-23",
+          "note": "Columbia Crest is not visible from this camera: the summit dome's nearer slope rises above the line of sight from about 0.9 km in front of the crest, by up to 0.47 deg 225 m in front of it, seen from the camera position solved for plate v0.1 (46.78783, -121.73704, lens about 1698 m); from this manifest's camera position it is hidden by 0.43 deg. So px stays null, and P1's summit band is the visible dome above 4,000 m (plates/specs/rainier.paradise-mountain.v0.1.json)."
         }
       ]
     }

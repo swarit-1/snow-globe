@@ -1,0 +1,51 @@
+[project]
+name = "snow-globe-plates"
+version = "0.1.0"
+description = "Snow Globe plate builder: base frame, pose from landmarks and stars, landmark-band masks (PRD 8.5)."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "snow-globe-common",
+    # The committed held-out split and its guard live in eval (frame_file_verdict): a plate is
+    # a fitted asset (PRD §13.9), so its inputs are checked by that one implementation.
+    "snow-globe-eval",
+    "numpy>=2.1",
+    "pillow>=11.0",
+    "scipy>=1.14",
+]
+
+[project.scripts]
+snow-globe-plates = "snow_globe_plates.cli:main"
+
+[tool.uv.sources]
+snow-globe-common = { path = "../workers/common", editable = true }
+snow-globe-eval = { path = "../eval", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.9",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.6,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Import from source even when macOS hides the editable-install .pth files (CLAUDE.md "Python").
+pythonpath = ["src", "../workers/common/src", "../eval/src"]
+addopts = "-m 'not network' --strict-markers"
+markers = [
+    "network: touches the network; excluded by default (run with -m network)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+# Docstrings use the PRD's own symbols (minus sign, en dash, times, degree).
+allowed-confusables = ["−", "–", "×", "′"]

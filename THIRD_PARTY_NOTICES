@@ -82,12 +82,28 @@ NOAA High-Resolution Rapid Refresh (HRRR), s3://noaa-hrrr-bdp-pds (AWS)
           Data Dissemination (NODD) on AWS.
   Duty:   credit "Forecast data: NOAA HRRR via NOAA Open Data Dissemination".
 
-US government geographic facts used in viewpoints/manifests/
+US government geographic facts used in viewpoints/manifests/ and plates/specs/
   USGS 3DEP elevations (Elevation Point Query Service), USGS GNIS place
   coordinates, the NPS ARD webcams feature layer (ArcGIS), and EPA AirNow and
   CASTNET site coordinates.
   Basis:  US government works, public domain. Only coordinates and heights
-          are used; each manifest lists its sources with access dates.
+          are used; each manifest and plate spec lists its sources with access
+          dates.
+
+USGS 3DEP bare-earth elevation model (raster), used by plates/
+  A subset exported as a float32 GeoTIFF by the National Map's
+  3DEPElevation ImageServer (exportImage), for the plate builder's skyline,
+  ray cast and landmark-band masks (PRD §8.5).
+  Basis:  US government work, public domain.
+  Status: the subsets stay in the data dir; the plate manifest records each
+          request and its SHA-256. None is in this repository.
+
+Bright Star Catalogue, 5th revised edition (Hoffleit & Warren 1991; CDS V/50)
+  Read by plates/ (starmatch.py) from the owner's own local copy, to match
+  stars in night frames for the camera pose (PRD §8.5).
+  Status: its terms of use are still to be confirmed by the owner. Nothing of
+          the catalogue is in this repository; the match files, which hold
+          catalogue positions, stay in the data dir.
 
 Other cited sources in the manifests
   TopoQuest and Wikipedia are cited for single facts (a GNIS id, a summit
@@ -133,6 +149,7 @@ Jean Meeus, Astronomical Algorithms (2nd ed.)
 
 Astronomical Almanac low-precision Moon formulas
   Cited; used only in the app/core tests (tests/moon_vs_almanac.rs).
+
 Hillaire 2020 sky and atmosphere, ported from sebh/UnrealEngineSkyAtmosphere
 (S. Hillaire, "A Scalable and Production Ready Sky and Atmosphere Rendering
 Technique", Computer Graphics Forum 39(4), 2020)
@@ -267,9 +284,10 @@ Planned, not in the code yet
     each package's METADATA states them (License-Expression, else License),
     or its licence file where the METADATA names none. Third-party packages
     in each closure: common 14, capture 21, forecast 28, eval 16 (17 with its
-    default "oculus" group; its optional "forecast" group adds forecast's).
+    default "oculus" group; its optional "forecast" group adds forecast's),
+    plates 16 (eval's groups do not carry over to it).
 
-    In all four closures (common, capture, forecast and eval):
+    In all five closures (common, capture, forecast, eval and plates):
       anyio                      4.16.0       MIT
       attrs                      26.1.0       MIT
       certifi                    2026.10.23   MPL-2.0 (the CA bundle httpx uses)
@@ -300,10 +318,12 @@ Planned, not in the code yet
       eckitlib                   2.5.0.34     Apache-2.0
       findlibs                   0.1.5        Apache-2.0
       numpy                      2.5.5        BSD-3-Clause AND 0BSD AND MIT AND
-                                              Zlib AND CC0-1.0 (in eval too)
+                                              Zlib AND CC0-1.0 (in eval and
+                                              plates too)
       pycparser                  3.12         BSD-3-Clause
-    Also in eval, besides numpy:
+    Also in eval and plates, besides numpy:
       scipy                      1.18.1       BSD-3-Clause
+    Also in eval only:
       oculus-core-py             0.1.0        MIT (the default "oculus" group)
 
 4f. Native libraries bundled inside the wheels (the macOS arm64 builds
@@ -325,7 +345,7 @@ Planned, not in the code yet
     scipy 1.18.1, scipy/.dylibs (3 files): the GCC runtime, libgfortran 5
       and libgcc_s (GPL-3.0-or-later WITH GCC-exception-3.1), and
       libquadmath (LGPL-2.1-or-later). Licence texts: the wheel's
-      scipy-1.18.1.dist-info/LICENSE.txt. Only eval installs scipy.
+      scipy-1.18.1.dist-info/LICENSE.txt. Only eval and plates install scipy.
 
     eccodeslib 2.50.0.34, eccodeslib/lib: libaec, OpenJPEG 2.5.2 and
       libpng 1.6.55. eckitlib 2.5.0.34, eckitlib/.dylibs: LZ4 1.10.0, PROJ
@@ -341,6 +361,16 @@ Planned, not in the code yet
       Apple's Accelerate). Its licence file names OpenBLAS, LAPACK and the
       GCC runtime for the builds that bundle them, such as the Linux wheel
       in the Lambda image (section 7).
+
+4g. plates: snow-globe-plates 0.1.0 (declares MIT; the plate builder, not
+    shipped: its plates are data in the data dir)
+    snow-globe-common  0.2.0    this repository
+    snow-globe-eval    0.2.0    this repository (its held-out guard,
+                                frame_file_verdict)
+    numpy              2.5.5    as above
+    pillow             13.0.0   MIT-CMU
+    scipy              1.18.1   BSD-3-Clause
+    Development only: pytest, ruff (as above).
 
 
 5. NODE (renderer/package.json: @snow-globe/renderer, private)

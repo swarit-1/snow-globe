@@ -8,7 +8,9 @@ Gate                    Test here                                               
 ======================  ============================================================  ==========
 ``fresh``               NPS image time, HTTP ``Last-Modified`` and SHA-256 all differ  done
                         from the previous capture (sidecar fields)
-``same_view``           registration against the plate                                TODO(M2)
+``same_view``           registration against the plate (:mod:`.registration`)         v0 when a
+                        within a tolerance, when the caller measured it; else not     shift is
+                        checked                                                       given
 ``clear_lens``          sharpness above a per-viewpoint floor; reported with and      TODO(M2)
                         without iced-lens exclusions
 ``colour_mode``         snow-globe-common ``chroma_spread`` above a cut-off (monochrome  cut-off
@@ -44,6 +46,7 @@ from snow_globe_common.timeutil import parse_iso_utc
 
 from .daylight import P1_MIN_SUN_ALT_DEG, sun_altitude_deg
 from .ephemeris import EphemerisBackend
+from .registration import Shift
 
 __all__ = [
     "CAPTURE_FAULT_FLAGS",
@@ -176,9 +179,33 @@ def fresh_gate(current: Mapping[str, Any], previous: Mapping[str, Any] | None) -
     return GateResult("fresh", True, f"compared {', '.join(compared)}{note}")
 
 
-def same_view_gate() -> GateResult:
-    """Same view (PRD §8.6): registration against the plate. Not implemented yet."""
-    return GateResult("same_view", None, "TODO(M2): registration against the plate (§8.5)")
+def same_view_gate(
+    shift: Shift | None = None,
+    *,
+    tolerance_px: float | None = None,
+    min_ncc: float | None = None,
+) -> GateResult:
+    """Same view (PRD §8.6): registration against the plate, within a tolerance.
+
+    ``shift`` is :func:`.registration.estimate_shift` of the plate's base frame onto this
+    frame. Without a shift or a tolerance the gate is not checked (TODO(M2): the tolerance
+    fitted per viewpoint, sub-pixel registration and rotation). A shift whose best NCC is
+    below ``min_ncc`` (a frame with too little structure to register, such as fog or falling
+    snow) is not checked either: its shift is noise, not a moved camera.
+    """
+    if shift is None or tolerance_px is None:
+        return GateResult("same_view", None, "TODO(M2): registration against the plate (§8.5)")
+    if min_ncc is not None and shift.ncc < min_ncc:
+        return GateResult(
+            "same_view",
+            None,
+            f"registration inconclusive: NCC {shift.ncc:.2f} < {min_ncc:g} (too little structure)",
+        )
+    moved = max(abs(shift.dx_px), abs(shift.dy_px))
+    reason = f"shift ({shift.dx_px:+g}, {shift.dy_px:+g}) px, NCC {shift.ncc:.2f}"
+    if moved > tolerance_px:
+        return GateResult("same_view", False, f"{reason}: beyond {tolerance_px:g} px")
+    return GateResult("same_view", True, f"{reason}: within {tolerance_px:g} px")
 
 
 def clear_lens_gate() -> GateResult:
@@ -258,14 +285,23 @@ def frame_gates(
     min_sun_alt_deg: float = P1_MIN_SUN_ALT_DEG,
     refracted: bool = False,
     ephemeris: EphemerisBackend | None = None,
+    view_shift: Shift | None = None,
+    same_view_tolerance_px: float | None = None,
+    same_view_min_ncc: float | None = None,
 ) -> FrameGates:
-    """Apply every §8.6 gate to one frame (see the module docstring for what each checks)."""
+    """Apply every §8.6 gate to one frame (see the module docstring for what each checks).
+
+    Same view is checked only when the caller passes the frame's registration against the
+    plate (``view_shift``) and a tolerance; otherwise it is reported as not checked.
+    """
     side = dict(sidecar or {})
     chroma = side.get("chroma_spread")
     return FrameGates(
         (
             fresh_gate(side, previous_sidecar) if side else GateResult("fresh", None, "no sidecar"),
-            same_view_gate(),
+            same_view_gate(
+                view_shift, tolerance_px=same_view_tolerance_px, min_ncc=same_view_min_ncc
+            ),
             clear_lens_gate(),
             colour_mode_gate(
                 None if chroma is None else float(chroma), max_chroma_spread=max_chroma_spread

@@ -18,8 +18,10 @@ from snow_globe_eval.gates import (
     exclusion_counts,
     frame_gates,
     fresh_gate,
+    same_view_gate,
     usable_frame_gate,
 )
+from snow_globe_eval.registration import Shift
 from snow_globe_eval.scores import contingency
 
 VP = load_manifest("rainier.paradise-mountain")
@@ -92,6 +94,30 @@ def test_frame_gates_name_what_was_not_checked() -> None:
     assert night.result("colour_mode").passed is True
     with pytest.raises(ValueError, match="one result per gate"):
         FrameGates((GateResult("daylight", True),))
+
+
+def _shift(dx: float, dy: float, ncc: float) -> Shift:
+    return Shift(dx, dy, dx / 960, dy / 540, 1.0, ncc, 0.1, 0.5, 960, (0, 0, 1, 1), (1.0,))
+
+
+def test_same_view_gate_with_a_measured_shift() -> None:
+    assert same_view_gate().passed is None
+    assert same_view_gate(_shift(0, 0, 0.9)).passed is None  # no tolerance: not checked
+    ok = same_view_gate(_shift(-2.0, 0.0, 0.8), tolerance_px=4.0, min_ncc=0.3)
+    assert ok.passed is True and "within 4 px" in ok.reason
+    moved = same_view_gate(_shift(51.0, -30.0, 0.45), tolerance_px=4.0, min_ncc=0.3)
+    assert moved.passed is False and "beyond 4 px" in moved.reason
+    fog = same_view_gate(_shift(40.0, 12.0, 0.05), tolerance_px=4.0, min_ncc=0.3)
+    assert fog.passed is None and "inconclusive" in fog.reason
+    gates = frame_gates(
+        viewpoint=VP,
+        image_time=T,
+        ephemeris=FixedEphemeris(20.0),
+        view_shift=_shift(51.0, -30.0, 0.45),
+        same_view_tolerance_px=4.0,
+        same_view_min_ncc=0.3,
+    )
+    assert gates.excluded_by == ("same_view",) and "same_view" not in gates.not_checked
 
 
 def test_exclusions_feed_the_scores_mask_and_are_counted() -> None:
