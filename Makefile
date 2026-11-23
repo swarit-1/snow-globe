@@ -86,10 +86,13 @@ DIR_common := workers/common
 DIR_capture := workers/capture
 DIR_forecast := workers/forecast
 DIR_eval := eval
+DIR_plates := plates
 PYPATH_common := src
 PYPATH_capture := src:../common/src
 PYPATH_forecast := src:../common/src
 PYPATH_eval := src:../workers/common/src
+# plates imports eval's held-out guard (frame_file_verdict), so eval's sources are on its path too.
+PYPATH_plates := src:../workers/common/src:../eval/src
 
 PYTEST_ARGS ?= -q -m "not network"
 # Its -m replaces a project's own -m in addopts. So capture's `slow` schedule tests (3 days each of
@@ -105,7 +108,7 @@ OFFLINE_ENV ?= HTTP_PROXY=$(DEAD_PROXY) HTTPS_PROXY=$(DEAD_PROXY) ALL_PROXY=$(DE
 # The suites `make test` runs, in order; each is `make test-<name>`. Override it to run fewer,
 # e.g. make test TEST_SUITES='docs bench'. CI runs each as its own `make test-<name>`, except the
 # LAPTOP_ONLY_SUITES: speech needs macOS 26 and Xcode 26.2, and CI has no macOS job (ci.yml).
-TEST_SUITES ?= common capture forecast eval renderer rust speech infra docs bench
+TEST_SUITES ?= common capture forecast eval plates renderer overlay rust speech infra docs bench
 LAPTOP_ONLY_SUITES := speech
 
 # How infra/test.sh installs the Terraform provider (SNOW_GLOBE_TF_INIT, infra/tf_providers.sh): auto
@@ -166,6 +169,8 @@ BENCH_CHECKS = rc=0; \
 	$(UV) run --no-sync python -I -B -m unittest discover -s $(BENCH_DIR)/utterances \
 		-t $(BENCH_DIR)/utterances -p 'test_*.py' || rc=1; \
 	$(UV) run --no-sync python -I -B $(BENCH_DIR)/utterances/check.py --no-parser || rc=1; \
+	$(UV) run --no-sync python -I -B -m unittest discover -s $(BENCH_DIR)/replay \
+		-t $(BENCH_DIR)/replay -p 'test_*.py' || rc=1; \
 	$(UV) run --no-sync ruff check --no-cache $(BENCH_DIR) || rc=1; \
 	$(UV) run --no-sync ruff format --check --no-cache $(BENCH_DIR) || rc=1; \
 	exit $$rc
@@ -222,8 +227,8 @@ EPHEM_ARGS ?=
 DATA_REPORT_ARGS ?=
 BENCH_ROUNDS ?=
 
-.PHONY: help test test-py test-common viewpoints-check test-capture test-forecast test-eval \
-	test-renderer test-rust test-speech test-infra infra-providers test-docs docs-check test-bench bench-script \
+.PHONY: help test test-py test-common viewpoints-check test-capture test-forecast test-eval test-plates \
+	test-renderer test-overlay test-rust test-speech test-infra infra-providers test-docs docs-check test-bench bench-script \
 	lint fmt-check \
 	bench bench-parse bench-renderer backtest score ephem-check data-report \
 	capture-status capture-once capture-loop archive-check \
@@ -265,11 +270,18 @@ test-forecast: ## workers/forecast: uv sync --locked, ruff check + format --chec
 test-eval: ## eval: uv sync --locked (builds oculus-core), ruff check + format --check, pytest; Node 24 for the contract
 	$(call py_suite,eval)
 
-test-py: test-common test-capture test-forecast test-eval ## The four Python suites (stops at the first failure)
+test-plates: ## plates: uv sync --locked, ruff check + format --check, pytest (synthetic scenes; eval's sources on the path)
+	$(call py_suite,plates)
+
+test-py: test-common test-capture test-forecast test-eval test-plates ## The five Python suites (stops at the first failure)
 
 test-renderer: ## renderer: pnpm install --frozen-lockfile, then tsc + vitest (unit + headless SwiftShader)
 	@echo "== renderer: pnpm install --frozen-lockfile, pnpm test"
 	@cd renderer && $(PNPM) install --frozen-lockfile --prefer-offline && $(PNPM) test
+
+test-overlay: ## app/src overlay: pnpm install --frozen-lockfile, then tsc + vitest (unit + headless Chromium key-mash stress)
+	@echo "== app/src overlay: pnpm install --frozen-lockfile, pnpm test"
+	@cd app/src && $(PNPM) install --frozen-lockfile --prefer-offline && $(PNPM) test
 
 test-rust: ## app: cargo test --workspace, clippy -D warnings, fmt --check (target dir outside iCloud)
 	@echo "== app: cargo test, clippy -D warnings, fmt --check (CARGO_TARGET_DIR=$(CARGO_TARGET_DIR))"
@@ -318,8 +330,8 @@ test-docs: ## docs-check, then ruff check + format --check of docs/checks (worke
 	$(UV) run --no-sync ruff format --check --no-cache $(DOCS_CHECKS_DIR) || rc=1; \
 	exit $$rc
 
-test-bench: ## bench/: utterance-script tests, check.py --no-parser, ruff check + format --check (stdlib, no audio)
-	@echo "== bench: unittest, check.py --no-parser, ruff check, ruff format --check (Python and ruff of workers/common)"
+test-bench: ## bench/: utterance-script tests, check.py --no-parser, replay-scorer tests, ruff check + format --check (stdlib, no audio)
+	@echo "== bench: unittest, check.py --no-parser, replay unittest, ruff check, ruff format --check (Python and ruff of workers/common)"
 	@cd $(DIR_common) || exit 1; \
 	$(UV) sync --locked || exit 1; \
 	$(BENCH_CHECKS)
@@ -423,9 +435,9 @@ forecast-tick: ## NETWORK (NOAA S3): snow-globe-forecast tick, one call of the f
 # checks them, each with its own ruff.toml (--no-cache: nothing written into the iCloud-synced tree).
 RUFF_EXTRA_DIRS := bench infra/cost docs/checks
 
-lint: ## ruff check (+ bench/, infra/cost/, docs/checks/), cargo clippy -D warnings, renderer tsc, terraform fmt -check, actionlint
+lint: ## ruff check (+ bench/, infra/cost/, docs/checks/), cargo clippy -D warnings, renderer and overlay tsc, terraform fmt -check, actionlint
 	@rc=0; \
-	for d in $(DIR_common) $(DIR_capture) $(DIR_forecast) $(DIR_eval); do \
+	for d in $(DIR_common) $(DIR_capture) $(DIR_forecast) $(DIR_eval) $(DIR_plates); do \
 		echo "== $$d: ruff check"; (cd $$d && $(UV) run --locked ruff check .) || rc=1; \
 	done; \
 	for d in $(RUFF_EXTRA_DIRS); do \
@@ -434,14 +446,15 @@ lint: ## ruff check (+ bench/, infra/cost/, docs/checks/), cargo clippy -D warni
 	done; \
 	echo "== app: cargo clippy -D warnings"; (cd app && $(CARGO) clippy --workspace --all-targets -- -D warnings) || rc=1; \
 	echo "== renderer: tsc"; (cd renderer && $(PNPM) run typecheck) || rc=1; \
+	echo "== app/src overlay: tsc"; (cd app/src && $(PNPM) run typecheck) || rc=1; \
 	echo "== infra: terraform fmt -check"; $(TERRAFORM) -chdir=infra/terraform fmt -check -recursive || rc=1; \
 	if command -v actionlint >/dev/null 2>&1; then echo "== actionlint"; actionlint .github/workflows/ci.yml || rc=1; \
 	else echo "-- actionlint not installed, skipped"; fi; \
 	exit $$rc
 
-fmt-check: ## ruff format --check (+ bench/, infra/cost/, docs/checks/), cargo fmt --check, terraform fmt -check; renderer has none
+fmt-check: ## ruff format --check (+ bench/, infra/cost/, docs/checks/), cargo fmt --check, terraform fmt -check; renderer and overlay have none
 	@rc=0; \
-	for d in $(DIR_common) $(DIR_capture) $(DIR_forecast) $(DIR_eval); do \
+	for d in $(DIR_common) $(DIR_capture) $(DIR_forecast) $(DIR_eval) $(DIR_plates); do \
 		echo "== $$d: ruff format --check"; (cd $$d && $(UV) run --locked ruff format --check .) || rc=1; \
 	done; \
 	for d in $(RUFF_EXTRA_DIRS); do \

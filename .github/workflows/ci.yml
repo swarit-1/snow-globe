@@ -27,7 +27,9 @@
 #     apply. On the laptop the init installs the AWS provider from the plugin cache with no network
 #     (infra/tf_providers.sh). The committed lock files hold the darwin_arm64 h1: hash only, so on
 #     linux_amd64 the cache never matches, and the infra job always takes the registry fallback;
-#   - the renderer runs headless Chromium (SwiftShader), with every page request served locally.
+#   - the renderer runs headless Chromium (SwiftShader), with every page request served locally;
+#     so does the overlay's key-mash stress test (app/src), whose page origin is snow-globe.invalid
+#     and whose browser context aborts every other request.
 # Otherwise the jobs use the network only for dependencies: PyPI (and uv's Python download),
 # crates.io, the npm registry, GitHub (the actions and the oculus-core pin), Playwright's Chromium
 # download and the Terraform registry.
@@ -102,6 +104,25 @@ jobs:
       - name: make test-eval
         run: make test-eval
 
+  plates:
+    name: plates (uv sync --locked, ruff check + format --check, tests on synthetic scenes)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # plates installs eval (for its held-out guard, frame_file_verdict) as an editable path
+      # dependency. eval's default "oculus" group does not carry over to a dependent project, so
+      # plates/uv.lock holds no oculus-core-py and this job needs no Rust. Its tests build their
+      # scenes in code (tests/synth.py) and read nothing from a data dir.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.6"
+          cache-dependency-glob: plates/uv.lock
+      - name: make test-plates
+        run: make test-plates
+
   renderer:
     name: renderer (tsc, vitest, headless Chromium + SwiftShader)
     runs-on: ubuntu-24.04
@@ -128,6 +149,31 @@ jobs:
       # applies PRD §13.1's rule, SSIM >= 0.98 (renderer/README.md, "Matching rules").
       - name: make test-renderer
         run: make test-renderer
+
+  overlay:
+    name: overlay (tsc, vitest, key-mash stress in headless Chromium)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.15.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: app/src/pnpm-lock.yaml
+      - name: pnpm install --frozen-lockfile
+        working-directory: app/src
+        run: pnpm install --frozen-lockfile
+      - name: Playwright's Chromium headless shell and its system libraries
+        working-directory: app/src
+        run: pnpm exec playwright-core install --with-deps --only-shell chromium
+      - name: make test-overlay
+        run: make test-overlay
 
   rust:
     name: rust (cargo test, clippy -D warnings, fmt --check)
