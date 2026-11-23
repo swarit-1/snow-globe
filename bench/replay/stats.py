@@ -69,7 +69,11 @@ def wilson(k: int, n: int, z: float = Z_TWO_SIDED_95) -> tuple[float, float]:
     denominator = 1.0 + z2 / n
     centre = (p + z2 / (2 * n)) / denominator
     half = z * math.sqrt(p * (1 - p) / n + z2 / (4 * n * n)) / denominator
-    return max(0.0, centre - half), min(1.0, centre + half)
+    # p = 0 is a root when k = 0, and p = 1 when k = n. Return those ends exactly: centre - half
+    # leaves a rounding residue there on some platforms (2.8e-17 on CI's Linux runner).
+    lower = 0.0 if k == 0 else max(0.0, centre - half)
+    upper = 1.0 if k == n else min(1.0, centre + half)
+    return lower, upper
 
 
 def group_seed(seed: int, name: str) -> int:
