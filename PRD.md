@@ -4,6 +4,8 @@
 > - **The product is renamed Snow Globe** (your decision of 21 Nov; DECISIONS.md D-080). That changes the title, the version and name lines, §0, §1 row 9's call, §2, §8, §12's tree, §13.4's R1 and §21's headline. "The Lookout draft" still names your draft of 18 Nov, which v0.4 merged. Where a bare "Lookout" meant that draft (§0, §1, §18.2, Appendices B and D), it now says so.
 > - The spec names no package, command, environment variable, path or User-Agent string under the old name, so nothing else changes here. The naming map for the code is in D-080.
 > - **Factual correction, 21 Nov:** the cost pointers of §11.3 and §17 add the estimate re-priced for capture 0.3.0 at `8fa6b6a`, before tax (D-086).
+> - **Factual corrections, 23 Nov:** Open-Meteo's HRRR end date, which its docs page no longer gives (§0, §6.6's C2, §8.1 and §22; D-115); the NPS confirmation, drafted and not yet requested (§8.1, §15.4; D-116); and oculus-core's measured error, which M2's validation puts above the 18 Nov figures for the Sun's and Moon's positions (§0, §8.4; D-109).
+> - **A note, not a spec change, 23 Nov:** §15.3's identification rule keeps its wording, with a note that the code's User-Agent carries no repo URL, by the lead's ruling h (D-113); dropping the URL from the rule is yours to confirm.
 > - No target, gate or cap changed.
 >
 > **Changelog:** v0.4.1, 19–20 Nov 2026 (UTC).
@@ -54,7 +56,7 @@ It is a visual forecast, not an image generator. Sun and Moon, cloud layers, clo
   - **The renderer's own claims:** it loses none of that skill, and sampling the forecast along each view ray predicts cloud height better than the camera's own grid cell does.
 
 **What the cross-check changed.** Both drafts had errors; the full record is in [docs/review/prd-crosscheck.md](docs/review/prd-crosscheck.md).
-- **HRRR does not end on 30 Nov; Open-Meteo's copy of it does.**
+- **HRRR does not end on 30 Nov; Open-Meteo's copy of it was listed to end then.** (Corrected 23 Nov: Open-Meteo's page no longer gives a date, and reads "Discontinues with future RRFSv2 release", D-115.)
   - Forecasts are read from NOAA's AWS bucket.
   - Its archive goes back to 2014, so evaluation can start on day one, with exact run times and the cloud-base and ceiling fields that Open-Meteo lacks.
 - **Forecast visibility is not haze along the sight line.** It is a near-surface fog diagnostic, so clear-air haze is calibrated per viewpoint instead (§9.3).
@@ -72,9 +74,9 @@ It is a visual forecast, not an image generator. Sun and Moon, cloud layers, clo
   - the data-flow inventory and licence ledger.
 
 **Measured so far** (this machine, 18–19 Nov 2026):
-- oculus-core matches JPL Horizons to 0.19′ for the Sun and 0.13′ for the Moon, worst case.
+- oculus-core matches JPL Horizons to 0.19′ for the Sun and 0.13′ for the Moon, worst case, at 3 sites. (Corrected 23 Nov: M2's validation, hourly for a year at the 8 viewpoints, measured 0.212′ and 0.161′ against Horizons, and 0.511′ and 0.318′ against Skyfield, still far inside §8.4's targets, D-109.)
 - The NPS feeds are live: Point Reyes serves 3840×2160 frames (1.86 MB) and the Rainier park camera serves 1920×1080 frames (577 KB).
-- Open-Meteo's docs list HRRR as "Discontinued 2026-11-30".
+- Open-Meteo's docs list HRRR as "Discontinued 2026-11-30". (Corrected 23 Nov: they no longer do; both HRRR rows read "Discontinues with future RRFSv2 release", D-115.)
 
 Nothing else had been measured when v0.4 was written. Every number since is in PRD_PROGRESS.md.
 
@@ -393,7 +395,7 @@ These are proposed. Each needs your go-ahead through §1.
 | # | Brief default | Proposed | Why |
 |---|---|---|---|
 | C1 | Tauri 2 | Keep it, with Swift as an in-process static library | See §6.5. |
-| C2 | Backend fetches Open-Meteo | An HRRR worker writes one JSON per viewpoint per run; the app and evaluation read the same file | Open-Meteo's HRRR ends 30 Nov, and it has no ceiling or cloud base and no run time. |
+| C2 | Backend fetches Open-Meteo | An HRRR worker writes one JSON per viewpoint per run; the app and evaluation read the same file | Open-Meteo's HRRR has no ceiling or cloud base and no run time. (Corrected 23 Nov: it was listed to end on 30 Nov, and its page no longer gives a date, D-115.) |
 | C3 | Tier 2 via proxy | A proxy with a spend guard, or a short-lived token for direct upload, chosen by a gate of ≤ 100 ms added p95 | Keys stay on the server. |
 | C4 | One scheduled job | Small unattended workers plus a daily batch | Frozen inputs make scoring reproducible. |
 | C5 | Renderer takes Sun and Moon as inputs | Computed inside the renderer via WASM | One self-contained module. |
@@ -532,9 +534,9 @@ Everything Snow Globe needs is free for a non-commercial project. The evaluation
 |---|---|---|---|
 | `oculus-core` (your Rust crate) | Sun and Moon position, illuminated fraction, twilight | Computed | Reused; refraction and the camera-frame transform are added (§8.4) |
 | **HRRR, direct from AWS** `noaa-hrrr-bdp-pds` | Visibility, cloud ceiling, cloud base, cloud top, low/mid/high cloud, boundary-layer cloud, RH, dew point, boundary-layer height, precipitation rate and type | Hourly runs: 18 h, or 48 h at 00/06/12/18Z. On S3 from about 51 min (f00) after the run starts. Per-hour p95 up to 101 min for f00–f18 and 117 min for f48; 0.1 % of hours took over 120 min (max 131); 23Z runs publish f06–f18 at about 111 min (a survey of 124 runs, D-027). | Public domain. Archived since 2014; HRRRv4 from Dec 2020. |
-| Open-Meteo, pinned model | GFS from 48 h to 7 days | Model-dependent | Free for non-commercial use; data CC BY 4.0. Its HRRR is **discontinued 2026-11-30**, and its responses carry no run time (bracketed with `meta.json`). |
-| NPS air-quality webcams | Truth frames, plates, Tier 0 library, live view | One frame per 15 min at the air cams | Generally public domain. EXIF names NPS. Written confirmation requested. |
-| Mount Rainier park camera `webcams-mora/mountain.jpg` | Rainier truth and plate | Off the quarter-hour; about once a minute (measured 19 Nov, PRD_PROGRESS.md) | 1920×1080, Axis P1387. **No ownership metadata**, so confirmation is requested from the park. |
+| Open-Meteo, pinned model | GFS from 48 h to 7 days | Model-dependent | Free for non-commercial use; data CC BY 4.0. Its HRRR was listed as **discontinued 2026-11-30**; on 23 Nov its page read "Discontinues with future RRFSv2 release" instead (corrected, D-115). Its responses carry no run time (bracketed with `meta.json`). |
+| NPS air-quality webcams | Truth frames, plates, Tier 0 library, live view | One frame per 15 min at the air cams | Generally public domain. EXIF names NPS. Written confirmation to be requested: the emails are drafted, not sent (corrected 23 Nov, D-116). |
+| Mount Rainier park camera `webcams-mora/mountain.jpg` | Rainier truth and plate | Off the quarter-hour; about once a minute (measured 19 Nov, PRD_PROGRESS.md) | 1920×1080, Axis P1387. **No ownership metadata**, so confirmation is to be requested from the park: its email is drafted, not sent (corrected 23 Nov, D-116). |
 | GOES-18 (`noaa-goes18`) | Independent cloud and fog vote at the viewpoint pixels | 5 min | Public domain |
 | Golden Gate cameras | Demo viewpoint | — | No licence-clean source found. Crissy Field's cameras were "temporarily unavailable" on 18 Nov. Permission asks: Lawrence Hall of Science, ALERTCalifornia; cut-off 4 Dec. |
 | Hosted image model | Tier 2 | Per call | Chosen in M3 by kill test and benchmark |
@@ -573,13 +575,13 @@ Capture starts for every camera that passes the licence check. Building (plates,
 
 `oculus-core` computes the Sun from JPL mean elements (Standish 1992) and the Moon from truncated ELP-2000/82 (Meeus ch. 47), with aberration, precession, nutation and topocentric parallax. It builds for Rust, WASM and Python, so the app and evaluation run the same code.
 
-**Measured** (18 Nov, `cargo test --release --test golden_astro`, 3/3 pass, against JPL Horizons and Astropy):
+**Measured** (18 Nov, `cargo test --release --test golden_astro`, 3/3 pass, against JPL Horizons and Astropy), with M2's validation of 23 Nov beside it (corrected 23 Nov, D-109: it puts the worst position errors above the 18 Nov figures, and both stay far inside the targets below):
 
-| Quantity | Worst error |
-|---|---|
-| Sun apparent position | 0.19′ (0.003°) |
-| Moon apparent position | 0.13′ |
-| Moon illuminated fraction | 0.01 % |
+| Quantity | Worst error, 18 Nov (3 sites) | Worst error, M2's validation (D-109) |
+|---|---|---|
+| Sun apparent position | 0.19′ (0.003°) | 0.212′ against Horizons, hourly from 1 Jul 2026 to 30 Jun 2027 at the 8 viewpoints; 0.511′ against Skyfield, 1,000 samples over 1998–2030 (unrefracted) |
+| Moon apparent position | 0.13′ | 0.161′ against Horizons; 0.318′ against Skyfield (unrefracted) |
+| Moon illuminated fraction | 0.01 % | 0.0085 percentage points against Horizons; 0.0063 against Skyfield (report `20261123T113638Z`) |
 
 **Additions:**
 - Apparent altitude with atmospheric refraction (`Apparent.alt` is unrefracted).
@@ -1145,7 +1147,7 @@ Three rules cover it:
 ### 15.3 Polite collection
 - **Live:** poll the JSON or headers, and fetch the image only on change, at most 4 per hour per camera.
 - **Backfill:** one request at a time, ≥ 5 s apart, resumable, never downloading twice, with a total size cap.
-- **Identification:** the User-Agent names the project and its repo URL.
+- **Identification:** the User-Agent names the project and its repo URL. (Note, 23 Nov, not a change to this rule: the code sends `SnowGlobe/0.1 (webcam research capture; fetch-on-change)`, with no repo URL, because the URL contains your GitHub handle, which your privacy rule keeps out of every request; the lead's ruling h keeps it that way, and dropping the URL from this rule is yours to confirm, D-113.)
 - **Errors:** back off on errors.
 - **robots.txt:** honoured (NPS disallows only `/ns/`, `/search/` and `loader.cfm`).
 
@@ -1153,7 +1155,7 @@ Three rules cover it:
 
 | Item | Licence or basis | Duty |
 |---|---|---|
-| NPS camera frames | Generally public domain (NPS disclaimer); air-cam EXIF names NPS; confirmation requested | "Webcam imagery courtesy National Park Service. Derived images are not NPS products." No implied endorsement. |
+| NPS camera frames | Generally public domain (NPS disclaimer); air-cam EXIF names NPS; confirmation to be requested, the emails drafted and not sent (corrected 23 Nov, D-116) | "Webcam imagery courtesy National Park Service. Derived images are not NPS products." No implied endorsement. |
 | HRRR, GOES-18 | US government, public domain | "Forecast data: NOAA HRRR via NOAA Open Data Dissemination" |
 | Open-Meteo | CC BY 4.0; free API non-commercial | A link beside any display; marked "modified" |
 | Hillaire atmosphere | `sebh/UnrealEngineSkyAtmosphere` (MIT) or Babylon.js (Apache-2.0) | Keep the notice in the source and the bundle |
@@ -1338,7 +1340,7 @@ Checked 18–19 Nov 2026. Fuller source lists are in [docs/research/](docs/resea
 | Kim & Pollefeys, *IEEE PAMI* 2008 | Model-free camera response |
 | Sunkavalli et al. 2007; Lalonde et al. 2009; Delle Monache et al. 2013 | Time-lapse relighting; analog ensembles |
 | [NOAA HRRR on AWS](https://registry.opendata.aws/noaa-hrrr-pds); NOAA-EMC UPP `CALVIS_GSD.f` | Forecast fields; visibility provenance |
-| [Open-Meteo GFS and HRRR docs](https://open-meteo.com/en/docs/gfs-api) | The HRRR discontinuation date |
+| [Open-Meteo GFS and HRRR docs](https://open-meteo.com/en/docs/gfs-api) | The HRRR discontinuation date, as read on 19 Nov; by 23 Nov the page gave none (corrected, D-115) |
 | NWS RRFS webinar Q&A; SCN 26-48 | HRRR's continuation; RRFS replacing NAM |
 | *Wind Energy Science* 10, 2755 (2025) | HRRR marine-layer tops running low |
 | [NPS air-quality webcams](https://www.nps.gov/features/ard/webcams/index.html); [NPS disclaimer](https://www.nps.gov/aboutus/disclaimer.htm) | Cameras and terms |
