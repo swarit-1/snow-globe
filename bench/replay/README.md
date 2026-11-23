@@ -150,7 +150,7 @@ fallback where the re-parse finds another of the three.
 | Place right | as each exact figure. A resolved row needs its viewpoint (either one of a close call); a miss must resolve to no place; a fallback row must reach the fallback or its viewpoint |
 | Fallback | every re-parsed trial (an empty transcript is not re-parsed) |
 | WER, raw and normalised | reference words: Σ(S + D + I) / ΣN. Normalised N is the reference's words with numbers spelt out, never one token per place (below) |
-| Wrong paints from partials, per partial paint (PRD §14's figure, proposed) | trials that painted from a partial whose verdict is known |
+| Wrong paints from partials, per partial paint (PRD §14's figure, D-096) | trials that painted from a partial whose verdict is known |
 | Wrong paints from partials, per judged trial | trials not superseded before their final parse |
 | Wrong paints from the final | trials that painted (expected 0: it would be a bug) |
 | Flips per query | trials that painted; a flip is a paint whose scene index differs from the paint before it |
@@ -195,7 +195,8 @@ one room (PRD §10.6).
 - **Wilson** for the wrong-paint shares: the score interval without continuity correction. The
   report gives the two-sided 95 % interval and the one-sided 95 % upper bound, and puts Wilson
   beside the ≤ 2 % target (never the bootstrap interval, which is 0 to 0 when no paint was
-  wrong); which bound PRD §14's "≤ 2 % (Wilson upper bound)" means is for the lead. With no wrong
+  wrong). PRD §14's "≤ 2 % (Wilson upper bound)" is read as the one-sided 95 % upper bound, per trial that
+  painted from a partial (D-096; the owner may overrule). With no wrong
   paint at all, the one-sided bound first falls under 2 % at 133 trials and the two-sided at 189
   (computed with stats.wilson). Wilson treats trials as independent, so the bootstrap interval is
   given in the wrong-paints section, labelled.

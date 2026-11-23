@@ -163,8 +163,9 @@ Technique", Computer Graphics Forum 39(4), 2020)
 Planned, not in the code yet
   - Z-Image-Turbo (Apache-2.0), if Tier 2 passes its kill test (M3).
   - Parakeet weights (CC BY 4.0), only if used (D-004).
-  - The depth model, embedding model and DEM: named in M2; non-commercial
-    weights are excluded.
+  - The depth model and embedding model: named in M2; non-commercial
+    weights are excluded. (The DEM is chosen: the USGS 3DEP raster in
+    section 1, used by plates/.)
 
 
 3. RUST

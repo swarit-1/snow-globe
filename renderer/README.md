@@ -133,8 +133,8 @@ multiple-scattering series and the energy-conserving step).
 
 - **Licence:** the MIT notice is a legal comment in `src/atmosphere/model.ts`, which every bundle keeps
   (`bundle.test.ts`), and a comment in every atmosphere shader source. Its copyright line ("Copyright (c) 2020
-  Epic Games, Inc.") was written from memory, offline: check it against the repository's LICENSE before
-  release. The transmittance table's parameterisation is Bruneton's (2008, 2017), as the reference uses it.
+  Epic Games, Inc.") was written offline; the lead checked it against the reference repository's LICENSE on
+  23 Nov 2026, and it matches (D-098). The transmittance table's parameterisation is Bruneton's (2008, 2017), as the reference uses it.
 - **Code:** `src/atmosphere/model.ts` (the medium, phase functions, the Earth's shadow, the tables'
   parameterisations), `src/cpu/atmosphere.ts` (the float64 reference of every pass and the light model),
   `src/webgl/atmosphere-glsl.ts` (the passes' GLSL), `src/cpu/shade.ts` (the float64 reference of the main pass's
@@ -463,7 +463,8 @@ The increments' 3.2e-3 sits on values 1.3–5.9 × 10⁻⁵ of the table's large
 ## Coverage Monte Carlo (PRD §9.5, the M1.5 gate)
 
 `src/cpu/montecarlo.ts`, `pnpm montecarlo --case above|deck|thin|cirrus`. The tables are in
-`$SNOW_GLOBE_DATA_DIR/cache/renderer/montecarlo/`:
+`$SNOW_GLOBE_DATA_DIR/reports/renderer/montecarlo/`, copied on 23 Nov from `cache/renderer/montecarlo/`, where the
+script writes them (`cache/` is deletable; `reports/` is kept):
 
 - from 2026-11-19 (renderer 0.2.0);
 - for renderer 0.3.0 (ticket M1.5-05), `mc-*-2026-11-23-r0.3.0.json` and the final tree's
@@ -558,7 +559,7 @@ after, each run in its own browser.
 - **Scenes:** the three goldens at 320 × 180 (SwiftShader only), and `pnpm bench`'s clear and heavy scenes (three
   slabs, fog, Sun shadows) at 720p and 1080p.
 
-**Raw data:** `$SNOW_GLOBE_DATA_DIR/cache/renderer/bench-sky-2026-11-23/fix/` holds every run's JSON, with the 1, 5
+**Raw data:** `$SNOW_GLOBE_DATA_DIR/reports/renderer/bench-sky-2026-11-23/fix/` (copied from `cache/renderer/`) holds every run's JSON, with the 1, 5
 and 15 minute load averages before and after it:
 
 - `ss-<k>-before|after.json` and `metal-<k>-before|after.json`;
@@ -662,7 +663,7 @@ warm-ups. Each steady frame moves the valid time by 1 min and the Sun with it. T
 slabs, fog and Sun shadows.
 
 The machine is fanless, and repeated runs vary a lot: the clear scene measured SwiftShader 720p p50 70.3 ms and
-then 49.6 ms three minutes later. Raw JSON is in `$SNOW_GLOBE_DATA_DIR/cache/renderer/bench-2026-11-19T11-*.json`.
+then 49.6 ms three minutes later. Raw JSON is in `$SNOW_GLOBE_DATA_DIR/reports/renderer/bench-2026-11-19T11-*.json` (copied from `cache/renderer/`).
 
 **SwiftShader** is a CPU rasteriser and **not representative of WKWebView**:
 

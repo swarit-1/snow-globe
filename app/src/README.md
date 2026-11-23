@@ -180,7 +180,7 @@ The decode alone took p50 1.54 ms. "Drawn" includes the wait for the next frame.
 | No match or Out of range that keeps the scene | 28 stale paints (and 49 residue) |
 | Acknowledging the destination while hidden | 31 unshown acknowledgements |
 
-The test asserts at least 10 for stale paints, residue and unshown acknowledgements, and 5 for overruns.
+The test asserts at least 10 for stale paints, residue and unshown acknowledgements, and 5 for overruns. Esc that only cancels has its own floor of 3 (`AT_LEAST_VARIANT` in `test/stress.browser.test.ts`): it was caught 17, 15, 12 and 11 times in four full runs and 9–23 times in 16 more samples, one of them below 10, so a floor of 10 failed about one `pnpm test` in 16–20 although the broken overlay was caught every time (D-092). The real overlay must still show 0 of every violation.
 
 **Compositing.** The browser tests use the headless shell's default compositing, not the renderer's SwiftShader GL flags (`OVERLAY_BROWSER_ARGS=swiftshader` brings them back). Measured on 22 Nov 2026 with `scripts/stress.ts`, load average 8 to 13:
 
