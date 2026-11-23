@@ -14,6 +14,7 @@ uv run snow-globe-eval heldout                # the committed held-out split, wi
 uv run snow-globe-eval heldout --check FRAME  # may this frame be used for development or fits? (metadata only)
 uv run snow-globe-eval data-report            # the M0.5 gate's 72 h log evidence (offline, read-only); --json
 uv run snow-globe-eval extractor-v0           # extractor v0 over every Rainier capture (plate v0.1) + validation on the hand labels
+uv run snow-globe-eval extractor-v0.2 --run-id ID  # extractor v0.2's pre-registered leave-one-day-out check on labels v0.2, v0 beside it
 ```
 
 Outside pytest, iCloud's hidden `.pth` files mean the commands need `PYTHONPATH=src:../workers/common/src`
@@ -71,6 +72,9 @@ the run it was made with.
 | `extractor.py` | §13.3 | v−1 landmark visibility from normalised Sobel energy against a Sun-binned clear-day reference; camera-in-cloud flag; camera-fault class (dark, saturated, blank) |
 | `extractor_v0.py` | §13.3, §13.4 | v0: the same energy per **plate landmark band** (summit, upper, mid, near), against the median of the 3 clear-day frames nearest in Sun position (within 3° altitude and 15° azimuth, never from the scored frame's own local day); classes visible ≥ 0.60 > partial ≥ 0.35 > hidden (v−1's placeholder τ, fixed before any v0 ratio); night, camera fault, excluded (a §8.6 gate failed), in cloud, no reference; obscuration height. The plate's band, overlay and base PNGs are checked against `plate.json`, bands may not share a pixel, and each band's validity is carried |
 | `extractor_v0_run.py` | §13.3, §13.8, §8.6 | `snow-globe-eval extractor-v0`: v0 over every development capture of a viewpoint against plate v0.1 by default, writing `results.jsonl`, `ratio_series.csv`, `summary.json` and `validation.json` under `<data dir>/scores/extractor-v0/<viewpoint>/<UTC stamp>/` (never over an earlier run) and a line in `runs.jsonl` beside them. The reference pool holds only clear-day frames a fit may use (the split's fit bound) that pass the gates; every frame gets Fresh, Daylight, Usable frame and Same view (registration against the plate's base within 4 px, v0 values), with exclusion and not-checked counts. Validation leaves the reference pool out of the judged sample (pool frames are scored against one another), reports the pool alone as a sanity check, judges F1 with label-partial frames left out and the extractor's partial counted as not visible, never meets the bar with thresholds given on the command line, and lists every §13.8 condition still missing. `summary.json` records the SHA-256 of the extractor's modules and the git state |
+| `extractor_v0_2.py` | §13.3, §13.4 | v0.2: v0's band energy against a reference conditioned on the light. D = sky median luma ÷ the near field's 99th-percentile luma (from the frame, never a label); the summit (a skyline band) is divided by C(D) = 2·\|1 − D\| / (1 + D), the clear-air Weber contrast of lit snow against the sky; the reference is the median of the 3 pool frames nearest in (D ÷ 0.05, Sun altitude ÷ 10°) from other days, with no hard limit. Pool: frames both labellers call visible for the band. τ fitted, never fixed here |
+| `extractor_v0_2_labels.py`, `labels_rainier_v0_2.json` | §13.8, §13.1 | Labels v0.2: two blind AI labellers (`a`, `b`) of the 105 daytime captures of 19–22 Nov (summit, upper, mid; five states with `in_cloud` and `unusable`), merged: agreement is the label, disagreement null (left out, counted, scored both ways). Cohen's kappa per band. Its own loader, under labels.py's guard (held-out frames by both times, the quarantine); `labels.load_labels` cannot read the file (it stops with `KeyError: 'camera_in_cloud'`), so read it with `load_merged_labels`. The committed file is fixed (the pre-registration cites its SHA-256); `--merge-labels DIR --labels OUT` writes a merge only to a new path |
+| `extractor_v0_2_lodo.py`, `extractor_v0_2_scores.py`, `extractor_v0_2_run.py` | §13.8, §13.7, §13.9 | `snow-globe-eval extractor-v0.2`: leave-one-day-out (pools and τ from the other days; training ratios nested off their own and the held-out day), τ by maximum F1 then the widest log gap, scored per band and day with a day-block bootstrap; v0.2, its ablation without the contrast model, v0 as built and v0 with fitted τ on the same folds, with each method's in-cloud flags against the in-cloud labels. Refuses to score without the pre-registration and never writes over a finished run (a re-run takes a new run id); resumable feature cache, reused only when every input is unchanged (stamp: parameters, feature code, plate, camera, ephemeris, split; per frame: its bytes, sidecar and previous capture) |
 | `labels.py`, `labels_rainier_v0_1.json`, `labels_rainier_v0.json` | §13.8, §13.1 | Hand labels by viewing: Rainier's 105 daytime captures of 19–22 Nov 2026, per band visible/partial/hidden, camera in cloud, sky, light, clear-day reference; the protocol is in the file. v0 is the first pass (every band, before any v0 ratio); v0.1, the default, keeps its summit labels and labels upper, mid and near again inside the plate v0.1 band outlines (after a v0 run existed; each frame keeps its first-pass labels). A file labelling a held-out or quarantined frame is refused, by its time field and by the time in its key |
 | `frames.py` | data layout | Frame records (with NPS's own archive times) and the `frames/` and `archive/` catalogue; never reads under `quarantine/` |
 | `heldout.py`, `heldout_periods_v2.json`, `heldout_periods.json` | §13.2, §13.9 | The committed held-out split (D-019, D-022, D-024), version 2 current and version 1 kept byte for byte: periods per viewpoint and design, the archive guard, the quarantine, scoring exclusions; strict, versioned loader; `cited_split` resolves a record's citation of either version |
@@ -266,6 +270,79 @@ in full in `data_report/__init__.py`:
   and `answer_bound_at`; the figures of every record so far are those of version 2).
 - **State files** (`state/capture/<id>.json`, the fetcher lock) are read as they are when the report runs
   (`state_now`), not as of `--until`. The home directory is printed as `~`.
+
+## Extractor v0.2 (PLAN.md M1.5; `extractor-v0.2`)
+
+v0 missed §13.8's bar on the summit (D-100) because a sunlit skyline against a blue sky was its
+only reference: a summit visible under bright overcast has about a third of that energy, and 58 %
+of frames had no reference within its Sun limits. v0.2 keeps v0's energy and conditions the
+reference on the light (module table): the edge energy at a skyline is proportional to the
+Weber contrast of snow against sky, which the light sets, so the summit's energy is divided by
+the contrast clear air would show in this frame's light, C(D), before it is compared.
+
+**Labels v0.2** (`labels_rainier_v0_2.json`, merged 23 Nov 2026 from
+`<data dir>/labels/rainier.paradise-mountain/v0.2/`): agreement summit 104/105 (Cohen's kappa
+0.983), upper 103/105 (0.969), mid 102/105 (0.954); visible against the rest, kappa 1.000,
+0.977, 0.956. Merged summit: 30 visible, 6 partial, 61 hidden, 7 in_cloud, 1 disagreement.
+
+**The check** was pre-registered before any v0.2 ratio met a v0.2 label
+(`<data dir>/scores/extractor-v0.2/preregistration.md`, SHA-256
+`7f1ff272dcb4794e3beaf3ec3190f75e1e90deaa1f3e885e15dfd65ee37532e6`), then run once as
+`20261123-lodo1` (0.4 s from cached features; 13.5 s to compute them for 105 frames on the
+M4). The bar is judged on that run. After the review's code fixes (no method or constant
+changed) it was run again as `20261123-lodo2`, every feature computed afresh (14.95 s wall on
+AC power): its folds and predictions are byte-identical to lodo1's, and its scores identical
+apart from the new in-cloud counts (`20261123-lodo2/posthoc/compare.json`). Pooled leave-one-day-out F1, primary form
+(abstentions count as not visible; partial and disagreements left out), 4 local days:
+
+| Method | Summit F1 (H/M/F/C) | Upper F1 | Mid F1 |
+|---|---|---|---|
+| v0.2 | **1.000** (30/0/0/68), day-block 95 % 1.0–1.0 | 1.000 | 1.000 |
+| v0.2-A, no contrast model | 0.915 (27/3/2/66), 0.50–1.00 | 1.000 | 1.000 |
+| v0 as built (τ 0.6, 0.35) | 0.571 (12/18/0/68), 0.00–0.67 | 0.830 | 0.815 |
+| v0, τ fitted per fold | 0.000: no τ in two folds (no visible training frame has a v0 ratio) | 0.830 | 0.815 |
+
+- The bar (summit F1 ≥ 0.85) is met as pre-registered. Paired ΔF1 against v0: +0.429
+  (95 % 0.333–1.000); against v0.2-A: +0.085 (0.000–0.500).
+- **Thin where it matters:** with 21 Nov held out, its overcast visible summits have only sunny
+  references, and the lowest reads 0.465 against τ_hi 0.440. Over all days visible summits are
+  ≥ 0.465 and hidden or in-cloud ones ≤ 0.333 (falling snow under overcast). Post hoc, a 95th
+  instead of 99th near-field percentile gives summit F1 0.938, and τ at the arithmetic middle
+  of the gap 0.966; the reference scales, k and the altitude scale change nothing. The
+  interval is 1.0–1.0 because no day has an error; Wilson 95 % for 30/30 is 0.886–1.0, wider
+  in truth (frames within a day are correlated).
+- **The two decisive folds rest on one frame per band** (post hoc, `posthoc/bridge.py` of
+  lodo1). 29 of the 30 visible summits fall on 20 and 21 Nov. In those two folds every training
+  frame of the other busy day (31) has exactly one summit reference, the only visible summit
+  of 19 Nov (23:57:58Z, Sun 3.66°), because the nested rule keeps both its own day and the
+  held-out day out; so that one frame near sunset sets the scale of 17 of the 18 (and 12 of
+  the 13) visible training ratios behind those folds' τ. Upper and mid rest the same way on
+  22 Nov 23:36:01Z. Relabel that frame partial and those folds get no τ: pooled F1 0.000; keep
+  it labelled but out of the pools and the summit scores 0.947 (27/3/0/68). So "bar met" is
+  weak evidence. The deployed fit has at least 3 candidate references per frame and band.
+- **In cloud, 1 of 7** (lodo2's in-cloud counts): v0.2 flags 1 of the 7 frames both labellers
+  call in cloud and classes the other 6's summits hidden. That leaves the F1 alone (in_cloud is
+  not visible) but matters for P1, which keeps in-cloud frames out of its primary (§13.4). The
+  limits are v−1's, set against sunny references, while v0.2's are matched in D. TODO(M2): fit
+  or redesign the in-cloud rule on labels before P1 relies on it. (v0 as built tested 2 of the
+  7 and flagged neither.)
+- **Code against the pre-registration's wording**, on paths lodo1 never reached: with D
+  undefined no band gets a reference (§4 says only the summit loses its reference; the distance
+  needs D), and the in-cloud test now takes the summit's references only, as §4 fixes (it took
+  the first band with any, which was always the summit here). The next pre-registration should
+  state the first.
+- **What the check does not protect:** the method was designed after viewing v0's energies
+  beside labels v0.1 on these same frames. LODO keeps the fitted pool and τ off the held-out
+  day, not the design. TODO(M1.5): score the deployed fit (summit τ_hi 0.393, τ_lo 0.359,
+  fitted on all four days) on labels of frames from 23 Nov onward, the prospective check.
+- Still not publishable (§13.8): 98 judged summit frames (not ~150), no re-label pass a week
+  later, no labelled renders, and not stratified by time of day and weather (4 days; the 11
+  visible summits in overcast light, D ≥ 0.70, all fall on 21 Nov, 17:33–20:12 UTC); the two
+  labellers are AI agents of one model family.
+- Runs and post-hoc notes: `<data dir>/scores/extractor-v0.2/rainier.paradise-mountain/<run id>/`
+  (`report.md`, `scores.json`, `folds.json`, `predictions.jsonl`, `run.json`, `posthoc/`). A
+  finished run's folder is never written over: re-running pre-registration §11's command now
+  refuses, and a check of a run takes a new `--run-id`.
 
 ## Measured (this machine, MacBook Air M4, 19 Nov 2026)
 

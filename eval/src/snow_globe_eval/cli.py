@@ -11,6 +11,11 @@
 - ``snow-globe-eval extractor-v0``: extractor v0 over every capture of a viewpoint against its
   plate's landmark bands, and its validation on the hand labels (PRD §13.3, §13.8;
   :mod:`.extractor_v0_run`); offline, writes under ``<data dir>/scores/extractor-v0/``.
+- ``snow-globe-eval extractor-v0.2``: extractor v0.2's leave-one-day-out check on the merged
+  two-labeller labels v0.2, with v0 on the same folds (PRD §13.3, §13.8;
+  :mod:`.extractor_v0_2_run`); refuses to score without the pre-registration; offline,
+  resumable, writes under ``<data dir>/scores/extractor-v0.2/``, never over a finished run.
+  ``--merge-labels DIR --labels OUT`` writes a new merged labels file instead.
 
 None touches the network, except ``backtest-pair --forecast auto``, which backfills one
 HRRR run from NOAA's public bucket through snow-globe-forecast.
@@ -220,6 +225,10 @@ def _parser() -> argparse.ArgumentParser:
         type=float,
         help="hidden threshold (v0's fixed 0.35); any other value marks the run as overridden",
     )
+
+    from .extractor_v0_2_run import register as register_extractor_v0_2
+
+    register_extractor_v0_2(sub)
     return parser
 
 
@@ -482,6 +491,8 @@ def main(argv: list[str] | None = None) -> int:
             return _data_report(args)
         if args.command == "extractor-v0":
             return _extractor_v0(args)
+        if args.command == "extractor-v0.2":
+            return args.handler(args)
         return _ephem_check(args)
     except (ValueError, FileNotFoundError, RuntimeError) as exc:
         print(f"snow-globe-eval {args.command}: {type(exc).__name__}: {exc}", file=sys.stderr)
